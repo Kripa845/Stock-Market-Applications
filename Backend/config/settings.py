@@ -89,7 +89,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "Stock-Market-2",
+        "NAME": "Stock-Market",
         "USER": "postgres",
         "PASSWORD": "kripa123",
         "HOST": "localhost",
