@@ -25,9 +25,7 @@ os.environ.setdefault(
 django.setup()
 
 
-# ============================================================
-# IMPORTS
-# ============================================================
+
 
 from apps.companies.models import Company
 from crawlers.items import DailyTradingDataItem
@@ -70,9 +68,6 @@ class TradingDataSpider(scrapy.Spider):
         "COOKIES_ENABLED": True,
     }
 
-    # ========================================================
-    # START
-    # ========================================================
 
     def start_requests(self):
 
@@ -118,9 +113,7 @@ class TradingDataSpider(scrapy.Spider):
                 errback=self.handle_error,
                 dont_filter=True,
             )
-    # ========================================================
-    # PARSE COMPANY PAGE
-    # ========================================================
+
 
     def parse_company(
         self,
@@ -134,9 +127,7 @@ class TradingDataSpider(scrapy.Spider):
             response.status,
         )
 
-        # ----------------------------------------------------
-        # COMPANY ID
-        # ----------------------------------------------------
+       
 
         company_id = response.css(
             "#companyid::text"
@@ -145,10 +136,7 @@ class TradingDataSpider(scrapy.Spider):
         if company_id:
             company_id = company_id.strip()
 
-        # ----------------------------------------------------
-        # FALLBACK REGEX
-        # ----------------------------------------------------
-
+      
         if not company_id:
 
             match = re.search(
@@ -176,9 +164,7 @@ class TradingDataSpider(scrapy.Spider):
             company_id,
         )
 
-        # ----------------------------------------------------
-        # CSRF TOKEN
-        # ----------------------------------------------------
+
 
         csrf_token = response.css(
             'meta[name="csrf-token"]::attr(content)'
@@ -214,9 +200,7 @@ class TradingDataSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # BUILD EXACT PAYLOAD
-        # ----------------------------------------------------
+
 
         form_data = self.build_form_data(
             company_id=company_id,
@@ -270,9 +254,7 @@ class TradingDataSpider(scrapy.Spider):
             dont_filter=True,
         )
 
-    # ========================================================
-    # BUILD EXACT DATATABLES PAYLOAD
-    # ========================================================
+    
 
     def build_form_data(
         self,
@@ -338,9 +320,7 @@ class TradingDataSpider(scrapy.Spider):
 
         return data
 
-    # ========================================================
-    # PARSE PRICE HISTORY
-    # ========================================================
+   
 
     def parse_history(
         self,
@@ -364,9 +344,6 @@ class TradingDataSpider(scrapy.Spider):
             response.text[:3000],
         )
 
-        # ----------------------------------------------------
-        # STATUS
-        # ----------------------------------------------------
 
         if response.status not in (200, 202):
 
@@ -377,9 +354,7 @@ class TradingDataSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # JSON
-        # ----------------------------------------------------
+
 
         try:
 
@@ -400,9 +375,8 @@ class TradingDataSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # DATATABLE INFORMATION
-        # ----------------------------------------------------
+
+
 
         records_total = payload.get(
             "recordsTotal",
@@ -437,9 +411,7 @@ class TradingDataSpider(scrapy.Spider):
             len(rows),
         )
 
-        # ----------------------------------------------------
-        # NO DATA
-        # ----------------------------------------------------
+
 
         if not rows:
 
@@ -450,9 +422,7 @@ class TradingDataSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # CREATE ITEMS
-        # ----------------------------------------------------
+    
 
         for row in rows:
 

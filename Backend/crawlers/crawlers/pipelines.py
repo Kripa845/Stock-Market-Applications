@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+
 from twisted.internet.threads import deferToThread
 
 # ----------------------------------------------------------------------
@@ -44,7 +45,18 @@ from apps.market_data.models import DailyPrice, FloorsheetTransaction
 # ======================================================================
 # HELPERS
 # ======================================================================
+def parse_integer(value):
+    if value is None or value == "":
+        return None
 
+    return int(float(str(value).replace(",", "").strip()))
+
+
+def parse_decimal(value):
+    if value is None or value == "":
+        return None
+
+    return Decimal(str(value).replace(",", "").strip())
 def clean_text(value):
     if value is None:
         return ""
@@ -818,14 +830,13 @@ class TradingDataPipeline:
 # FLOORSHEET PIPELINE
 # ======================================================================
 
+
 class FloorsheetPipeline:
     """
-    Persists FloorsheetTransaction rows (feeds the buyer/seller
-    behavior analysis in Section 3) AND keeps writing floorsheet.json
-    for quick manual inspection.
+    Persists FloorsheetTransaction rows and writes floorsheet.json.
 
-    Same async-context caveat as the other DB-touching pipelines: all
-    ORM calls run inside deferToThread().
+    All Django ORM operations are executed inside deferToThread()
+    because Scrapy is running with an asyncio reactor.
     """
 
     def open_spider(self, spider):
@@ -842,6 +853,7 @@ class FloorsheetPipeline:
         self.skipped_count = 0
         self.failed_count = 0
 
+        spider.floorsheet_found = 0
         spider.floorsheet_saved = 0
         spider.floorsheet_failed = 0
 
@@ -856,14 +868,23 @@ class FloorsheetPipeline:
         if not any(key in item for key in required_keys):
             return item
 
-        # Keep the raw JSON dump regardless of DB outcome.
+        spider.floorsheet_found += 1
+
+        # --------------------------------------------------------------
+        # Keep raw JSON output regardless of database result.
+        # --------------------------------------------------------------
+
         if self.first_item:
             self.first_item = False
         else:
             self.file.write(",\n")
 
         self.file.write(
-            json.dumps(dict(item), ensure_ascii=False, default=str)
+            json.dumps(
+                dict(item),
+                ensure_ascii=False,
+                default=str,
+            )
         )
 
         return deferToThread(
@@ -873,13 +894,21 @@ class FloorsheetPipeline:
         )
 
     def _save_transaction_sync(self, item, spider):
-        symbol = clean_text(item.get("company")).upper()
+        # --------------------------------------------------------------
+        # COMPANY
+        # --------------------------------------------------------------
+
+        symbol = clean_text(
+            item.get("company")
+        ).upper()
 
         if not symbol:
             self.skipped_count += 1
+
             spider.logger.error(
-                "Floorsheet row missing company symbol.",
+                "Floorsheet row missing company symbol."
             )
+
             return item
 
         try:
@@ -887,92 +916,204 @@ class FloorsheetPipeline:
                 symbol=symbol,
                 is_active=True,
             )
+
         except Company.DoesNotExist:
             self.skipped_count += 1
+
             spider.logger.error(
                 "Floorsheet row skipped: unknown company '%s'.",
                 symbol,
             )
+
             return item
+
+        # --------------------------------------------------------------
+        # DATE
+        # --------------------------------------------------------------
 
         raw_date = item.get("date")
 
         if not raw_date:
             self.skipped_count += 1
+
             spider.logger.error(
                 "Floorsheet row missing date for %s.",
                 symbol,
             )
+
             return item
 
-        trading_date = normalize_datetime(raw_date)
+        trading_datetime = normalize_datetime(
+            raw_date
+        )
 
-        if trading_date is None:
+        if trading_datetime is None:
             self.skipped_count += 1
+
             spider.logger.error(
                 "Floorsheet row has unparseable date '%s' for %s.",
                 raw_date,
                 symbol,
             )
+
             return item
 
-        trading_date = trading_date.date()
+        trading_date = trading_datetime.date()
 
-        buyer_broker = clean_text(item.get("buyer_broker"))
-        seller_broker = clean_text(item.get("seller_broker"))
-        transaction_id = clean_text(item.get("transaction_id"))
+        # --------------------------------------------------------------
+        # BROKER / TRANSACTION INFORMATION
+        # --------------------------------------------------------------
 
-        try:
-            quantity = int(
-                str(item.get("quantity") or "0").replace(",", "")
-            )
+        buyer_broker = clean_text(
+            item.get("buyer_broker")
+        )
 
-            rate = Decimal(
-                str(item.get("rate") or "0").replace(",", "")
-            )
+        seller_broker = clean_text(
+            item.get("seller_broker")
+        )
 
-            amount_raw = item.get("amount")
+        transaction_id = clean_text(
+            item.get("transaction_id")
+        )
 
-            amount = (
-                Decimal(str(amount_raw).replace(",", ""))
-                if amount_raw not in (None, "")
-                else (rate * quantity)
-            )
+        # --------------------------------------------------------------
+        # NUMERIC DATA
+        # --------------------------------------------------------------
 
-        except (InvalidOperation, ValueError):
+        raw_quantity = item.get("quantity")
+        raw_rate = item.get("rate")
+        raw_amount = item.get("amount")
+
+        quantity = parse_integer(
+            raw_quantity
+        )
+
+        rate = parse_decimal(
+            raw_rate
+        )
+
+        amount = None
+
+        if quantity is not None and rate is not None:
+            amount = rate * quantity
+
+        # --------------------------------------------------------------
+        # VALIDATE NUMERIC DATA
+        # --------------------------------------------------------------
+
+        if quantity is None:
             self.failed_count += 1
             spider.floorsheet_failed += 1
 
             spider.logger.error(
-                "Floorsheet row has invalid numeric data for %s on %s.",
+                "Invalid quantity | company=%s | date=%s | "
+                "raw_quantity=%r | raw_rate=%r | raw_amount=%r",
                 symbol,
                 trading_date,
+                raw_quantity,
+                raw_rate,
+                raw_amount,
             )
+
             return item
 
-        if quantity < 0 or rate < 0 or amount < 0:
+        if rate is None:
             self.failed_count += 1
             spider.floorsheet_failed += 1
 
             spider.logger.error(
-                "Floorsheet row has negative values for %s on %s.",
+                "Invalid rate | company=%s | date=%s | "
+                "raw_quantity=%r | raw_rate=%r | raw_amount=%r",
                 symbol,
                 trading_date,
+                raw_quantity,
+                raw_rate,
+                raw_amount,
             )
+
             return item
 
+        if amount is None:
+            self.failed_count += 1
+            spider.floorsheet_failed += 1
+
+            spider.logger.error(
+                "Could not calculate amount | company=%s | date=%s | "
+                "quantity=%r | rate=%r",
+                symbol,
+                trading_date,
+                quantity,
+                rate,
+            )
+
+            return item
+
+        # --------------------------------------------------------------
+        # NEGATIVE VALUE VALIDATION
+        # --------------------------------------------------------------
+
+        if quantity < 0:
+            self.failed_count += 1
+            spider.floorsheet_failed += 1
+
+            spider.logger.error(
+                "Negative quantity | company=%s | date=%s | quantity=%s",
+                symbol,
+                trading_date,
+                quantity,
+            )
+
+            return item
+
+        if rate < 0:
+            self.failed_count += 1
+            spider.floorsheet_failed += 1
+
+            spider.logger.error(
+                "Negative rate | company=%s | date=%s | rate=%s",
+                symbol,
+                trading_date,
+                rate,
+            )
+
+            return item
+
+        if amount < 0:
+            self.failed_count += 1
+            spider.floorsheet_failed += 1
+
+            spider.logger.error(
+                "Negative amount | company=%s | date=%s | amount=%s",
+                symbol,
+                trading_date,
+                amount,
+            )
+
+            return item
+
+        # --------------------------------------------------------------
+        # DATABASE
+        # --------------------------------------------------------------
+
+        transaction_key = (
+            transaction_id
+            or f"{buyer_broker}-{seller_broker}-{quantity}-{rate}"
+        )
+
         try:
-            _, created = FloorsheetTransaction.objects.update_or_create(
-                company=company,
-                date=trading_date,
-                transaction_id=transaction_id or f"{buyer_broker}-{seller_broker}-{quantity}-{rate}",
-                defaults={
-                    "buyer_broker": buyer_broker,
-                    "seller_broker": seller_broker,
-                    "quantity": quantity,
-                    "rate": rate,
-                    "amount": amount,
-                },
+            _, created = (
+                FloorsheetTransaction.objects.update_or_create(
+                    company=company,
+                    date=trading_date,
+                    transaction_id=transaction_key,
+                    defaults={
+                        "buyer_broker": buyer_broker,
+                        "seller_broker": seller_broker,
+                        "quantity": quantity,
+                        "rate": rate,
+                        "amount": amount,
+                    },
+                )
             )
 
         except IntegrityError as exc:
@@ -980,24 +1121,47 @@ class FloorsheetPipeline:
             spider.floorsheet_failed += 1
 
             spider.logger.error(
-                "Database error saving floorsheet row for %s on %s: %s",
+                "Database error saving floorsheet row | "
+                "company=%s | date=%s | error=%s",
                 symbol,
                 trading_date,
                 exc,
             )
+
             return item
+
+        except Exception as exc:
+            self.failed_count += 1
+            spider.floorsheet_failed += 1
+
+            spider.logger.exception(
+                "Unexpected error saving floorsheet row | "
+                "company=%s | date=%s | error=%s",
+                symbol,
+                trading_date,
+                exc,
+            )
+
+            return item
+
+        # --------------------------------------------------------------
+        # SUCCESS
+        # --------------------------------------------------------------
 
         self.saved_count += 1
         spider.floorsheet_saved += 1
 
         spider.logger.debug(
-            "%s | floorsheet | %s | %s -> %s | qty=%s rate=%s",
+            "%s | floorsheet | %s | %s -> %s | "
+            "qty=%s | rate=%s | amount=%s",
             "CREATED" if created else "UPDATED",
             symbol,
             trading_date,
             buyer_broker,
+            seller_broker,
             quantity,
             rate,
+            amount,
         )
 
         return item
@@ -1008,9 +1172,11 @@ class FloorsheetPipeline:
             self.file.close()
 
         spider.logger.info(
-            "Floorsheet pipeline finished | saved=%s | skipped=%s | "
-            "failed=%s",
+            "Floorsheet pipeline finished | "
+            "found=%s | saved=%s | skipped=%s | failed=%s",
+            getattr(spider, "floorsheet_found", 0),
             self.saved_count,
             self.skipped_count,
             self.failed_count,
         )
+
