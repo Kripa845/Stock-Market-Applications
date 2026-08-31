@@ -78,8 +78,14 @@ class BizmanduSpider(BaseNewsSpider):
                 continue
 
             self.seen_article_urls.add(url)
+
             self.articles_seen += 1
             self.articles_scheduled += 1
+
+            self.logger.info(
+                "Scheduling Bizmandu article: %s",
+                url,
+            )
 
             yield scrapy.Request(
                 url,
@@ -92,15 +98,22 @@ class BizmanduSpider(BaseNewsSpider):
             self.pages_crawled < self.max_pages
             and self.articles_scheduled < self.max_articles
         ):
+
             next_page = self.extract_next_page(response)
 
             if next_page:
+
+                self.logger.info(
+                    "Next Bizmandu page: %s",
+                    next_page,
+                )
+
                 yield scrapy.Request(
                     next_page,
                     callback=self.parse,
                     errback=self.errback_page,
                 )
-
+    # rest of your existing code...
     def extract_article_urls(self, response):
 
         urls = []
@@ -140,7 +153,43 @@ class BizmanduSpider(BaseNewsSpider):
                 break
 
         return urls
+   
 
+        all_links = response.css("a::attr(href)").getall()
+
+        self.logger.info(
+            "Bizmandu total links found: %s",
+            len(all_links),
+        )
+
+        for href in all_links[:50]:
+            self.logger.info("LINK: %s", href)
+
+        urls = []
+        seen = set()
+
+        for href in all_links:
+
+            if not href:
+                continue
+
+            absolute = canonicalize_url(
+                response.urljoin(href.strip())
+            )
+
+            if "bizmandu.com" not in absolute:
+                continue
+
+            if "/category/" in absolute:
+                continue
+
+            if absolute in seen:
+                continue
+
+            seen.add(absolute)
+            urls.append(absolute)
+
+        return urls
     def extract_next_page(self, response):
 
         selectors = [
@@ -156,43 +205,35 @@ class BizmanduSpider(BaseNewsSpider):
 
         return None
 
+  
     def parse_article(self, response):
 
         headline = (
-            response.css("h1::text").get()
+            response.css("#title::text").get()
+            or response.css("h1::text").get()
             or response.css(
                 'meta[property="og:title"]::attr(content)'
             ).get()
         )
 
-        body_selectors = [
-            "div.content-details p::text",
-            "div.description p::text",
-            "article p::text",
-            ".post-content p::text",
-        ]
-
-        body_parts = []
-
-        for selector in body_selectors:
-            parts = response.css(selector).getall()
-            if parts:
-                body_parts = parts
-                break
+        body_parts = response.css(
+            "div.biz-article-content div.news-text.mb-0 *::text"
+        ).getall()
 
         if not body_parts:
-            body_parts = response.xpath(
-                "//article//p//text()"
+            body_parts = response.css(
+                "div.biz-article-content div.news-text.mb-0::text"
             ).getall()
 
         body = " ".join(
-            part.strip() for part in body_parts if part.strip()
+            part.strip()
+            for part in body_parts
+            if part.strip()
         )
 
         published_at = (
             response.css(
-                'meta[property="article:published_time"]'
-                "::attr(content)"
+                'meta[property="article:published_time"]::attr(content)'
             ).get()
             or response.css("time::attr(datetime)").get()
             or response.css("time::text").get()
