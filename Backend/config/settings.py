@@ -38,6 +38,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
     'django_filters',
     'corsheaders',
     'rest_framework',
@@ -164,18 +165,7 @@ CELERY_RESULT_BACKEND = os.getenv(
     "redis://localhost:6379/1",
 )
 
-# ----------------------------------------------------------------------
-# Scheduling (assignment section 1.3)
-#
-# Celery beat runs these on a schedule so the dataset stays current
-# without anyone manually re-running a script. NEPSE trades Sun-Thu,
-# closing mid-afternoon Nepal time, so the once-daily price/floorsheet
-# jobs are scheduled for the evening (after the exchange has published
-# the day's final figures) rather than at midnight UTC.
-#
-# `crontab` is imported lazily-ish here (module-level import is fine,
-# celery is already a hard dependency of this project).
-# ----------------------------------------------------------------------
+
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_TIMEZONE = "Asia/Kathmandu"
@@ -186,14 +176,12 @@ CELERY_TASK_ROUTES = {
 }
 
 CELERY_BEAT_SCHEDULE = {
-    # News changes throughout the day, so re-crawl it every 3 hours.
+ 
     "crawl-news-every-3-hours": {
         "task": "apps.crawler_runs.tasks.crawl_all_news",
         "schedule": crontab(minute=0, hour="*/3"),
     },
-    # OHLCV + floorsheet only change once a day (after market close),
-    # so a single evening run is enough. 18:00 Asia/Kathmandu gives
-    # ShareSansar time to publish the finalized end-of-day figures.
+    
     "crawl-daily-prices-evening": {
         "task": "apps.crawler_runs.tasks.crawl_daily_prices",
         "schedule": crontab(minute=0, hour=18),
