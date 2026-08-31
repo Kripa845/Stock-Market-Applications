@@ -1,38 +1,12 @@
-"""
-Subprocess-based spider runner.
 
-WHY SUBPROCESS INSTEAD OF CrawlerProcess/CrawlerRunner?
---------------------------------------------------------
-The pipelines in this project call `django.setup()` and run ORM
-operations through Twisted's `deferToThread`, which assumes Scrapy owns
-its own reactor for the lifetime of one `scrapy crawl` process. Trying
-to start a second Scrapy reactor inside a long-lived Celery worker
-process (which already has its own event loop / prefork model) is a
-well-known source of "ReactorNotRestartable" and asyncio-related
-crashes.
-
-Shelling out to `scrapy crawl <spider>` gives every crawl run a clean
-process and a clean reactor, exactly like running it by hand from the
-terminal — the only difference is that Celery beat / a cron job is the
-one pressing "enter" instead of a person. This is also the reason the
-official Scrapy docs recommend `scrapyd` or a subprocess call for
-running spiders from other long-lived Python processes.
-
-Both apps/crawler_runs/tasks.py (Celery) and the `run_crawl` management
-command (cron / manual) call into this module so there is exactly one
-place that knows how to invoke a spider.
-"""
 
 import shlex
 import subprocess
 from pathlib import Path
 
-# Backend/crawlers  (the Scrapy project root, i.e. where scrapy.cfg lives)
 CRAWLER_PROJECT_DIR = Path(__file__).resolve().parent
 
-# All spiders this project ships. Kept as a single source of truth so
-# Celery tasks, the management command, and the beat schedule can't
-# silently drift from what actually exists in crawlers/spiders/.
+
 NEWS_SPIDERS = [
     "sharesansar",
     "merolagani",
@@ -70,19 +44,7 @@ class SpiderRunResult:
 
 
 def run_spider(spider_name, spider_args=None, timeout=60 * 30):
-    """
-    Run `scrapy crawl <spider_name>` as a subprocess.
-
-    spider_args: dict of `-a key=value` arguments forwarded to the
-                 spider's __init__ (e.g. {"max_articles": 30}).
-    timeout:     hard ceiling in seconds so one hung crawl can't block
-                 the whole scheduled run forever (default 30 minutes).
-
-    Returns a SpiderRunResult. Never raises for a *crawl* failure
-    (non-zero exit, timeout, etc.) — callers decide how to treat that,
-    which keeps one bad portal from taking down the rest of a
-    scheduled run. Programmer errors (bad spider_args) still raise.
-    """
+    
 
     if spider_name not in ALL_SPIDERS:
         raise ValueError(
@@ -132,11 +94,7 @@ def run_spider(spider_name, spider_args=None, timeout=60 * 30):
 
 
 def run_spiders(spider_names, spider_args=None, timeout=60 * 30):
-    """
-    Run several spiders back to back, continuing past individual
-    failures so one broken portal doesn't stop the rest of the run.
-    Returns a list of SpiderRunResult, one per spider.
-    """
+
 
     return [
         run_spider(name, spider_args=spider_args, timeout=timeout)

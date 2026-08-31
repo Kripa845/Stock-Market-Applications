@@ -221,7 +221,7 @@ MAILERS = {
 AUTH_USER_MODEL = "users.User"
 # settings.py
 
-
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
