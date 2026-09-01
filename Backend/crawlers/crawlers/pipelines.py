@@ -9,9 +9,7 @@ from pathlib import Path
 
 from twisted.internet.threads import deferToThread
 
-# ----------------------------------------------------------------------
-# DJANGO SETUP
-# ----------------------------------------------------------------------
+
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -32,9 +30,7 @@ from django.utils import timezone
 
 from itemadapter import ItemAdapter
 
-# ----------------------------------------------------------------------
-# MODELS
-# ----------------------------------------------------------------------
+
 
 from apps.crawler_runs.models import CrawlRun
 from apps.news.models import NewsArticle, RawArticle
@@ -42,9 +38,7 @@ from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 
 
-# ======================================================================
-# HELPERS
-# ======================================================================
+
 def parse_integer(value):
     if value is None or value == "":
         return None
@@ -82,10 +76,7 @@ def clean_body(value):
 
 
 def normalize_datetime(value):
-    """
-    Convert the datetime supplied by the spider into a Django
-    timezone-aware datetime.
-    """
+    
 
     if isinstance(value, datetime):
         dt = value
@@ -137,23 +128,10 @@ def normalize_datetime(value):
     return dt
 
 
-# ======================================================================
-# CRAWL RUN PIPELINE
-# ======================================================================
+
 
 class CrawlRunPipeline:
-    """
-    Creates one CrawlRun per crawler execution.
-
-    IMPORTANT:
-    Scrapy is running with an asyncio reactor. Direct synchronous Django
-    ORM calls from pipeline callbacks can raise:
-
-        SynchronousOnlyOperation:
-        You cannot call this from an async context
-
-    Therefore every ORM operation is executed in deferToThread().
-    """
+  
 
     def open_spider(self, spider):
         return deferToThread(
@@ -227,7 +205,7 @@ class CrawlRunPipeline:
             crawl_run.status = "completed"
             crawl_run.completed_at = timezone.now()
 
-            # These fields exist in the project's CrawlRun model.
+            
             crawl_run.articles_found = getattr(
                 spider,
                 "articles_seen",
@@ -275,27 +253,10 @@ class CrawlRunPipeline:
             )
 
 
-# ======================================================================
-# NEWS PIPELINE
-# ======================================================================
+
 
 class NewsPipeline:
-    """
-    Saves:
-
-        RawArticle
-             |
-             v
-        NewsArticle
-
-    Deduplication:
-        1. URL
-        2. content_hash
-
-    RawArticle.crawl_run is mandatory in the actual project model, so
-    the current CrawlRun ID is always attached to RawArticle.
-    """
-
+  
     def open_spider(self, spider):
         self.created_count = 0
         self.duplicate_url_count = 0
@@ -400,7 +361,7 @@ class NewsPipeline:
             f"{headline}|{body}".encode("utf-8")
         ).hexdigest()
 
-        # Run all Django ORM operations in a normal worker thread.
+       
         return deferToThread(
             self._save_article_sync,
             item,
@@ -433,9 +394,6 @@ class NewsPipeline:
         try:
             with transaction.atomic():
 
-                # ------------------------------------------------------
-                # URL duplicate
-                # ------------------------------------------------------
 
                 existing_article = (
                     NewsArticle.objects
@@ -454,9 +412,7 @@ class NewsPipeline:
 
                     return item
 
-                # ------------------------------------------------------
-                # Content duplicate
-                # ------------------------------------------------------
+               
 
                 existing_content = (
                     NewsArticle.objects
@@ -475,21 +431,7 @@ class NewsPipeline:
 
                     return item
 
-                # ------------------------------------------------------
-                # RAW ARTICLE
-                # ------------------------------------------------------
-                #
-                # The original pipeline did:
-                #
-                #   RawArticle.objects.create(
-                #       source=...,
-                #       url=...,
-                #   )
-                #
-                # But RawArticle.crawl_run is mandatory. This is a
-                # second independent bug that would appear after fixing
-                # SynchronousOnlyOperation.
-                # ------------------------------------------------------
+              
 
                 raw_article = (
                     RawArticle.objects
@@ -511,8 +453,7 @@ class NewsPipeline:
                     )
 
                 else:
-                    # Recover a RawArticle left behind by a partially
-                    # completed previous crawl.
+                    
                     raw_article.crawl_run_id = crawl_run_id
                     raw_article.http_status = http_status
                     raw_article.raw_html = raw_html or ""
@@ -525,9 +466,7 @@ class NewsPipeline:
                         ],
                     )
 
-                # ------------------------------------------------------
-                # NEWS ARTICLE
-                # ------------------------------------------------------
+    
 
                 article = NewsArticle.objects.create(
                     raw_article=raw_article,
@@ -585,18 +524,10 @@ class NewsPipeline:
         )
 
 
-# ======================================================================
-# TRADING DATA PIPELINE
-# ======================================================================
+
 
 class TradingDataPipeline:
-    """
-    Persists DailyPrice and writes trading_data.json.
-
-    The original pipeline also performed synchronous Django ORM calls.
-    That would produce the same async-context exception when this item
-    pipeline is used by trading_data.
-    """
+   
 
     def open_spider(self, spider):
         self.file = open(

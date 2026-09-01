@@ -1,22 +1,4 @@
-"""
-MeroLagani news spider.
 
-Listing:  https://merolagani.com/NewsList.aspx
-Article:  https://merolagani.com/NewsDetail.aspx?newsID=<id>
-
-MeroLagani is a classic ASP.NET WebForms site. The first page of
-NewsList.aspx is fully server-rendered (no JS needed to read it), so a
-plain Scrapy request is enough to get the most recent articles.
-
-SHORTCUT / KNOWN LIMITATION (documented per assignment instructions):
-"Load More" on the listing page is driven by an ASP.NET __doPostBack
-call rather than a normal link, so pagination past the first page would
-require replaying the WebForms postback (__VIEWSTATE / __EVENTVALIDATION
-+ the postback target). That is out of scope for this take-home; the
-spider currently collects the newest batch of articles shown on the
-first render of the listing page, which is sufficient to keep the
-dataset current when the crawler runs on a schedule (see 1.3).
-"""
 
 import re
 
@@ -140,10 +122,7 @@ class MerolaganiSpider(BaseNewsSpider):
             part.strip() for part in body_parts if part.strip()
         )
 
-        # Publish date is rendered as free text near the headline, e.g.
-        # "Aug 30, 2026 05:23 PM". Search the whole page text for the
-        # first value that looks like that pattern instead of relying
-        # on a brittle single selector.
+     
         published_at = self.extract_published_at(response)
 
         item = self.build_item(
