@@ -1,134 +1,8 @@
-# from scrapy.spiders import SitemapSpider
-
-# from crawlers.spiders.base_news import BaseNewsSpider
-
-
-# class ArthakhabarSpider(
-#     BaseNewsSpider,
-#     SitemapSpider,
-# ):
-
-#     name = "arthakhabar"
-
-#     allowed_domains = [
-#         "arthakhabar.com",
-#         "www.arthakhabar.com",
-#     ]
-
-#     sitemap_urls = [
-#         "https://arthakhabar.com/wp-sitemap.xml"
-#     ]
-
-#     SOURCE = "Arthakhabar"
-
-#     def sitemap_filter(self, entries):
-
-#         ignored_parts = [
-#             "/wp-admin/",
-#             "/wp-login",
-#             "/category/",
-#             "/tag/",
-#             "/author/",
-#             "/page/",
-#             "/feed/",
-#             "/wp-json/",
-#         ]
-
-#         for entry in entries:
-
-#             url = entry["loc"]
-
-#             if any(
-#                 part in url.lower()
-#                 for part in ignored_parts
-#             ):
-#                 continue
-
-#             yield entry
-
-#     def parse(self, response):
-
-#         headline = (
-#             response.css("h1::text").get()
-#             or
-#             response.css(
-#                 'meta[property="og:title"]::attr(content)'
-#             ).get()
-#         )
-
-#         body_parts = []
-
-#         selectors = [
-#             "article .entry-content p::text",
-#             "article .post-content p::text",
-#             "article .article-content p::text",
-#             ".entry-content p::text",
-#             ".post-content p::text",
-#             ".article-content p::text",
-#             ".news-content p::text",
-#             "article p::text",
-#         ]
-
-#         for selector in selectors:
-
-#             parts = response.css(
-#                 selector
-#             ).getall()
-
-#             if parts:
-#                 body_parts = parts
-#                 break
-
-#         if not body_parts:
-
-#             body_parts = response.xpath(
-#                 "//article//p//text()"
-#             ).getall()
-
-#         body = " ".join(
-#             part.strip()
-#             for part in body_parts
-#             if part.strip()
-#         )
-
-#         published_at = (
-#             response.css(
-#                 'meta[property="article:published_time"]'
-#                 '::attr(content)'
-#             ).get()
-#             or
-#             response.css(
-#                 "time::attr(datetime)"
-#             ).get()
-#             or
-#             response.css(
-#                 "time::text"
-#             ).get()
-#             or
-#             response.css(
-#                 ".entry-date::text"
-#             ).get()
-#             or
-#             response.css(
-#                 ".published::text"
-#             ).get()
-#         )
-
-#         item = self.build_item(
-#             response=response,
-#             headline=headline,
-#             body=body,
-#             published_at=published_at,
-#             source=self.SOURCE,
-#         )
-
-#         if item:
-#             yield item
-
 
 import scrapy
 
 from crawlers.spiders.base_news import BaseNewsSpider
+import json
 
 
 class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
@@ -203,9 +77,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
 
     def parse_article(self, response):
 
-        # --------------------------------------------------
-        # HEADLINE
-        # --------------------------------------------------
+   
 
         headline = response.css(
             "#content > div > header > h1::text"
@@ -220,9 +92,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         if headline:
             headline = headline.strip()
 
-        # --------------------------------------------------
-        # BODY
-        # --------------------------------------------------
+      
 
         body_parts = response.css(
             "div.entry-content p::text"
@@ -240,10 +110,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
             if part.strip()
         )
 
-        # --------------------------------------------------
-        # PUBLISHED DATE
-        # --------------------------------------------------
-
+      
         published_at = self.extract_published_at(
             response
         )
@@ -257,9 +124,10 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
             response.url,
         )
 
-        # --------------------------------------------------
-        # BUILD ITEM
-        # --------------------------------------------------
+        self.logger.info(
+           "Arthakhabar body: %s",
+         body,
+)
 
         item = self.build_item(
             response=response,
@@ -272,115 +140,14 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         if item:
             yield item
 
-    # def extract_published_at(self, response):
+   
 
-    #     # --------------------------------------------------
-    #     # 1. Actual Arthakhabar header date
-    #     # --------------------------------------------------
-
-    #     published_at = response.css(
-    #         "#content > div > header > div > div > div "
-    #         "> p:nth-child(2)::text"
-    #     ).get()
-
-    #     if published_at:
-    #         return published_at.strip()
-
-    #     # --------------------------------------------------
-    #     # 2. <time datetime="">
-    #     # --------------------------------------------------
-
-    #     published_at = response.css(
-    #         "time::attr(datetime)"
-    #     ).get()
-
-    #     if published_at:
-    #         return published_at.strip()
-
-    #     # --------------------------------------------------
-    #     # 3. <time> text
-    #     # --------------------------------------------------
-
-    #     published_at = response.css(
-    #         "time::text"
-    #     ).get()
-
-    #     if published_at:
-    #         return published_at.strip()
-
-    #     # --------------------------------------------------
-    #     # 4. WordPress date classes
-    #     # --------------------------------------------------
-
-    #     for selector in [
-    #         ".entry-date::text",
-    #         ".published::text",
-    #         ".post-date::text",
-    #         ".article-date::text",
-    #         ".date::text",
-    #     ]:
-
-    #         published_at = response.css(
-    #             selector
-    #         ).get()
-
-    #         if published_at:
-    #             return published_at.strip()
-
-    #     # --------------------------------------------------
-    #     # 5. JSON-LD
-    #     # --------------------------------------------------
-
-    #     json_ld_blocks = response.css(
-    #         'script[type="application/ld+json"]::text'
-    #     ).getall()
-
-    #     for block in json_ld_blocks:
-
-    #         try:
-    #             import json
-
-    #             data = json.loads(block)
-
-    #         except (
-    #             json.JSONDecodeError,
-    #             TypeError,
-    #         ):
-    #             continue
-
-    #         if isinstance(data, list):
-    #             objects = data
-
-    #         elif (
-    #             isinstance(data, dict)
-    #             and "@graph" in data
-    #         ):
-    #             objects = data["@graph"]
-
-    #         else:
-    #             objects = [data]
-
-    #         for obj in objects:
-
-    #             if not isinstance(obj, dict):
-    #                 continue
-
-    #             published_at = (
-    #                 obj.get("datePublished")
-    #                 or obj.get("dateCreated")
-    #             )
-
-    #             if published_at:
-    #                 return str(
-    #                     published_at
-    #                 ).strip()
+ 
 
     #     return None
     def extract_published_at(self, response):
 
-    # --------------------------------------------------
-    # 1. JSON-LD
-    # --------------------------------------------------
+   
 
         json_ld_blocks = response.css(
             'script[type="application/ld+json"]::text'
@@ -416,9 +183,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
                 if published_at:
                     return str(published_at).strip()
 
-        # --------------------------------------------------
-        # 2. OpenGraph
-        # --------------------------------------------------
+       
 
         published_at = response.css(
             'meta[property="article:published_time"]::attr(content)'
@@ -427,9 +192,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         if published_at:
             return published_at.strip()
 
-        # --------------------------------------------------
-        # 3. <time datetime="">
-        # --------------------------------------------------
+
 
         published_at = response.css(
             "time::attr(datetime)"
@@ -438,9 +201,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         if published_at:
             return published_at.strip()
 
-        # --------------------------------------------------
-        # 4. <time> visible text
-        # --------------------------------------------------
+        
 
         published_at = response.css(
             "time::text"
@@ -449,12 +210,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         if published_at:
             return published_at.strip()
 
-        # --------------------------------------------------
-        # 5. Arthakhabar article header
-        #
-        # Based on:
-        # #content > div > header > div > div > div > p:nth-child(2)
-        # --------------------------------------------------
+        
 
         selectors = [
 
@@ -515,9 +271,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
                 ):
                     return value
 
-        # --------------------------------------------------
-        # 6. Search all header text
-        # --------------------------------------------------
+       
 
         header_text = response.css(
             "#content > div > header ::text"

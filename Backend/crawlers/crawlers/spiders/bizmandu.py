@@ -1,13 +1,4 @@
-"""
-Bizmandu news spider.
 
-Listing:  https://bizmandu.com/content/category/market.html
-Article:  https://bizmandu.com/content/details/<id>/<slug>.html   (typical)
-
-Bizmandu runs on a WordPress-style CMS with static-looking `.html`
-category/detail URLs, so it behaves like arthakhabar / fiscalnepal:
-plain requests are enough, no JS rendering required.
-"""
 
 import scrapy
 

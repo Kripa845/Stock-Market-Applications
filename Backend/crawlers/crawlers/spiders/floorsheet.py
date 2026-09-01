@@ -7,9 +7,7 @@ import django
 import scrapy
 
 
-# ============================================================
-# DJANGO SETUP
-# ============================================================
+
 
 BASE_DIR = Path(__file__).resolve()
 
@@ -26,17 +24,12 @@ os.environ.setdefault(
 django.setup()
 
 
-# ============================================================
-# IMPORTS
-# ============================================================
 
 from apps.companies.models import Company
 from crawlers.items import FloorsheetItem
 
 
-# ============================================================
-# SPIDER
-# ============================================================
+
 
 class FloorsheetSpider(scrapy.Spider):
 
@@ -90,9 +83,7 @@ class FloorsheetSpider(scrapy.Spider):
         "HTTPERROR_ALLOW_ALL": True,
     }
 
-    # ========================================================
-    # INITIALIZATION
-    # ========================================================
+ 
 
     def __init__(
         self,
@@ -102,9 +93,7 @@ class FloorsheetSpider(scrapy.Spider):
     ):
         super().__init__(*args, **kwargs)
 
-        # Optional date supplied from command line:
-        #
-        # scrapy crawl floorsheet -a floorsheet_date=2026-08-26
+  
         #
         self.floorsheet_date = floorsheet_date
 
@@ -116,9 +105,6 @@ class FloorsheetSpider(scrapy.Spider):
         self.floorsheet_saved = 0
         self.floorsheet_failed = 0
 
-    # ========================================================
-    # START REQUESTS
-    # ========================================================
 
     def start_requests(self):
 
@@ -187,9 +173,7 @@ class FloorsheetSpider(scrapy.Spider):
                 dont_filter=True,
             )
 
-    # ========================================================
-    # PARSE COMPANY PAGE
-    # ========================================================
+  
 
     def parse_company(
         self,
@@ -203,9 +187,7 @@ class FloorsheetSpider(scrapy.Spider):
             response.status,
         )
 
-        # ----------------------------------------------------
-        # CHECK RESPONSE
-        # ----------------------------------------------------
+       
 
         if response.status != 200:
 
@@ -219,9 +201,7 @@ class FloorsheetSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # CSRF TOKEN
-        # ----------------------------------------------------
+       
 
         csrf_token = (
             response.css(
@@ -264,9 +244,7 @@ class FloorsheetSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # DETERMINE DATE
-        # ----------------------------------------------------
+        
 
         date_value = self.get_floorsheet_date(
             response
@@ -286,9 +264,6 @@ class FloorsheetSpider(scrapy.Spider):
             date_value,
         )
 
-        # ----------------------------------------------------
-        # SEND FIRST PAGE
-        # ----------------------------------------------------
 
         yield from self.make_request(
             symbol=symbol,
@@ -298,18 +273,14 @@ class FloorsheetSpider(scrapy.Spider):
             start=0,
         )
 
-    # ========================================================
-    # GET FLOOR SHEET DATE
-    # ========================================================
+    
 
     def get_floorsheet_date(
         self,
         response,
     ):
 
-        # ----------------------------------------------------
-        # 1. Explicit date passed from command line
-        # ----------------------------------------------------
+    
 
         if self.floorsheet_date:
 
@@ -317,9 +288,6 @@ class FloorsheetSpider(scrapy.Spider):
                 self.floorsheet_date
             ).strip()
 
-        # ----------------------------------------------------
-        # 2. Common date input selectors
-        # ----------------------------------------------------
 
         selectors = [
 
@@ -354,9 +322,7 @@ class FloorsheetSpider(scrapy.Spider):
 
                     return value
 
-        # ----------------------------------------------------
-        # 3. Try data attributes
-        # ----------------------------------------------------
+       
 
         data_selectors = [
 
@@ -379,9 +345,7 @@ class FloorsheetSpider(scrapy.Spider):
 
                     return value
 
-        # ----------------------------------------------------
-        # 4. Log useful HTML around date controls
-        # ----------------------------------------------------
+
 
         date_html = response.css(
             "#date"
@@ -404,9 +368,7 @@ class FloorsheetSpider(scrapy.Spider):
 
         return None
 
-    # ========================================================
-    # BUILD DATATABLES REQUEST
-    # ========================================================
+   
 
     def make_request(
         self,
@@ -442,9 +404,7 @@ class FloorsheetSpider(scrapy.Spider):
 
         }
 
-        # ----------------------------------------------------
-        # DataTables columns
-        # ----------------------------------------------------
+       
 
         columns = [
 
@@ -555,9 +515,7 @@ class FloorsheetSpider(scrapy.Spider):
             dont_filter=True,
         )
 
-    # ========================================================
-    # PARSE FLOOR SHEET RESPONSE
-    # ========================================================
+
 
     def parse_floorsheet(
         self,
@@ -577,10 +535,7 @@ class FloorsheetSpider(scrapy.Spider):
             response.url,
         )
 
-        # ----------------------------------------------------
-        # HTTP STATUS
-        # ----------------------------------------------------
-
+        
         if response.status not in (
             200,
             202,
@@ -604,9 +559,7 @@ class FloorsheetSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # EMPTY RESPONSE
-        # ----------------------------------------------------
+      
 
         if not response.text.strip():
 
@@ -617,9 +570,6 @@ class FloorsheetSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # JSON
-        # ----------------------------------------------------
 
         try:
 
@@ -641,9 +591,6 @@ class FloorsheetSpider(scrapy.Spider):
 
             return
 
-        # ----------------------------------------------------
-        # LOG RESPONSE STRUCTURE
-        # ----------------------------------------------------
 
         self.logger.info(
             "%s response keys: %s",
@@ -651,9 +598,7 @@ class FloorsheetSpider(scrapy.Spider):
             list(payload.keys()),
         )
 
-        # ----------------------------------------------------
-        # DATATABLE METADATA
-        # ----------------------------------------------------
+      
 
         records_total = payload.get(
             "recordsTotal",
@@ -681,9 +626,6 @@ class FloorsheetSpider(scrapy.Spider):
             len(rows),
         )
 
-        # ----------------------------------------------------
-        # DEBUG EMPTY DATA
-        # ----------------------------------------------------
 
         if not rows:
 
@@ -705,20 +647,21 @@ class FloorsheetSpider(scrapy.Spider):
 
         self.successful_responses += 1
 
-        # ----------------------------------------------------
-        # PROCESS ROWS
-        # ----------------------------------------------------
+      
 
         for row in rows:
 
-            self.logger.debug(
-                "Raw floorsheet row: %s",
-                row,
+            self.logger.info(
+                "RAW TRANSACTION | %s | contract= %s | buyer= %s | seller= %s | quantity= %s | rate= %s | amount= %s | date= %s",
+                symbol,
+                row.get("contract_no") or row.get("transaction_id") or row.get("contract"),
+                row.get("buyer") or row.get("buyer_broker"),
+                row.get("seller") or row.get("seller_broker"),
+                row.get("quantity") or row.get("qty"),
+                row.get("rate") or row.get("price"),
+                row.get("amount") or row.get("turnover"),
+                row.get("date_") or row.get("date") or date,
             )
-
-            # -----------------------------------------------
-            # EXTRACT VALUES
-            # -----------------------------------------------
 
             transaction_id = (
                 row.get("contract_no")
@@ -757,9 +700,7 @@ class FloorsheetSpider(scrapy.Spider):
                 or date
             )
 
-            # -----------------------------------------------
-            # BASIC VALIDATION
-            # -----------------------------------------------
+            
 
             if not buyer_broker:
 
@@ -815,9 +756,7 @@ class FloorsheetSpider(scrapy.Spider):
 
                 continue
 
-            # -----------------------------------------------
-            # YIELD ITEM
-            # -----------------------------------------------
+            
 
             self.items_found += 1
 
@@ -844,20 +783,7 @@ class FloorsheetSpider(scrapy.Spider):
                 source=self.SOURCE,
             )
 
-        # ----------------------------------------------------
-        # PAGINATION
-        # ----------------------------------------------------
-        #
-        # If the endpoint reports more records than the
-        # current page, request the next page.
-        #
-        # Example:
-        #
-        # recordsTotal = 500
-        # current page = 200
-        #
-        # next start = 200
-        # ----------------------------------------------------
+    
 
         try:
 
@@ -893,11 +819,7 @@ class FloorsheetSpider(scrapy.Spider):
                 total_records,
             )
 
-            # We need the CSRF token again.
-            #
-            # Scrapy keeps the same cookie jar for the
-            # request chain, so request the company page
-            # again to obtain the token cleanly.
+           
 
             company_url = (
                 "https://www.sharesansar.com/"
@@ -921,9 +843,7 @@ class FloorsheetSpider(scrapy.Spider):
                 dont_filter=True,
             )
 
-    # ========================================================
-    # PREPARE NEXT PAGE
-    # ========================================================
+ 
 
     def parse_company_next_page(
         self,
@@ -979,9 +899,7 @@ class FloorsheetSpider(scrapy.Spider):
             start=start,
         )
 
-    # ========================================================
-    # ERROR HANDLER
-    # ========================================================
+   
 
     def handle_error(
         self,
@@ -1022,9 +940,6 @@ class FloorsheetSpider(scrapy.Spider):
                 response.text[:3000],
             )
 
-    # ========================================================
-    # CLOSE SPIDER
-    # ========================================================
 
     def closed(
         self,
