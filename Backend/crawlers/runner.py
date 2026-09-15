@@ -2,6 +2,7 @@
 
 import shlex
 import subprocess
+import sys
 from pathlib import Path
 
 CRAWLER_PROJECT_DIR = Path(__file__).resolve().parent
@@ -43,7 +44,12 @@ class SpiderRunResult:
         return f"<SpiderRunResult {self.spider_name} {status}>"
 
 
-def run_spider(spider_name, spider_args=None, timeout=60 * 30):
+def run_spider(
+    spider_name,
+    spider_args=None,
+    timeout=60 * 30,
+    on_process_started=None,
+):
     
 
     if spider_name not in ALL_SPIDERS:
@@ -52,33 +58,41 @@ def run_spider(spider_name, spider_args=None, timeout=60 * 30):
             f"Known spiders: {', '.join(ALL_SPIDERS)}"
         )
 
-    command = ["scrapy", "crawl", spider_name]
+    command = [sys.executable, "-m", "scrapy", "crawl", spider_name]
 
     for key, value in (spider_args or {}).items():
         command += ["-a", f"{key}={value}"]
 
     try:
-        completed = subprocess.run(
+        process = subprocess.Popen(
             command,
             cwd=str(CRAWLER_PROJECT_DIR),
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout,
         )
+
+        if on_process_started:
+            on_process_started(process.pid)
+
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+            return SpiderRunResult(
+                spider_name=spider_name,
+                returncode=-1,
+                stdout=(stdout or "")[-4000:],
+                stderr=(stderr or "")[-4000:]
+                + f"\nSpider '{spider_name}' timed out after {timeout}s",
+            )
 
         return SpiderRunResult(
             spider_name=spider_name,
-            returncode=completed.returncode,
-            stdout=completed.stdout[-4000:],
-            stderr=completed.stderr[-4000:],
-        )
-
-    except subprocess.TimeoutExpired as exc:
-        return SpiderRunResult(
-            spider_name=spider_name,
-            returncode=-1,
-            stdout=(exc.stdout or "")[-4000:] if exc.stdout else "",
-            stderr=f"Spider '{spider_name}' timed out after {timeout}s",
+            returncode=process.returncode,
+            stdout=(stdout or "")[-4000:],
+            stderr=(stderr or "")[-4000:],
         )
 
     except FileNotFoundError:
@@ -87,17 +101,27 @@ def run_spider(spider_name, spider_args=None, timeout=60 * 30):
             returncode=-2,
             stdout="",
             stderr=(
-                "`scrapy` executable not found on PATH. Is Scrapy "
-                "installed in this environment/venv?"
+                "Scrapy is not installed in the Python environment used "
+                f"by the worker: {sys.executable}"
             ),
         )
 
 
-def run_spiders(spider_names, spider_args=None, timeout=60 * 30):
+def run_spiders(
+    spider_names,
+    spider_args=None,
+    timeout=60 * 30,
+    on_process_started=None,
+):
 
 
     return [
-        run_spider(name, spider_args=spider_args, timeout=timeout)
+        run_spider(
+            name,
+            spider_args=spider_args,
+            timeout=timeout,
+            on_process_started=on_process_started,
+        )
         for name in spider_names
     ]
 

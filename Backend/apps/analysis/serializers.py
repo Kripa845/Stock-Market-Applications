@@ -1,36 +1,27 @@
 from rest_framework import serializers
+from .models import DailyAnalysis
+from apps.companies.models import Company
 
-from .models import Company
 
-
-class CompanySerializer(serializers.ModelSerializer):
+class DailyAnalysisSerializer(serializers.ModelSerializer):
+    company_symbol = serializers.CharField(source="company.symbol", read_only=True)
+    company_name = serializers.CharField(source="company.name", read_only=True)
 
     class Meta:
-        model = Company
-
+        model = DailyAnalysis
         fields = [
             "id",
-            "symbol",
-            "name",
-            "sector",
-            "aliases",
-            "is_active",
-            "created_by",
+            "company",
+            "company_symbol",
+            "company_name",
+            "date",
+            "vwap",
+            "close_price",
+            "volume",
+            "volume_average",
+            "volume_anomaly",
+            "pressure",
+            "news_count",
             "created_at",
-            "updated_at",
         ]
-
-        read_only_fields = [
-            "id",
-            "created_by",
-            "created_at",
-            "updated_at",
-        ]
-
-    def create(self, validated_data):
-        request = self.context.get("request")
-
-        if request and request.user.is_authenticated:
-            validated_data["created_by"] = request.user
-
-        return super().create(validated_data)
+        read_only_fields = ["id", "created_at"]

@@ -1,5 +1,5 @@
 from django.db import models
-from apps.crawler_runs.models import CrawlRun
+# from apps.crawler_runs.models import CrawlRun
 from django.conf import settings
 # Create your models here.
 class Company(models.Model):

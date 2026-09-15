@@ -7,6 +7,7 @@ from pathlib import Path
 
 import django
 import scrapy
+from asgiref.sync import sync_to_async
 
 
 # ============================================================
@@ -67,6 +68,13 @@ class TradingDataSpider(scrapy.Spider):
         # Important for the POST request
         "COOKIES_ENABLED": True,
     }
+
+    async def start(self):
+        """Bridge Scrapy's async start hook to the Django-backed request generator."""
+        requests = await sync_to_async(list)(self.start_requests())
+
+        for request in requests:
+            yield request
 
 
     def start_requests(self):

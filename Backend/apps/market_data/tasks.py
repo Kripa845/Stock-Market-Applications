@@ -16,4 +16,4 @@ project (trading data is collected via the Scrapy spider
 would have raised ModuleNotFoundError the first time this task ran.
 """
 
-from apps.crawler_runs.tasks import crawl_daily_prices  # noqa: F401
+# from apps.crawler_runs.tasks import crawl_daily_prices  # noqa: F401

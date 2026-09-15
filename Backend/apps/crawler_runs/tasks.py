@@ -1,165 +1,435 @@
 import logging
 
 from celery import shared_task
+from django.utils import timezone
 
 from crawlers.runner import (
     FLOORSHEET_SPIDERS,
     MARKET_DATA_SPIDERS,
     NEWS_SPIDERS,
-    run_spider,
     run_spiders,
 )
+
+from .models import CrawlRun
+
 
 logger = logging.getLogger(__name__)
 
 
-def _log_results(label, results):
-    ok = [r.spider_name for r in results if r.ok]
-    failed = [r for r in results if not r.ok]
+# ============================================================
+# HELPER: FINISH CRAWL RUN
+# ============================================================
 
-    logger.info(
-        "%s finished | ok=%s | failed=%s",
-        label,
-        ok,
-        [r.spider_name for r in failed],
+def _finish_run(
+    crawl_run_id,
+    *,
+    success,
+    results=None,
+    logs="",
+):
+    crawl_run = CrawlRun.objects.get(
+        pk=crawl_run_id
     )
 
-    for result in failed:
-        logger.error(
-            "%s: spider '%s' exited with code %s\nSTDERR:\n%s",
-            label,
-            result.spider_name,
-            result.returncode,
-            result.stderr,
+    results = results or []
+
+    crawl_run.logs = logs
+
+    # Collect failed spider errors
+    failed = []
+
+    for result in results:
+        if not result.ok:
+            failed.append(
+                f"{result.spider_name}: {result.stderr}"
+            )
+
+    if failed:
+        crawl_run.errors = [
+            *crawl_run.errors,
+            *failed,
+        ]
+
+    crawl_run.status = (
+        CrawlRun.Status.SUCCESS
+        if success
+        else CrawlRun.Status.FAILED
+    )
+
+    crawl_run.completed_at = timezone.now()
+
+    crawl_run.save(
+        update_fields=[
+            "status",
+            "completed_at",
+            "logs",
+            "errors",
+        ]
+    )
+
+
+# ============================================================
+# MAIN CRAWL TASK
+# ============================================================
+
+@shared_task(bind=True)
+def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
+
+    crawl_run = CrawlRun.objects.get(
+        pk=crawl_run_id
+    )
+
+    crawl_run.task_id = self.request.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+
+    if not crawl_run.started_at:
+        crawl_run.started_at = timezone.now()
+
+    crawl_run.save(
+        update_fields=[
+            "task_id",
+            "status",
+            "started_at",
+        ]
+    )
+
+    try:
+
+        # ------------------------------------------------
+        # Determine spiders
+        # ------------------------------------------------
+
+        if spider_name:
+            spider_names = [spider_name]
+
+        elif crawl_run.crawl_type == CrawlRun.CrawlType.NEWS:
+
+            spider_names = crawl_run.sources
+
+        elif crawl_run.crawl_type == CrawlRun.CrawlType.TRADING:
+
+            spider_names = MARKET_DATA_SPIDERS
+
+        elif crawl_run.crawl_type == CrawlRun.CrawlType.FLOORSHEET:
+
+            spider_names = FLOORSHEET_SPIDERS
+
+        elif crawl_run.crawl_type == CrawlRun.CrawlType.ALL:
+
+            spider_names = (
+                NEWS_SPIDERS
+                + MARKET_DATA_SPIDERS
+                + FLOORSHEET_SPIDERS
+            )
+
+        else:
+            raise ValueError(
+                f"Unsupported crawl type: "
+                f"{crawl_run.crawl_type}"
+            )
+
+        # ------------------------------------------------
+        # Save Scrapy PID
+        # ------------------------------------------------
+
+        def save_process_id(pid):
+
+            CrawlRun.objects.filter(
+                pk=crawl_run_id
+            ).update(
+                process_id=pid
+            )
+
+            logger.info(
+                "CrawlRun %s started Scrapy PID %s",
+                crawl_run_id,
+                pid,
+            )
+
+        # ------------------------------------------------
+        # Run spiders
+        # ------------------------------------------------
+
+        results = run_spiders(
+            spider_names,
+            spider_args={
+                "crawl_run_id": crawl_run_id,
+                **(spider_args or {}),
+            },
+            on_process_started=save_process_id,
         )
 
-    return {
-        "ok": ok,
-        "failed": [r.spider_name for r in failed],
-    }
+        # ------------------------------------------------
+        # Clear PID
+        # ------------------------------------------------
 
-
-# ======================================================================
-# INDIVIDUAL SPIDER TASKS
-#
-# Exposed individually (not just as part of the "crawl everything"
-# tasks below) so a single portal can be re-run on demand from the
-# admin "trigger crawl" screen (Section 5 / POST /api/admin/crawl-runs)
-# without re-running the whole pipeline.
-# ======================================================================
-
-@shared_task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=2,
-)
-def crawl_single_spider(self, spider_name, spider_args=None):
-    """
-    Generic single-spider task. `POST /api/admin/crawl-runs` can call
-    this with any spider name from crawlers.runner.ALL_SPIDERS instead
-    of needing one hard-coded task per portal.
-    """
-
-    result = run_spider(spider_name, spider_args=spider_args)
-
-    if not result.ok:
-        logger.error(
-            "Spider '%s' failed (code=%s):\n%s",
-            spider_name,
-            result.returncode,
-            result.stderr,
+        CrawlRun.objects.filter(
+            pk=crawl_run_id
+        ).update(
+            process_id=None
         )
 
-    return {
-        "spider": spider_name,
-        "ok": result.ok,
-        "returncode": result.returncode,
-    }
+        # ------------------------------------------------
+        # Check cancellation
+        # ------------------------------------------------
 
+        crawl_run.refresh_from_db()
 
-# ======================================================================
-# GROUPED / SCHEDULED TASKS
-#
-# These are the ones wired into CELERY_BEAT_SCHEDULE (config/settings.py)
-# so the dataset stays current without anyone running a script by hand.
-# ======================================================================
+        if crawl_run.status == CrawlRun.Status.CANCELLED:
 
-@shared_task(
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=2,
-)
-def crawl_all_news():
-    """
-    Runs every configured news spider (ShareSansar, MeroLagani,
-    Bizmandu, NepseAlpha, ArthaKhabar, FiscalNepal).
+            logger.info(
+                "CrawlRun %s was cancelled.",
+                crawl_run_id,
+            )
 
-    Scheduled every few hours (see CELERY_BEAT_SCHEDULE) so freshly
-    published articles get categorized and analyzed the same day they
-    come out, rather than only once per day.
-    """
+            return {
+                "crawl_run_id": crawl_run_id,
+                "success": False,
+                "cancelled": True,
+            }
 
-    results = run_spiders(NEWS_SPIDERS)
-    return _log_results("crawl_all_news", results)
+        # ------------------------------------------------
+        # Determine success
+        # ------------------------------------------------
 
+        success = all(
+            result.ok
+            for result in results
+        )
 
-@shared_task(
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=2,
-)
-def crawl_daily_prices():
-    """
-    Runs the OHLCV trading-data spider(s) for every active/tracked
-    company. Scheduled once a day, shortly after NEPSE's market close
-    (Sun-Thu ~15:00 NPT), since intraday values aren't final until
-    then.
-    """
+        # ------------------------------------------------
+        # Build logs
+        # ------------------------------------------------
 
-    results = run_spiders(MARKET_DATA_SPIDERS)
-    return _log_results("crawl_daily_prices", results)
+        logs = []
 
+        logs.append(
+            f"Crawl Run: {crawl_run_id}"
+        )
 
-@shared_task(
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=2,
-)
-def crawl_floorsheet():
-    """
-    Runs the floorsheet spider(s) for a sample of trading days per
-    company (feeds the buyer/seller broker behavior analysis).
-    Scheduled once a day, same window as crawl_daily_prices.
-    """
+        logs.append(
+            f"Crawl Type: {crawl_run.crawl_type}"
+        )
 
-    results = run_spiders(FLOORSHEET_SPIDERS)
-    return _log_results("crawl_floorsheet", results)
+        logs.append(
+            "========================================"
+        )
 
+        for result in results:
+
+            logs.append(
+                f"{result.spider_name}: "
+                f"{'SUCCESS' if result.ok else 'FAILED'}"
+            )
+
+            if result.stdout:
+                logs.append(
+                    f"\nSTDOUT:\n{result.stdout}"
+                )
+
+            if result.stderr:
+                logs.append(
+                    f"\nSTDERR:\n{result.stderr}"
+                )
+
+            logs.append(
+                "----------------------------------------"
+            )
+
+        # ------------------------------------------------
+        # Finish
+        # ------------------------------------------------
+
+        _finish_run(
+            crawl_run_id,
+            success=success,
+            results=results,
+            logs="\n".join(logs),
+        )
+
+        return {
+            "crawl_run_id": crawl_run_id,
+            "success": success,
+            "spiders": list(spider_names),
+        }
+
+    except Exception as exc:
+
+        logger.exception(
+            "Crawl %s failed.",
+            crawl_run_id,
+        )
+
+        crawl_run = CrawlRun.objects.get(
+            pk=crawl_run_id
+        )
+
+        # Don't overwrite CANCELLED
+        if crawl_run.status == CrawlRun.Status.CANCELLED:
+            return {
+                "crawl_run_id": crawl_run_id,
+                "success": False,
+                "cancelled": True,
+            }
+
+        crawl_run.status = CrawlRun.Status.FAILED
+        crawl_run.completed_at = timezone.now()
+
+        crawl_run.errors = [
+            *crawl_run.errors,
+            str(exc),
+        ]
+
+        crawl_run.process_id = None
+
+        crawl_run.save(
+            update_fields=[
+                "status",
+                "completed_at",
+                "errors",
+                "process_id",
+            ]
+        )
+
+        raise
+
+# ============================================================
+# SCHEDULED NEWS CRAWL
+# ============================================================
 
 @shared_task
-def run_full_crawl_pipeline():
+def crawl_all_news():
     """
-    Orchestrator: news -> prices -> floorsheet, run one after another
-    (not in parallel) so a slow/rate-limited news crawl doesn't compete
-    for the same outbound bandwidth/IP as the price crawl that runs
-    right after market close.
+    Automatically crawl all news sources.
 
-    This is the task Celery beat calls for the once-a-day "full
-    refresh" entry; the more frequent `crawl_all_news` entry keeps news
-    current between full refreshes.
+    Creates a CrawlRun and then dispatches run_crawl().
     """
 
-    news_summary = _log_results("crawl_all_news", run_spiders(NEWS_SPIDERS))
-    prices_summary = _log_results(
-        "crawl_daily_prices", run_spiders(MARKET_DATA_SPIDERS)
+    crawl_run = CrawlRun.objects.create(
+        crawl_type=CrawlRun.CrawlType.NEWS,
+        source="all",
+        target="All tracked companies",
+        status=CrawlRun.Status.PENDING,
+        sources=list(NEWS_SPIDERS),
     )
-    floorsheet_summary = _log_results(
-        "crawl_floorsheet", run_spiders(FLOORSHEET_SPIDERS)
+
+    task = run_crawl.delay(
+        crawl_run.id
+    )
+
+    crawl_run.task_id = task.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+    crawl_run.started_at = timezone.now()
+
+    crawl_run.save(
+        update_fields=[
+            "task_id",
+            "status",
+            "started_at",
+        ]
     )
 
     return {
-        "news": news_summary,
-        "prices": prices_summary,
-        "floorsheet": floorsheet_summary,
+        "crawl_run_id": crawl_run.id,
+        "task_id": task.id,
+        "type": "news",
     }
+
+
+# ============================================================
+# SCHEDULED TRADING DATA CRAWL
+# ============================================================
+
+@shared_task
+def crawl_daily_prices():
+    """
+    Automatically crawl daily trading data.
+    """
+
+    crawl_run = CrawlRun.objects.create(
+        crawl_type=CrawlRun.CrawlType.TRADING,
+        source="trading_data",
+        target="All tracked companies",
+        status=CrawlRun.Status.PENDING,
+        sources=list(MARKET_DATA_SPIDERS),
+    )
+
+    task = run_crawl.delay(
+        crawl_run.id
+    )
+
+    crawl_run.task_id = task.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+    crawl_run.started_at = timezone.now()
+
+    crawl_run.save(
+        update_fields=[
+            "task_id",
+            "status",
+            "started_at",
+        ]
+    )
+
+    return {
+        "crawl_run_id": crawl_run.id,
+        "task_id": task.id,
+        "type": "trading",
+    }
+
+
+# ============================================================
+# SCHEDULED FLOORSHEET CRAWL
+# ============================================================
+
+@shared_task
+def crawl_floorsheet():
+    """
+    Automatically crawl floorsheet data.
+    """
+
+    crawl_run = CrawlRun.objects.create(
+        crawl_type=CrawlRun.CrawlType.FLOORSHEET,
+        source="floorsheet",
+        target="All tracked companies",
+        status=CrawlRun.Status.PENDING,
+        sources=list(FLOORSHEET_SPIDERS),
+    )
+
+    task = run_crawl.delay(
+        crawl_run.id
+    )
+
+    crawl_run.task_id = task.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+    crawl_run.started_at = timezone.now()
+
+    crawl_run.save(
+        update_fields=[
+            "task_id",
+            "status",
+            "started_at",
+        ]
+    )
+
+    return {
+        "crawl_run_id": crawl_run.id,
+        "task_id": task.id,
+        "type": "floorsheet",
+    }
+
+
+# ============================================================
+# FULL CRAWL
+# ============================================================
+
+@shared_task
+def run_full_crawl_pipeline(crawl_run_id):
+    """
+    Kept for compatibility with the existing API.
+
+    The actual crawling is handled by run_crawl().
+    """
+
+    return run_crawl(
+        crawl_run_id
+    )

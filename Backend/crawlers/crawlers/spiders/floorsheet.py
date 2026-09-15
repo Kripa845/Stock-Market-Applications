@@ -5,6 +5,7 @@ from pathlib import Path
 
 import django
 import scrapy
+from asgiref.sync import sync_to_async
 
 
 
@@ -104,6 +105,13 @@ class FloorsheetSpider(scrapy.Spider):
 
         self.floorsheet_saved = 0
         self.floorsheet_failed = 0
+
+    async def start(self):
+        """Bridge Scrapy's async start hook to the Django-backed request generator."""
+        requests = await sync_to_async(list)(self.start_requests())
+
+        for request in requests:
+            yield request
 
 
     def start_requests(self):

@@ -1,56 +1,31 @@
-// Types mirror the DRF serializers in Backend/apps/*/serializers.py.
-// Where a backend route isn't wired up yet (news, analysis, admin
-// crawl-runs), the shape is inferred from the model fields + the
-// assignment spec (Section 7 / Section 3) instead of a live serializer.
+// ── Company & Market Data ─────────────────────────────────────────────
 
-export type Role = "admin" | "analyst" | "viewer";
-
-// apps/users/serializers.py:UserSerializer
-export interface User {
-  id: number;
-  username: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  role: Role;
-  is_active: boolean;
-  date_joined: string;
-}
-
-export interface RegisterPayload {
-  username: string;
-  email: string;
-  password: string;
-  passwordConfirm: string;
-  firstName?: string;
-  lastName?: string;
-}
-
-export interface LoginPayload {
-  username: string;
-  password: string;
-}
-
-export interface TokenPair {
-  access: string;
-  refresh: string;
-}
-
-// apps/companies/serializers.py:CompanySerializer
 export interface Company {
   id: number;
   symbol: string;
   name: string;
   sector: string;
-  aliases: string[];
   is_active: boolean;
+  aliases?: string[];
+  is_tracked?: boolean;
+  latest_price: number;
+  price_change: number;
+  price_change_percent: number;
+  volume_24h: number;
+  turnover_24h: number;
+  high_24h: number;
+  low_24h: number;
+  news_count: number;
+  sentiment_score: number;
+  sparkline: number[];
+  last_crawl?: string | null;
+  last_crawl_status?: string | null;
 }
 
-// apps/market_data/serializers.py:DailyPriceSerializers
 export interface DailyPrice {
   id: number;
-  company: number; // FK id
-  date: string; // YYYY-MM-DD
+  company: number;
+  date: string;
   open: string;
   high: string;
   low: string;
@@ -59,7 +34,6 @@ export interface DailyPrice {
   turnover: string;
 }
 
-// apps/market_data/serializers.py:FloorsheetSerializer
 export interface FloorsheetTransaction {
   id: number;
   company: number;
@@ -69,53 +43,57 @@ export interface FloorsheetTransaction {
   seller_broker: string;
   quantity: number;
   rate: string;
-  amount: string | null;
-  created_at: string;
+  amount: string;
 }
 
-export interface PaginatedResponse<T> {
-  count: number;
-  next: string | null;
-  previous: string | null;
-  results: T[];
+// ── News & Categorization ─────────────────────────────────────────────
+
+export type SentimentLabel = 'positive' | 'neutral' | 'negative' | null;
+
+export interface CompanyTag {
+  id: number;
+  company: number;
+  company_symbol?: string;
+  symbol?: string;
+  company_name: string;
+  confidence: number;
+  method: string;
+  is_manual: boolean;
 }
 
-export interface FloorsheetQueryParams {
-  company?: number | string;
-  date?: string;
-  buyer_broker?: string;
-  seller_broker?: string;
-  search?: string;
-  ordering?: string;
-}
-
-// --- Not yet implemented on the backend (apps/news/urls.py is empty) --
-// Inferred from apps/news/models.py: NewsArticle + ArticleCompanyTag
 export interface NewsArticle {
   id: number;
+  headline: string;
+  body?: string;
   source: string;
   url: string;
-  headline: string;
-  body: string;
-  published_at: string | null;
+  published_at: string;
   sentiment: number | null;
-  sentiment_label: string;
-  confidence?: number; // from the ArticleCompanyTag for the queried company
-  method?: string;
+  sentiment_label: SentimentLabel;
+  is_processed: boolean;
+  company_tags: CompanyTag[];
+  created_at: string;
+  updated_at?: string;
 }
 
-export interface RecategorizePayload {
-  company_id: number | string;
-  action: "add" | "remove" | "update";
-  reason?: string;
+export interface NewsStats {
+  total_articles: number;
+  categorized: number;
+  uncategorized: number;
+  multi_company_articles: number;
+  by_source: { source: string; count: number }[];
+  by_company: { company__symbol: string; company__name: string; count: number }[];
 }
 
-// --- Not yet implemented on the backend (apps/analysis/urls.py is empty) --
-// Inferred from apps/analysis/models.py: DailyAnalysis
-export type Pressure = "buying" | "selling" | "neutral";
+// ── Analysis ──────────────────────────────────────────────────────────
 
-export interface BehaviorSummaryData {
+export type Pressure = 'buying' | 'selling' | 'neutral';
+
+export interface DailyAnalysis {
+  id: number;
   company: number;
+  symbol: string;
+  company_name: string;
   date: string;
   vwap: string | null;
   close_price: string;
@@ -124,26 +102,107 @@ export interface BehaviorSummaryData {
   volume_anomaly: boolean;
   pressure: Pressure;
   news_count: number;
+  created_at: string;
+}
+
+export interface BehaviorSummary {
+  company_id: number;
+  symbol: string;
+  company_name: string;
+  latest_close: string | null;
+  latest_vwap: string | null;
+  current_pressure: Pressure | null;
+  volume_anomaly_days: number;
+  anomaly_threshold_multiplier: number;
+  avg_daily_volume: number | null;
+  daily_analysis: DailyAnalysis[];
 }
 
 export interface NewsPriceCorrelation {
-  company: number;
-  correlation: number;
-  window_days: number;
+  date: string;
+  news_count: number;
+  avg_sentiment: number | null;
+  next_day_price_change_pct: number | null;
+  next_day_volume_change_pct: number | null;
+  pressure: Pressure | null;
 }
 
-// --- Not yet implemented on the backend (apps/crawler_runs has no urls.py) --
-// Inferred from apps/crawler_runs/models.py: CrawlRun
-export type CrawlRunStatus = "pending" | "running" | "completed" | "failed";
+export interface BrokerRow {
+  buyer_broker?: string;
+  seller_broker?: string;
+  total_quantity: number;
+  total_amount: number;
+  transaction_count: number;
+}
+
+export interface TopBrokers {
+  company_id: number;
+  symbol: string;
+  top_buyers: BrokerRow[];
+  top_sellers: BrokerRow[];
+}
+
+export interface CompanyBehaviorOverview {
+  company_id: number;
+  symbol: string;
+  company_name: string;
+  sector: string;
+  latest_close: number | null;
+  latest_vwap: number | null;
+  pressure: Pressure;
+  volume_anomaly: boolean;
+  anomaly_count_30d: number;
+  total_news: number;
+}
+
+// ── Crawler ───────────────────────────────────────────────────────────
+
+export type CrawlStatus = 'running' | 'success' | 'failed' | 'pending' | 'cancelled';
 
 export interface CrawlRun {
   id: number;
-  started_at: string | null;
-  completed_at: string | null;
-  status: CrawlRunStatus;
+  status: CrawlStatus;
   sources: string[];
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number | null;
   articles_found: number;
   articles_created: number;
   articles_updated: number;
-  errors: string[];
+  errors: string | null;
 }
+
+// ── Auth ──────────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'analyst' | 'viewer';
+
+export interface User { id: number;
+   username: string;
+    email: string;
+     first_name: string;
+      last_name: string; 
+      role: UserRole; 
+      is_active: boolean;
+       date_joined: string; 
+       last_login: string | null; }
+
+// ── Pagination ────────────────────────────────────────────────────────
+
+export interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+export interface AdminDashboard {
+           role: 'admin'; 
+           users_count: number;
+            active_users: number; 
+            tracked_companies: number;
+             crawl_runs_count: number; 
+             latest_crawl: 
+             { id: number; status: string; started_at: string; completed_at: string | null; } | null; }
+
+
+export interface AnalystDashboard { role: 'analyst'; tracked_companies: number; total_news: number; corrections_count: number; } export interface ViewerDashboard { role: 'viewer'; tracked_companies: number; total_news: number; } export interface DashboardSummary { tracked_companies: number; total_news: number; total_trading_days: number; total_floorsheet_transactions: number; market_volume: number; market_turnover: number; positive_news: number; negative_news: number;
+     neutral_news: number; }

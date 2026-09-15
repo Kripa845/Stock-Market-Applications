@@ -17,6 +17,8 @@ class DailyPriceSerializers(serializers.ModelSerializer):
         fields=[
             "id",
             "company",
+            "company_symbol",
+            "company_name",
             "date",
             "open",
             "close",
@@ -24,9 +26,13 @@ class DailyPriceSerializers(serializers.ModelSerializer):
             "low",
             "volume",
             "turnover",
-            
+           
         ]
-        
+        read_only_fields = [
+            "id",
+            "company_symbol",
+            "company_name",
+        ]
         
 class FloorsheetSerializer(serializers.ModelSerializer):
     class Meta:

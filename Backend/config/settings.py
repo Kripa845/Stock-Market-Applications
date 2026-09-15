@@ -12,21 +12,27 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-6=7nlin21@zkun-)g+(#wb633(so@@d#^tf&s+y$+5_g$3=k1v'
+SECRET_KEY = os.getenv(
+    "SECRET_KEY",
+    'django-insecure-6=7nlin21@zkun-)g+(#wb633(so@@d#^tf&s+y$+5_g$3=k1v',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*", "localhost", "127.0.0.1", "testserver"]
+
 
 
 # Application definition
@@ -49,11 +55,13 @@ INSTALLED_APPS = [
     'apps.market_data',
     'apps.news',
     'apps.users',
+    'apps.dashboard',
     
     
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -174,12 +182,13 @@ CELERY_ENABLE_UTC = True
 CELERY_TASK_ROUTES = {
     "apps.crawler_runs.tasks.*": {"queue": "crawling"},
 }
+CELERY_TASK_DEFAULT_QUEUE = "crawling"
 
 CELERY_BEAT_SCHEDULE = {
  
-    "crawl-news-every-3-hours": {
+    "crawl-news-every-5-minutes": {
         "task": "apps.crawler_runs.tasks.crawl_all_news",
-        "schedule": crontab(minute=0, hour="*/3"),
+        "schedule": crontab(minute="*/5"),
     },
     
     "crawl-daily-prices-evening": {
@@ -226,26 +235,26 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 FRONTEND_URL = os.getenv(
     "FRONTEND_URL",
     "http://localhost:5173",
+   
 )
 
 CORS_ALLOWED_ORIGINS = [
-    FRONTEND_URL,
+    os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://localhost:5174",
 ]
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
-SECRET_KEY = os.getenv("SECRET_KEY")
-
-DEBUG = os.getenv("DEBUG", "False") == "True"
 
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
+        "NAME": os.getenv("DB_NAME", "Stock-Market"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "kripa123"),
         "HOST": os.getenv("DB_HOST","localhost"),
         "PORT": os.getenv("DB_PORT","5432"),
     }

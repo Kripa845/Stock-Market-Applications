@@ -128,6 +128,47 @@ def normalize_datetime(value):
     return dt
 
 
+def update_crawl_metrics(spider, status=None):
+    crawl_run_id = getattr(spider, "crawl_run_id", None)
+
+    if not crawl_run_id:
+        return
+
+    try:
+        crawl_run = CrawlRun.objects.get(pk=crawl_run_id)
+        source = getattr(spider, "name", "")
+        update_fields = []
+
+        if source in {"sharesansar", "merolagani", "bizmandu", "nepsealpha", "arthakhabar", "fiscalnepal"}:
+            crawl_run.articles_found = getattr(spider, "articles_seen", 0)
+            crawl_run.articles_created = getattr(spider, "news_created", 0)
+            crawl_run.articles_updated = getattr(spider, "news_duplicate_url", 0)
+            update_fields += ["articles_found", "articles_created", "articles_updated"]
+        elif source == "trading_data":
+            crawl_run.prices_found = getattr(spider, "prices_found", 0)
+            crawl_run.prices_created = getattr(spider, "prices_created", 0)
+            crawl_run.prices_updated = getattr(spider, "prices_updated", 0)
+            update_fields += ["prices_found", "prices_created", "prices_updated"]
+        elif source == "floorsheet":
+            crawl_run.floorsheet_found = getattr(spider, "floorsheet_found", 0)
+            crawl_run.floorsheet_created = getattr(spider, "floorsheet_created", 0)
+            crawl_run.floorsheet_updated = getattr(spider, "floorsheet_updated", 0)
+            update_fields += ["floorsheet_found", "floorsheet_created", "floorsheet_updated"]
+
+        if status:
+            crawl_run.status = status
+            update_fields.append("status")
+
+        if status in {CrawlRun.Status.SUCCESS, CrawlRun.Status.FAILED}:
+            crawl_run.completed_at = timezone.now()
+            update_fields.append("completed_at")
+
+        if update_fields:
+            crawl_run.save(update_fields=update_fields)
+    except Exception as exc:
+        spider.logger.exception("Failed to update CrawlRun %s: %s", crawl_run_id, exc)
+
+
 
 
 class CrawlRunPipeline:
@@ -152,11 +193,20 @@ class CrawlRunPipeline:
         )
 
         try:
-            crawl_run = CrawlRun.objects.create(
-                status="running",
-                started_at=timezone.now(),
-                sources=[source],
-            )
+            crawl_run_id = getattr(spider, "crawl_run_id", None)
+            if crawl_run_id:
+                crawl_run = CrawlRun.objects.get(pk=crawl_run_id)
+                if source not in crawl_run.sources:
+                    crawl_run.sources = [*crawl_run.sources, source]
+                crawl_run.status = CrawlRun.Status.RUNNING
+                crawl_run.started_at = crawl_run.started_at or timezone.now()
+                crawl_run.save(update_fields=["sources", "status", "started_at"])
+            else:
+                crawl_run = CrawlRun.objects.create(
+                    status=CrawlRun.Status.RUNNING,
+                    started_at=timezone.now(),
+                    sources=[source],
+                )
 
             spider.crawl_run = crawl_run
             spider.crawl_run_id = crawl_run.id
@@ -202,7 +252,7 @@ class CrawlRunPipeline:
                 pk=crawl_run_id,
             )
 
-            crawl_run.status = "completed"
+            crawl_run.status = CrawlRun.Status.SUCCESS
             crawl_run.completed_at = timezone.now()
 
             
@@ -224,15 +274,16 @@ class CrawlRunPipeline:
                 0,
             )
 
-            crawl_run.save(
-                update_fields=[
-                    "status",
-                    "completed_at",
-                    "articles_found",
-                    "articles_created",
-                    "articles_updated",
-                ],
-            )
+            if spider.name == "trading_data":
+                crawl_run.prices_found = getattr(spider, "prices_found", 0)
+                crawl_run.prices_created = getattr(spider, "prices_created", 0)
+                crawl_run.prices_updated = getattr(spider, "prices_updated", 0)
+            elif spider.name == "floorsheet":
+                crawl_run.floorsheet_found = getattr(spider, "floorsheet_found", 0)
+                crawl_run.floorsheet_created = getattr(spider, "floorsheet_saved", 0)
+                crawl_run.floorsheet_updated = 0
+
+            crawl_run.save()
 
             spider.logger.info(
                 "CrawlRun %s completed | found=%s | created=%s | "
@@ -538,6 +589,9 @@ class TradingDataPipeline:
 
         self.file.write("[\n")
         self.first_item = True
+        spider.prices_found = 0
+        spider.prices_created = 0
+        spider.prices_updated = 0
 
     def process_item(self, item, spider):
         if "open" not in item:
@@ -732,6 +786,12 @@ class TradingDataPipeline:
             close_price,
         )
 
+        spider.prices_found += 1
+        if created:
+            spider.prices_created += 1
+        else:
+            spider.prices_updated += 1
+
         if self.first_item:
             self.first_item = False
         else:
@@ -787,6 +847,8 @@ class FloorsheetPipeline:
         spider.floorsheet_found = 0
         spider.floorsheet_saved = 0
         spider.floorsheet_failed = 0
+        spider.floorsheet_created = 0
+        spider.floorsheet_updated = 0
 
     def process_item(self, item, spider):
         required_keys = {
@@ -1081,6 +1143,10 @@ class FloorsheetPipeline:
 
         self.saved_count += 1
         spider.floorsheet_saved += 1
+        if created:
+            spider.floorsheet_created += 1
+        else:
+            spider.floorsheet_updated += 1
 
         spider.logger.debug(
             "%s | floorsheet | %s | %s -> %s | "

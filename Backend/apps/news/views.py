@@ -1,3 +1,181 @@
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.db.models import F, Q
 
-# Create your views here.
+from apps.companies.models import Company
+from apps.users.permissions import IsAnalystUserRole
+from .models import ArticleCompanyTag, CategorizationCorrection, NewsArticle
+from .serializers import (
+    CategorizationCorrectionSerializer,
+    NewsArticleSerializer,
+    RecategorizeRequestSerializer,
+)
+
+
+class NewsArticleListAPIView(generics.ListAPIView):
+    """
+    GET /api/news/?company_id=&sentiment=&source=&search=&confidence_min=&confidence_max=&needs_review=
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = NewsArticleSerializer
+
+    def get_queryset(self):
+        qs = NewsArticle.objects.prefetch_related(
+            "company_tags__company", "corrections__corrected_by"
+        ).all().order_by(
+            F("published_at").desc(nulls_last=True),
+            F("id").desc(),
+        )
+
+        company_id = self.request.query_params.get("company_id")
+        if company_id:
+            qs = qs.filter(company_tags__company_id=company_id)
+
+        sentiment = self.request.query_params.get("sentiment")
+        if sentiment:
+            qs = qs.filter(sentiment_label__iexact=sentiment)
+
+        source = self.request.query_params.get("source")
+        if source:
+            qs = qs.filter(source__iexact=source)
+
+        search = self.request.query_params.get("search")
+        if search:
+            qs = qs.filter(
+                Q(headline__icontains=search) | Q(body__icontains=search)
+            )
+
+        confidence_min = self.request.query_params.get("confidence_min")
+        if confidence_min:
+            try:
+                qs = qs.filter(company_tags__confidence__gte=float(confidence_min))
+            except ValueError:
+                pass
+
+        confidence_max = self.request.query_params.get("confidence_max")
+        if confidence_max:
+            try:
+                qs = qs.filter(company_tags__confidence__lte=float(confidence_max))
+            except ValueError:
+                pass
+
+        needs_review = self.request.query_params.get("needs_review")
+        if needs_review and needs_review.lower() == "true":
+            # Filter articles with low confidence (< 0.7) or no company tags
+            qs = qs.filter(
+                Q(company_tags__confidence__lt=0.7) | Q(company_tags__isnull=True)
+            )
+
+        return qs.distinct()
+
+
+class NewsArticleDetailAPIView(generics.RetrieveAPIView):
+    """
+    GET /api/news/:id/
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = NewsArticleSerializer
+    queryset = NewsArticle.objects.prefetch_related(
+        "company_tags__company", "corrections__corrected_by"
+    ).all()
+
+
+class NewsRecategorizeAPIView(APIView):
+    """
+    POST /api/news/:id/recategorize/
+    Role-gated: Analyst & Admin only.
+    Body:
+    {
+      "company_id": 1,
+      "action": "add" | "remove" | "update",
+      "confidence": 0.95,
+      "reason": "Explicit company name mention in 2nd paragraph"
+    }
+    """
+    permission_classes = [IsAnalystUserRole]
+
+    def post(self, request, pk):
+        article = get_object_or_404(NewsArticle, pk=pk)
+        req_serializer = RecategorizeRequestSerializer(data=request.data)
+        req_serializer.is_valid(raise_exception=True)
+
+        company_id = req_serializer.validated_data["company_id"]
+        action = req_serializer.validated_data["action"]
+        confidence = req_serializer.validated_data.get("confidence", 1.0)
+        reason = req_serializer.validated_data["reason"]
+
+        company = get_object_or_404(Company, pk=company_id)
+
+        existing_tag = ArticleCompanyTag.objects.filter(
+            article=article,
+            company=company,
+        ).first()
+
+        prev_confidence = existing_tag.confidence if existing_tag else None
+        prev_method = existing_tag.method if existing_tag else ""
+
+        if action == "remove":
+            if existing_tag:
+                existing_tag.delete()
+        elif action == "add":
+            if not existing_tag:
+                ArticleCompanyTag.objects.create(
+                    article=article,
+                    company=company,
+                    confidence=confidence,
+                    method="analyst_manual_review",
+                    evidence={"manual_reason": reason, "by": request.user.username},
+                    is_manual=True,
+                )
+            else:
+                existing_tag.confidence = confidence
+                existing_tag.method = "analyst_manual_review"
+                existing_tag.is_manual = True
+                existing_tag.evidence = {"manual_reason": reason, "by": request.user.username}
+                existing_tag.save()
+        elif action == "update":
+            tag, created = ArticleCompanyTag.objects.update_or_create(
+                article=article,
+                company=company,
+                defaults={
+                    "confidence": confidence,
+                    "method": "analyst_manual_review",
+                    "evidence": {"manual_reason": reason, "by": request.user.username},
+                    "is_manual": True,
+                },
+            )
+
+        # Log correction record
+        correction = CategorizationCorrection.objects.create(
+            article=article,
+            company=company,
+            previous_confidence=prev_confidence,
+            previous_method=prev_method,
+            action=action,
+            reason=reason,
+            corrected_by=request.user,
+        )
+
+        article.refresh_from_db()
+        return Response(
+            {
+                "message": f"Article recategorized successfully ({action}).",
+                "correction": CategorizationCorrectionSerializer(correction).data,
+                "article": NewsArticleSerializer(article).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class CategorizationCorrectionListAPIView(generics.ListAPIView):
+    """
+    GET /api/news/corrections/ - Audit log of corrections
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = CategorizationCorrectionSerializer
+    queryset = CategorizationCorrection.objects.select_related(
+        "article", "company", "corrected_by"
+    ).all().order_by("-corrected_at")

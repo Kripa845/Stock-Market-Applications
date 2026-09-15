@@ -1,20 +1,63 @@
-from django.contrib import admin
 from django.urls import path
-
-from apps.companies.views import CompanyListAPIView,CompanyDetailView
-
+from apps.analysis.views import (
+    CompanyBehaviorSummaryAPIView,
+    CompanyNewsPriceCorrelationAPIView,
+)
+from .views import (
+    CompanyDetailUpdateDestroyAPIView,
+    CompanyFloorsheetAPIView,
+    CompanyListCreateAPIView,
+    CompanyPricesAPIView,
+    CompanyToggleTrackAPIView,
+)
 
 urlpatterns = [
-
-   
-
     path(
-        "api/companies/",
-        CompanyListAPIView.as_view()
+        "",
+        CompanyListCreateAPIView.as_view(),
+        name="company-list-create",
     ),
-       path(
+    path(
         "<int:pk>/",
-        CompanyDetailView.as_view(),
+        CompanyDetailUpdateDestroyAPIView.as_view(),
         name="company-detail",
     ),
+    path(
+        "<int:pk>/toggle-track/",
+        CompanyToggleTrackAPIView.as_view(),
+        name="company-toggle-track",
+    ),
+    path(
+        "<int:pk>/prices/",
+        CompanyPricesAPIView.as_view(),
+        name="company-prices",
+    ),
+    path(
+        "<int:pk>/floorsheet/",
+        CompanyFloorsheetAPIView.as_view(),
+        name="company-floorsheet",
+    ),
+    path(
+    "<int:pk>/behavior/",
+    CompanyBehaviorSummaryAPIView.as_view(),
+    name="company-behavior-summary",
+),
+
+    path(
+        "<int:pk>/behavior-summary/",
+        CompanyBehaviorSummaryAPIView.as_view(),
+        name="company-behavior-summary-spec",
+    ),
+
+path(
+    "<int:pk>/news-correlation/",
+    CompanyNewsPriceCorrelationAPIView.as_view(),
+    name="company-news-correlation",
+),
+
+path(
+    "<int:pk>/news-price-correlation/",
+    CompanyNewsPriceCorrelationAPIView.as_view(),
+    name="company-news-price-correlation-spec",
+),
 ]

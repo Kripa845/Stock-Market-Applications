@@ -1,37 +1,63 @@
-import apiClient, { tokenStore } from "./client";
-import type { LoginPayload, RegisterPayload, TokenPair, User } from "../types";
 
-interface RegisterResponse {
-  message: string;
+import { apiClient } from './client';
+import type { User } from '../types';
+
+export interface LoginResponse {
+  access: string;
+  refresh: string;
   user: User;
 }
 
-// POST /api/users/register/
-export async function register(payload: RegisterPayload): Promise<RegisterResponse> {
-  const { data } = await apiClient.post<RegisterResponse>("/users/register/", {
-    username: payload.username,
-    email: payload.email,
-    password: payload.password,
-    password_confirm: payload.passwordConfirm,
-    first_name: payload.firstName || "",
-    last_name: payload.lastName || "",
-  });
-  return data;
+export interface RegisterPayload {
+  username: string;
+  email: string;
+  password: string;
+  password_confirm: string;
+  first_name: string;
+  last_name: string;
+  role?: 'viewer' | 'analyst' | 'admin';
 }
 
-// POST /api/users/login/ (SimpleJWT TokenObtainPairView -> { access, refresh })
-export async function login(payload: LoginPayload): Promise<TokenPair> {
-  const { data } = await apiClient.post<TokenPair>("/users/login/", payload);
-  tokenStore.setTokens(data);
-  return data;
-}
+export const authApi = {
+  login: (
+    username: string,
+    password: string
+  ) =>
+    apiClient
+      .post<LoginResponse>(
+        '/users/login/',
+        {
+          username,
+          password,
+        }
+      )
+      .then((response) => response.data),
 
-// GET /api/users/me/
-export async function fetchMe(): Promise<User> {
-  const { data } = await apiClient.get<User>("/users/me/");
-  return data;
-}
+  register: (
+    payload: RegisterPayload
+  ) =>
+    apiClient
+      .post(
+        '/users/register/',
+        payload
+      )
+      .then((response) => response.data),
 
-export function logout(): void {
-  tokenStore.clear();
-}
+  me: () =>
+    apiClient
+      .get<User>('/users/me/')
+      .then((response) => response.data),
+
+  refresh: (
+    refresh: string
+  ) =>
+    apiClient
+      .post(
+        '/users/token/refresh/',
+        {
+          refresh,
+        }
+      )
+      .then((response) => response.data),
+};
+

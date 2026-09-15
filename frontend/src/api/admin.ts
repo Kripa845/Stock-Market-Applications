@@ -1,31 +1,49 @@
-import apiClient from "./client";
-import type { CrawlRun, PaginatedResponse, User } from "../types";
 
-// --- Not yet implemented on the backend -------------------------------
-// apps/crawler_runs has no urls.py at all yet, even though CrawlRun
-// (models.py) and the Celery tasks (tasks.py: crawl_all_news,
-// crawl_daily_prices, crawl_floorsheet) already exist. Written against
-// the spec's documented shape (role-gated: Admin).
-// ------------------------------------------------------------------------
+import { apiClient } from './client';
+import type {
+  User,
+  AdminDashboard,
+} from '../types';
 
-export interface TriggerCrawlPayload {
-  sources?: string[];
-}
+export const adminApi = {
+  getDashboard: () =>
+    apiClient
+      .get<AdminDashboard>(
+        '/dashboard/admin/'
+      )
+      .then((response) => response.data),
 
-// POST /api/admin/crawl-runs
-export async function triggerCrawlRun(payload: TriggerCrawlPayload = {}): Promise<CrawlRun> {
-  const { data } = await apiClient.post<CrawlRun>("/admin/crawl-runs", payload);
-  return data;
-}
+  getUsers: () =>
+    apiClient
+      .get<User[]>('/admin/users/')
+      .then((response) => response.data),
 
-// GET /api/admin/crawl-runs/:id
-export async function getCrawlRun(id: number | string): Promise<CrawlRun> {
-  const { data } = await apiClient.get<CrawlRun>(`/admin/crawl-runs/${id}`);
-  return data;
-}
+  createUser: (payload: {
+    username: string;
+    email: string;
+    password: string;
+    password_confirm: string;
+    first_name: string;
+    last_name: string;
+    role: 'admin' | 'analyst' | 'viewer';
+  }) =>
+    apiClient
+      .post('/admin/users/', payload)
+      .then((response) => response.data),
 
-// GET /api/admin/users
-export async function listUsers(): Promise<User[] | PaginatedResponse<User>> {
-  const { data } = await apiClient.get<User[] | PaginatedResponse<User>>("/admin/users");
-  return data;
-}
+  updateUser: (
+    id: number,
+    payload: Partial<User> & {
+      password?: string;
+    }
+  ) =>
+    apiClient
+      .patch(`/admin/users/${id}/`, payload)
+      .then((response) => response.data),
+
+  deleteUser: (id: number) =>
+    apiClient
+      .delete(`/admin/users/${id}/`)
+      .then((response) => response.data),
+};
+
