@@ -3,8 +3,8 @@ import { AlertTriangle, Edit3, Plus, RefreshCw, Search, Trash2, UserRound, X } f
 import PageHeader from '../../components/common/PageHeader';
 import Badge from '../../components/common/Badge';
 import { usersApi, type AdminUser, type BuiltInRole as Role } from '../../api/users';
-import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { UserPayload } from '../../api/users';
+import { useAuth } from '../../contexts/AuthContext';
 
 const roleColors = {
   admin: 'red',
@@ -13,6 +13,12 @@ const roleColors = {
 } as const;
 
 export default function UserManagementPage() {
+  const { hasPermission } = useAuth();
+  const canCreate = hasPermission('create_users');
+  const canEdit = hasPermission('edit_users');
+  const canDelete = hasPermission('delete_users');
+  const canChangeRoles = hasPermission('change_user_roles');
+  const canToggleActive = hasPermission('activate_users');
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -33,7 +39,6 @@ export default function UserManagementPage() {
   }, []);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
-  useLiveRefresh(loadUsers, 10000);
 
   const normalizedSearch = search.trim().toLowerCase();
   const filteredUsers = users.filter((user) =>
@@ -61,8 +66,13 @@ export default function UserManagementPage() {
     setError('');
     try {
       if (editingUser) {
-        const { password, ...withoutPassword } = form;
-        await usersApi.update(editingUser.id, password ? form : withoutPassword);
+        const { password, role, is_active, ...editableFields } = form;
+        const payload: Partial<UserPayload> = password
+          ? { ...editableFields, password }
+          : editableFields;
+        if (canChangeRoles) payload.role = role;
+        if (canToggleActive) payload.is_active = is_active;
+        await usersApi.update(editingUser.id, payload);
       } else {
         if (!form.password) throw new Error('Password is required for a new user.');
         await usersApi.create(form);
@@ -96,7 +106,7 @@ export default function UserManagementPage() {
         actions={
           <div className="flex items-center gap-2">
             <button onClick={loadUsers} className="btn-ghost flex items-center gap-2" disabled={loading}><RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Refresh</button>
-            <button onClick={openCreate} className="btn-primary flex items-center gap-2"><Plus size={14} />Add user</button>
+            {canCreate && <button onClick={openCreate} className="btn-primary flex items-center gap-2"><Plus size={14} />Add user</button>}
           </div>
         }
       />
@@ -166,7 +176,7 @@ export default function UserManagementPage() {
                   <td className="py-3"><Badge variant={user.is_active ? 'green' : 'red'}>{user.is_active ? 'Active' : 'Inactive'}</Badge></td>
                   <td className="py-3 text-text-secondary">{user.date_joined ? new Date(user.date_joined).toLocaleDateString() : '—'}</td>
                   <td className="py-3 text-text-secondary">{user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</td>
-                  <td className="py-3"><div className="flex justify-end gap-1"><button onClick={() => openEdit(user)} className="p-2 text-text-muted hover:text-accent-light" title="Edit user"><Edit3 size={14} /></button><button onClick={() => removeUser(user)} className="p-2 text-text-muted hover:text-down" title="Delete user"><Trash2 size={14} /></button></div></td>
+                  <td className="py-3"><div className="flex justify-end gap-1">{canEdit && <button onClick={() => openEdit(user)} className="p-2 text-text-muted hover:text-accent-light" title="Edit user"><Edit3 size={14} /></button>}{canDelete && <button onClick={() => removeUser(user)} className="p-2 text-text-muted hover:text-down" title="Delete user"><Trash2 size={14} /></button>}</div></td>
                 </tr>
               ))}
             </tbody>
@@ -175,7 +185,7 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      {showForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><form onSubmit={saveUser} className="w-full max-w-lg space-y-4 rounded-xl border border-bg-border bg-bg-secondary p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold text-text-primary">{editingUser ? 'Edit user' : 'Add user'}</h2><button type="button" onClick={() => setShowForm(false)} className="text-text-muted hover:text-text-primary" title="Close"><X size={18} /></button></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-xs text-text-secondary">Username<input required value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">Email<input required type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">First name<input value={form.first_name} onChange={event => setForm({ ...form, first_name: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">Last name<input value={form.last_name} onChange={event => setForm({ ...form, last_name: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">Password<input required={!editingUser} type="password" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" placeholder={editingUser ? 'Leave blank to keep current' : ''} /></label><label className="text-xs text-text-secondary">Role<select value={form.role} onChange={event => setForm({ ...form, role: event.target.value as Role })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary"><option value="viewer">Viewer</option><option value="analyst">Analyst</option><option value="admin">Admin</option></select></label></div><label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={form.is_active} onChange={event => setForm({ ...form, is_active: event.target.checked })} />Active account</label>{error && <p className="text-sm text-down">{error}</p>}<div className="flex justify-end gap-2"><button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button><button type="submit" disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save user'}</button></div></form></div>}
+      {showForm && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><form onSubmit={saveUser} className="w-full max-w-lg space-y-4 rounded-xl border border-bg-border bg-bg-secondary p-6 shadow-2xl"><div className="flex items-center justify-between"><h2 className="text-lg font-semibold text-text-primary">{editingUser ? 'Edit user' : 'Add user'}</h2><button type="button" onClick={() => setShowForm(false)} className="text-text-muted hover:text-text-primary" title="Close"><X size={18} /></button></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><label className="text-xs text-text-secondary">Username<input required value={form.username} onChange={event => setForm({ ...form, username: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">Email<input required type="email" value={form.email} onChange={event => setForm({ ...form, email: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">First name<input value={form.first_name} onChange={event => setForm({ ...form, first_name: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">Last name<input value={form.last_name} onChange={event => setForm({ ...form, last_name: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" /></label><label className="text-xs text-text-secondary">Password<input required={!editingUser} type="password" value={form.password} onChange={event => setForm({ ...form, password: event.target.value })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" placeholder={editingUser ? 'Leave blank to keep current' : ''} /></label>{canChangeRoles && <label className="text-xs text-text-secondary">Role<select value={form.role} onChange={event => setForm({ ...form, role: event.target.value as Role })} className="mt-1 w-full rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary"><option value="viewer">Viewer</option><option value="analyst">Analyst</option><option value="admin">Admin</option></select></label>}</div>{canToggleActive && <label className="flex items-center gap-2 text-sm text-text-secondary"><input type="checkbox" checked={form.is_active} onChange={event => setForm({ ...form, is_active: event.target.checked })} />Active account</label>}{error && <p className="text-sm text-down">{error}</p>}<div className="flex justify-end gap-2"><button type="button" onClick={() => setShowForm(false)} className="btn-ghost">Cancel</button><button type="submit" disabled={saving} className="btn-primary">{saving ? 'Saving...' : 'Save user'}</button></div></form></div>}
     </div>
   );
 }

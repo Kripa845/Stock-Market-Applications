@@ -3,13 +3,7 @@ from django.db import models
 
 
 class RolePermissionConfig(models.Model):
-    """
-    Database-backed permission configuration for the
-    editable built-in roles (Analyst, Viewer).
-
-    Admin is intentionally excluded because it always has
-    full access.
-    """
+  
 
     class Meta:
         ordering = ["role_key"]

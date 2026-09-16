@@ -140,7 +140,7 @@ export default function App() {
           <Route
             path="/admin/companies"
             element={
-              <PermissionRoute requiredPermissions={["view_companies", "manage_tracked_companies"]}>
+              <PermissionRoute requiredPermissions={["view_companies"]}>
                 <CompaniesPage />
               </PermissionRoute>
             }
@@ -149,19 +149,19 @@ export default function App() {
           <Route
             path="/admin/watchlist"
             element={
-              <PermissionRoute requiredPermissions={["view_watchlist", "add_watchlist"]}>
+              <PermissionRoute requiredPermissions={["view_watchlist"]}>
                 <WatchlistPage />
               </PermissionRoute>
             }
           />
 
           <Route path="/admin/crawl" element={
-            <PermissionRoute requiredPermissions={["view_crawl_runs", "run_crawler"]}>
+            <PermissionRoute requiredPermissions={["view_crawl_runs"]}>
               <CrawlerStatusPage />
             </PermissionRoute>
           } />
           <Route path="/admin/crawl-runs" element={
-            <PermissionRoute requiredPermissions={["view_crawl_runs", "run_crawler"]}>
+            <PermissionRoute requiredPermissions={["view_crawl_runs"]}>
               <CrawlerStatusPage />
             </PermissionRoute>
           } />
@@ -169,7 +169,7 @@ export default function App() {
           <Route
             path="/admin/users"
             element={
-              <PermissionRoute requiredPermissions={["view_users", "create_users", "edit_users"]}>
+              <PermissionRoute requiredPermissions={["view_users"]}>
                 <UserManagementPage />
               </PermissionRoute>
             }
@@ -187,7 +187,7 @@ export default function App() {
           <Route
             path="/admin/news"
             element={
-              <PermissionRoute requiredPermissions={["view_news", "categorize_news", "correct_categories"]}>
+              <PermissionRoute requiredPermissions={["view_news"]}>
                 <AdminNewsPage />
               </PermissionRoute>
             }
@@ -195,7 +195,7 @@ export default function App() {
           <Route
             path="/admin/news/:id"
             element={
-              <PermissionRoute requiredPermissions={["view_news", "categorize_news", "correct_categories"]}>
+              <PermissionRoute requiredPermissions={["view_news"]}>
                 <NewsDetail />
               </PermissionRoute>
             }
@@ -208,7 +208,7 @@ export default function App() {
           <Route
             path="/admin/roles-permissions"
             element={
-              <PermissionRoute requiredPermissions={["view_roles", "edit_roles"]}>
+              <PermissionRoute requiredPermissions={["view_roles"]}>
                 <RolesPermissionsPage />
               </PermissionRoute>
             }
@@ -231,17 +231,17 @@ export default function App() {
 
           <Route
             path="/analyst"
-            element={<AnalystDashboard />}
+            element={<PermissionRoute requiredPermissions={["view_analysis"]}><AnalystDashboard /></PermissionRoute>}
           />
-          <Route path="/analyst/market" element={<MarketPage />} />
+          <Route path="/analyst/market" element={<PermissionRoute requiredPermissions={["view_market_data"]}><MarketPage /></PermissionRoute>} />
           <Route path="/analyst/stocks" element={<MarketPage />} />
           <Route path="/analyst/stocks/:symbol" element={<StockDetail />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />
-          <Route path="/analyst/news" element={<NewsPage />} />
-          <Route path="/analyst/news-review" element={<NewsPage />} />
+          <Route path="/analyst/news" element={<PermissionRoute requiredPermissions={["view_news"]}><NewsPage /></PermissionRoute>} />
+          <Route path="/analyst/news-review" element={<PermissionRoute requiredPermissions={["correct_categories"]}><NewsPage /></PermissionRoute>} />
           <Route path="/analyst/news/:id" element={<NewsDetail />} />
           <Route path="/news/:id" element={<NewsDetail />} />
-          <Route path="/analyst/trading" element={<TradingPage />} />
+          <Route path="/analyst/trading" element={<PermissionRoute requiredPermissions={["view_market_data"]}><TradingPage /></PermissionRoute>} />
 
         </Route>
 
@@ -260,16 +260,16 @@ export default function App() {
 
           <Route
             path="/viewer"
-            element={<ViewerDashboard />}
+            element={<PermissionRoute requiredPermissions={["view_analysis"]}><ViewerDashboard /></PermissionRoute>}
           />
-          <Route path="/viewer/market" element={<WatchlistPage />} />
+          <Route path="/viewer/market" element={<PermissionRoute requiredPermissions={["view_watchlist"]}><WatchlistPage /></PermissionRoute>} />
           <Route path="/viewer/stocks" element={<MarketPage />} />
           <Route path="/viewer/stocks/:symbol" element={<StockDetail />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />
-          <Route path="/viewer/news" element={<NewsPage />} />
+          <Route path="/viewer/news" element={<PermissionRoute requiredPermissions={["view_news"]}><NewsPage /></PermissionRoute>} />
           <Route path="/viewer/news/:id" element={<NewsDetail />} />
           <Route path="/news/:id" element={<NewsDetail />} />
-          <Route path="/viewer/trading" element={<TradingPage />} />
+          <Route path="/viewer/trading" element={<PermissionRoute requiredPermissions={["view_market_data"]}><TradingPage /></PermissionRoute>} />
 
         </Route>
 

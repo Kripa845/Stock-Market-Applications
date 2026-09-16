@@ -4,7 +4,6 @@ import PageHeader from '../../components/common/PageHeader';
 import EmptyState from '../../components/common/EmptyState';
 import { getCompanies } from '../../api/companies';
 import { stocksApi } from '../../api/stocks';
-import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import type { Company, DailyPrice, FloorsheetTransaction } from '../../types';
 
 interface WatchlistItem {
@@ -55,7 +54,6 @@ export default function WatchlistPage() {
   }, []);
 
   useEffect(() => { loadWatchlist(); }, [loadWatchlist]);
-  useLiveRefresh(loadWatchlist, 15000);
 
   const searchFloorsheet = useCallback(async (filters = floorFilters) => {
     setFloorLoading(true);
