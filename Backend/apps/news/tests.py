@@ -1,25 +1,4 @@
-"""
-Comprehensive Automated Test Suite for News Auto-Categorization.
 
-Covers:
-1. Exact company name matching
-2. Alias matching
-3. Case-insensitive matching
-4. Semantic similarity calculation (Cosine similarity)
-5. Hybrid scoring formula
-6. Threshold behavior
-7. Multi-label article handling (multiple companies tagged)
-8. No-match article handling (no false positive tags)
-9. Confidence score persistence
-10. Duplicate tag prevention (unique constraint)
-11. Manual correction precedence over auto-categorization
-12. Audit record creation in CategorizationCorrection
-13. Analyst-only recategorization
-14. Viewer cannot recategorize (403 Forbidden)
-15. Admin permissions verification
-16. Celery task execution safety
-17. Idempotency when running categorization multiple times
-"""
 
 import hashlib
 import numpy as np

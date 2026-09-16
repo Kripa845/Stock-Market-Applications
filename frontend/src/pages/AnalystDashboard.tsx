@@ -15,6 +15,7 @@ import Badge from '../components/common/Badge';
 import { newsApi } from '../api/news';
 import type { CategorizationCorrection, NewsArticle, NewsStats } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import CompaniesPage from '../pages/admin/CompaniesPage';
 
 
 const AnalystDashboard: React.FC = () => {
@@ -117,6 +118,11 @@ const AnalystDashboard: React.FC = () => {
           </p>
           <span className="text-[11px] text-text-muted">Analyst corrections logged</span>
         </div>
+      </div>
+
+      {/* Companies Section */}
+      <div className="mt-8">
+        <CompaniesPage trackedOnly={false} />
       </div>
 
       {/* Main Grid: Needs Review Queue & Recent Corrections Audit Trail */}

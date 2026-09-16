@@ -234,6 +234,7 @@ export default function App() {
             element={<PermissionRoute requiredPermissions={["view_analysis"]}><AnalystDashboard /></PermissionRoute>}
           />
           <Route path="/analyst/market" element={<PermissionRoute requiredPermissions={["view_market_data"]}><MarketPage /></PermissionRoute>} />
+          <Route path="/analyst/companies" element={<PermissionRoute requiredPermissions={["view_companies"]}><CompaniesPage /></PermissionRoute>} />
           <Route path="/analyst/stocks" element={<MarketPage />} />
           <Route path="/analyst/stocks/:symbol" element={<StockDetail />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />

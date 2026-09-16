@@ -187,9 +187,9 @@ CELERY_TASK_DEFAULT_QUEUE = "crawling"
 
 CELERY_BEAT_SCHEDULE = {
  
-    "crawl-news-every-5-minutes": {
+    "crawl-news-every-hour": {
         "task": "apps.crawler_runs.tasks.crawl_all_news",
-        "schedule": crontab(minute="*/5"),
+        "schedule": crontab(minute=0),
     },
     
     "crawl-daily-prices-evening": {
@@ -285,4 +285,4 @@ CATEGORIZATION_KEYWORD_WEIGHT = float(
 )
 CATEGORIZATION_THRESHOLD = float(
     os.getenv("CATEGORIZATION_THRESHOLD", "0.65")
-)
+)

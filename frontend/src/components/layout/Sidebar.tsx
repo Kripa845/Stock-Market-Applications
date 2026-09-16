@@ -149,10 +149,6 @@ const ANALYST_NAV: NavItem[] = [
     icon: LayoutDashboard,
     to: "/analyst",
   },
-  { label: "User Management", icon: Users, to: "/admin/users", requiredPermissions: ["view_users"] },
-  { label: "Companies", icon: Briefcase, to: "/admin/companies", requiredPermissions: ["view_companies"] },
-  { label: "Crawlers", icon: Radio, to: "/admin/crawl", requiredPermissions: ["view_crawl_runs"] },
-  { label: "Roles & Permissions", icon: ShieldCheck, to: "/admin/roles-permissions", requiredPermissions: ["view_roles"] },
 
   {
     type: "divider",
@@ -166,9 +162,10 @@ const ANALYST_NAV: NavItem[] = [
   },
 
   {
-    label: "Stocks",
-    icon: LineChart,
-    to: "/analyst/stocks",
+    label: "Companies",
+    icon: Briefcase,
+    to: "/analyst/companies",
+    requiredPermissions: ["view_companies"],
   },
 
   {
@@ -244,10 +241,6 @@ const VIEWER_NAV: NavItem[] = [
     icon: LayoutDashboard,
     to: "/viewer",
   },
-  { label: "User Management", icon: Users, to: "/admin/users", requiredPermissions: ["view_users"] },
-  { label: "Companies", icon: Briefcase, to: "/admin/companies", requiredPermissions: ["view_companies"] },
-  { label: "Crawlers", icon: Radio, to: "/admin/crawl", requiredPermissions: ["view_crawl_runs"] },
-  { label: "Roles & Permissions", icon: ShieldCheck, to: "/admin/roles-permissions", requiredPermissions: ["view_roles"] },
 
   {
     type: "divider",

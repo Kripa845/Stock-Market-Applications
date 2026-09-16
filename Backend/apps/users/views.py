@@ -574,7 +574,7 @@ class RolePermissionDetailAPIView(APIView):
                 "permissions": list(
                     config.permissions or []
                 ),
-                "editable": True,
+                "editable":True
             }
         )
 
@@ -641,7 +641,7 @@ class RolePermissionDetailAPIView(APIView):
                 "permissions": list(
                     config.permissions or []
                 ),
-                "editable": True,
+                "editable":True
             }
         )
 
@@ -678,7 +678,7 @@ class RolePermissionsAPIView(APIView):
                     "permissions": list(
                         config.permissions or []
                     ),
-                    "editable": True,
+                    "editable":True,
                 }
             )
 

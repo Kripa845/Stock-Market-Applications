@@ -28,11 +28,7 @@ def categorize_article_task(
     article_id: int,
     threshold: Optional[float] = None,
 ):
-    """
-    Asynchronous Celery task to categorize a newly crawled or updated NewsArticle.
-    Ensures that ML inference and embedding computations run in the background
-    without blocking Scrapy spiders or REST API requests.
-    """
+   
     logger.info("Executing categorize_article_task for article_id=%d", article_id)
     try:
         article = NewsArticle.objects.filter(pk=article_id).first()
@@ -74,9 +70,7 @@ def categorize_article_task(
 
 @shared_task(name="apps.news.tasks.categorize_unprocessed_news_task")
 def categorize_unprocessed_news_task(batch_size: int = 50):
-    """
-    Periodic or background task to find unprocessed articles and categorize them.
-    """
+    
     unprocessed_articles = (
         NewsArticle.objects
         .filter(is_processed=False)
@@ -106,10 +100,7 @@ def categorize_unprocessed_news_task(batch_size: int = 50):
 
 @shared_task(name="apps.news.tasks.recategorize_all_news_task")
 def recategorize_all_news_task(threshold: Optional[float] = None):
-    """
-    Recategorize all articles in the database.
-    Useful when company profiles or aliases change.
-    """
+    
     invalidate_company_cache()
     articles = NewsArticle.objects.all().order_by("-id")
     total = articles.count()

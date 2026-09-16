@@ -75,7 +75,7 @@ export default function NewsPage() {
   useEffect(() => {
     loadNews();
   }, [loadNews]);
-  useLiveRefresh(loadNews);
+  // useLiveRefresh(loadNews);
 
   const groupedArticles = articles.reduce<Record<string, NewsArticle[]>>((groups, article) => {
     const portal = article.source || 'Other portals';
