@@ -8,7 +8,7 @@ import {
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegistrationPage';
-
+import RolesPermissionsPage from "./pages/admin/RolesPermissionPage";
 import Layout from './components/layout/Layout';
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
@@ -17,6 +17,7 @@ import CrawlerStatusPage from './pages/CrawlerStatus';
 import MarketPage from './pages/Market';
 import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
+import NewsDetail from './pages/NewsDetail';
 import TradingPage from './pages/Trading';
 
 // =========================
@@ -230,6 +231,14 @@ export default function App() {
             path="/admin/news"
             element={<AdminNewsPage />}
           />
+          <Route
+            path="/admin/news/:id"
+            element={<NewsDetail />}
+          />
+          <Route
+            path="/news/:id"
+            element={<NewsDetail />}
+          />
 
 
           {/* -----------------------------------------------
@@ -240,6 +249,15 @@ export default function App() {
             path="/admin/settings"
             element={<SettingsPage />}
           /> */}
+
+          {/* -----------------------------------------------
+              ROLES & PERMISSIONS
+              URL: /admin/roles-permissions
+              ----------------------------------------------- */}
+          <Route
+            path="/admin/roles-permissions"
+            element={<RolesPermissionsPage />}
+          />
 
         </Route>
 
@@ -267,6 +285,9 @@ export default function App() {
           <Route path="/analyst/stocks/:symbol" element={<StockDetail />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />
           <Route path="/analyst/news" element={<NewsPage />} />
+          <Route path="/analyst/news-review" element={<NewsPage />} />
+          <Route path="/analyst/news/:id" element={<NewsDetail />} />
+          <Route path="/news/:id" element={<NewsDetail />} />
           <Route path="/analyst/trading" element={<TradingPage />} />
 
         </Route>
@@ -295,15 +316,17 @@ export default function App() {
           <Route path="/viewer/stocks/:symbol" element={<StockDetail />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />
           <Route path="/viewer/news" element={<NewsPage />} />
+          <Route path="/viewer/news/:id" element={<NewsDetail />} />
+          <Route path="/news/:id" element={<NewsDetail />} />
           <Route path="/viewer/trading" element={<TradingPage />} />
 
         </Route>
 
 
+
         {/* =================================================
             404
             ================================================= */}
-
         <Route
           path="*"
           element={<NotFound />}

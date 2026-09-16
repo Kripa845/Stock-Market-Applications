@@ -1,6 +1,6 @@
 
 import scrapy
-
+import re
 from crawlers.spiders.base_news import BaseNewsSpider
 import json
 
@@ -114,7 +114,7 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         published_at = self.extract_published_at(
             response
         )
-
+        print("ARTHAKHABAR RAW PUBLISHED DATE:", repr(published_at))
         self.logger.info(
             "Arthakhabar article | headline=%r | "
             "published_at=%r | body_length=%s | url=%s",
@@ -141,166 +141,110 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
             yield item
 
    
-
- 
-
-    #     return None
     def extract_published_at(self, response):
+    
 
-   
+        nepali_months = (
+            "बैशाख|बैसाख|जेठ|असार|श्रावण|साउन|"
+            "भाद्र|भाद्रपद|आश्विन|कार्तिक|मंसिर|पौष|"
+            "माघ|फाल्गुण|फाल्गुन|चैत्र"
+        )
 
-        json_ld_blocks = response.css(
+        # 1. Look for the visible date in the article header
+        selectors = [
+            "#content > div > header p::text",
+            "#content > div > header div p::text",
+            "article header p::text",
+            "article header div p::text",
+        ]
+
+        for selector in selectors:
+            texts = response.css(selector).getall()
+
+            for text in texts:
+                text = " ".join(text.split())
+
+                if re.search(
+                    rf"\d+\s*(?:{nepali_months})\s*\d{{4}}",
+                    text,
+                ):
+                    self.logger.info(
+                        "Arthakhabar visible date: %s",
+                        text,
+                    )
+                    return text
+
+        # 2. Search the whole article header
+        header_text = " ".join(
+            response.css("#content > div > header *::text").getall()
+        )
+
+        header_text = " ".join(header_text.split())
+
+        match = re.search(
+            rf"\d+\s*(?:{nepali_months})\s*\d{{4}}"
+            rf"(?:,\s*[^0-9]+)?"
+            rf"(?:\s*\d{{1,2}}:\d{{2}})?",
+            header_text,
+        )
+
+        if match:
+            value = match.group(0).strip()
+
+            self.logger.info(
+                "Arthakhabar header date: %s",
+                value,
+            )
+
+            return value
+
+        # 3. JSON-LD fallback
+        for script in response.css(
             'script[type="application/ld+json"]::text'
-        ).getall()
-
-        for block in json_ld_blocks:
+        ).getall():
 
             try:
-                data = json.loads(block)
+                data = json.loads(script)
+
+                objects = data if isinstance(data, list) else [data]
+
+                for obj in objects:
+                    if not isinstance(obj, dict):
+                        continue
+
+                    value = (
+                        obj.get("datePublished")
+                        or obj.get("dateCreated")
+                    )
+
+                    if value:
+                        return value
 
             except (json.JSONDecodeError, TypeError):
                 continue
 
-            if isinstance(data, list):
-                objects = data
-
-            elif isinstance(data, dict) and "@graph" in data:
-                objects = data["@graph"]
-
-            else:
-                objects = [data]
-
-            for obj in objects:
-
-                if not isinstance(obj, dict):
-                    continue
-
-                published_at = (
-                    obj.get("datePublished")
-                    or obj.get("dateCreated")
-                )
-
-                if published_at:
-                    return str(published_at).strip()
-
-       
-
-        published_at = response.css(
+        # 4. Meta tag fallback
+        value = response.css(
             'meta[property="article:published_time"]::attr(content)'
         ).get()
 
-        if published_at:
-            return published_at.strip()
+        if value:
+            return value.strip()
 
-
-
-        published_at = response.css(
+        # 5. <time datetime="">
+        value = response.css(
             "time::attr(datetime)"
         ).get()
 
-        if published_at:
-            return published_at.strip()
+        if value:
+            return value.strip()
 
-        
-
-        published_at = response.css(
+        # 6. <time> visible text
+        value = response.css(
             "time::text"
         ).get()
 
-        if published_at:
-            return published_at.strip()
-
-        
-
-        selectors = [
-
-            "#content > div > header > div > div > div > p:nth-child(2)::text",
-
-            "#content > div > header p:nth-child(2)::text",
-
-            "#content > div > header p::text",
-
-            "#content > div > header div p::text",
-
-            "article header p::text",
-
-            "article header div p::text",
-
-        ]
-
-        for selector in selectors:
-
-            values = response.css(selector).getall()
-
-            for value in values:
-
-                value = value.strip()
-
-                if not value:
-                    continue
-
-                # Only accept text that looks like a date.
-                if any(
-                    month in value
-                    for month in [
-                        "बैशाख",
-                        "जेठ",
-                        "असार",
-                        "श्रावण",
-                        "श्रावण",
-                        "भाद्र",
-                        "आश्विन",
-                        "कार्तिक",
-                        "मंसिर",
-                        "पौष",
-                        "माघ",
-                        "फाल्गुण",
-                        "चैत्र",
-                    ]
-                ):
-                    return value
-
-                # Gregorian date fallback
-                if any(
-                    char.isdigit()
-                    for char in value
-                ) and (
-                    "-" in value
-                    or "/" in value
-                    or ":" in value
-                ):
-                    return value
-
-       
-
-        header_text = response.css(
-            "#content > div > header ::text"
-        ).getall()
-
-        for text in header_text:
-
-            text = text.strip()
-
-            if not text:
-                continue
-
-            if any(
-                month in text
-                for month in [
-                    "बैशाख",
-                    "जेठ",
-                    "असार",
-                    "श्रावण",
-                    "भाद्र",
-                    "आश्विन",
-                    "कार्तिक",
-                    "मंसिर",
-                    "पौष",
-                    "माघ",
-                    "फाल्गुण",
-                    "चैत्र",
-                ]
-            ):
-                return text
+        if value:
+            return " ".join(value.split())
 
         return None

@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Zap,
   Users,
+  ShieldCheck,
 } from "lucide-react";
 import clsx from "clsx";
 
@@ -59,6 +60,11 @@ const ADMIN_NAV = [
     to: "/admin/users",
   },
 
+  {
+    label: "Roles & Permissions",
+    icon: ShieldCheck,
+    to: "/admin/roles-permissions",
+},
   {
     type: "divider",
     label: "News & Data",

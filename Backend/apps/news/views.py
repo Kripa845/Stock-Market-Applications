@@ -1,9 +1,9 @@
+from django.db.models import Count, F, Q
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import F, Q
 
 from apps.companies.models import Company
 from apps.users.permissions import IsAnalystUserRole
@@ -13,6 +13,7 @@ from .serializers import (
     NewsArticleSerializer,
     RecategorizeRequestSerializer,
 )
+from .tasks import categorize_article_task
 
 
 class NewsArticleListAPIView(generics.ListAPIView):
@@ -64,9 +65,9 @@ class NewsArticleListAPIView(generics.ListAPIView):
 
         needs_review = self.request.query_params.get("needs_review")
         if needs_review and needs_review.lower() == "true":
-            # Filter articles with low confidence (< 0.7) or no company tags
+            # Filter articles with low confidence (< 0.65) or no company tags
             qs = qs.filter(
-                Q(company_tags__confidence__lt=0.7) | Q(company_tags__isnull=True)
+                Q(company_tags__confidence__lt=0.65) | Q(company_tags__isnull=True)
             )
 
         return qs.distinct()
@@ -126,29 +127,29 @@ class NewsRecategorizeAPIView(APIView):
                     article=article,
                     company=company,
                     confidence=confidence,
-                    method="analyst_manual_review",
+                    method="manual",
                     evidence={"manual_reason": reason, "by": request.user.username},
                     is_manual=True,
                 )
             else:
                 existing_tag.confidence = confidence
-                existing_tag.method = "analyst_manual_review"
+                existing_tag.method = "manual"
                 existing_tag.is_manual = True
                 existing_tag.evidence = {"manual_reason": reason, "by": request.user.username}
                 existing_tag.save()
         elif action == "update":
-            tag, created = ArticleCompanyTag.objects.update_or_create(
+            tag, _ = ArticleCompanyTag.objects.update_or_create(
                 article=article,
                 company=company,
                 defaults={
                     "confidence": confidence,
-                    "method": "analyst_manual_review",
+                    "method": "manual",
                     "evidence": {"manual_reason": reason, "by": request.user.username},
                     "is_manual": True,
                 },
             )
 
-        # Log correction record
+        # Log audit trail correction record
         correction = CategorizationCorrection.objects.create(
             article=article,
             company=company,
@@ -170,12 +171,90 @@ class NewsRecategorizeAPIView(APIView):
         )
 
 
+class NewsTriggerCategorizeAPIView(APIView):
+    """
+    POST /api/news/:id/trigger-categorize/
+    Role-gated: Analyst & Admin only.
+    Dispatches asynchronous Celery auto-categorization task for an article.
+    """
+    permission_classes = [IsAnalystUserRole]
+
+    def post(self, request, pk):
+        article = get_object_or_404(NewsArticle, pk=pk)
+        task = categorize_article_task.delay(article.id)
+        return Response(
+            {
+                "message": f"Categorization task dispatched for article {article.id}.",
+                "task_id": task.id,
+                "article_id": article.id,
+            },
+            status=status.HTTP_202_ACCEPTED,
+        )
+
+
+class NewsStatsAPIView(APIView):
+    """
+    GET /api/news/stats/
+    Provides metrics on total articles, categorized, uncategorized,
+    multi-company articles, source breakdown, and company breakdown.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        total_articles = NewsArticle.objects.count()
+        categorized = NewsArticle.objects.filter(company_tags__isnull=False).distinct().count()
+        uncategorized = total_articles - categorized
+
+        multi_company_articles = (
+            NewsArticle.objects
+            .annotate(tag_count=Count("company_tags"))
+            .filter(tag_count__gt=1)
+            .count()
+        )
+
+        by_source = list(
+            NewsArticle.objects
+            .values("source")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+
+        by_company = list(
+            ArticleCompanyTag.objects
+            .values("company__symbol", "company__name")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+
+        return Response({
+            "total_articles": total_articles,
+            "categorized": categorized,
+            "uncategorized": uncategorized,
+            "multi_company_articles": multi_company_articles,
+            "by_source": by_source,
+            "by_company": by_company,
+        })
+
+
 class CategorizationCorrectionListAPIView(generics.ListAPIView):
     """
-    GET /api/news/corrections/ - Audit log of corrections
+    GET /api/news/corrections/?article_id=
+    Audit log of all manual categorization corrections.
     """
     permission_classes = [IsAuthenticated]
     serializer_class = CategorizationCorrectionSerializer
-    queryset = CategorizationCorrection.objects.select_related(
-        "article", "company", "corrected_by"
-    ).all().order_by("-corrected_at")
+
+    def get_queryset(self):
+        qs = CategorizationCorrection.objects.select_related(
+            "article", "company", "corrected_by"
+        ).all().order_by("-corrected_at")
+
+        article_id = self.request.query_params.get("article_id")
+        if article_id:
+            qs = qs.filter(article_id=article_id)
+
+        company_id = self.request.query_params.get("company_id")
+        if company_id:
+            qs = qs.filter(company_id=company_id)
+
+        return qs

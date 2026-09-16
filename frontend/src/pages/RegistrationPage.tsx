@@ -7,13 +7,22 @@ import { authApi } from '../api/auth';
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    first_name: string;
+    last_name: string;
+    username: string;
+    email: string;
+    password: string;
+    password_confirm: string;
+    role: 'viewer' | 'analyst' | 'admin';
+  }>({
     first_name: '',
     last_name: '',
     username: '',
     email: '',
     password: '',
     password_confirm: '',
+    role: 'viewer',
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +34,9 @@ const RegisterPage: React.FC = () => {
   const [success, setSuccess] = useState('');
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >
   ) => {
     setForm({
       ...form,
@@ -70,10 +81,6 @@ const RegisterPage: React.FC = () => {
 
       await authApi.register({
         ...form,
-
-        // Public users are registered as viewer.
-        // Admin can later change the role.
-        role: 'viewer',
       });
 
       setSuccess(
@@ -262,6 +269,28 @@ const RegisterPage: React.FC = () => {
                 className="input text-black bg-white placeholder:text-gray-400"
                 placeholder="you@example.com"
               />
+            </div>
+
+            {/* Role */}
+            <div>
+              <label className="label">
+                Role
+              </label>
+
+              <select
+                name="role"
+                value={form.role}
+                onChange={handleChange}
+                className="input text-black bg-white"
+              >
+                <option value="viewer">
+                  Viewer
+                </option>
+
+                <option value="analyst">
+                  Analyst
+                </option>
+              </select>
             </div>
 
             {/* Password */}

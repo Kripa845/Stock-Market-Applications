@@ -2,10 +2,12 @@ import hashlib
 import json
 import os
 import sys
+import re
+import nepali_datetime
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-
+from zoneinfo import ZoneInfo
 
 from twisted.internet.threads import deferToThread
 
@@ -20,7 +22,7 @@ os.environ.setdefault(
     "DJANGO_SETTINGS_MODULE",
     "config.settings",
 )
-
+NEPAL_TZ = ZoneInfo("Asia/Kathmandu")
 import django
 
 django.setup()
@@ -34,6 +36,7 @@ from itemadapter import ItemAdapter
 
 from apps.crawler_runs.models import CrawlRun
 from apps.news.models import NewsArticle, RawArticle
+from apps.news.tasks import categorize_article_task
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 
@@ -73,60 +76,234 @@ def clean_body(value):
         return "\n\n".join(parts).strip()
 
     return str(value).strip()
-
-
 def normalize_datetime(value):
-    
 
-    if isinstance(value, datetime):
-        dt = value
-
-    elif isinstance(value, str):
-        value = clean_text(value)
-
-        formats = [
-            "%a, %b %d, %Y %I:%M %p",
-            "%a, %b %d, %Y %I:%M:%S %p",
-            "%B %d, %Y, %I:%M:%S %p",
-            "%B %d, %Y, %I:%M %p",
-            "%B %d, %Y %I:%M:%S %p",
-            "%B %d, %Y %I:%M %p",
-            "%Y-%m-%d %H:%M:%S",
-            "%Y-%m-%d %H:%M",
-            "%Y-%m-%d",
-        ]
-
-        dt = None
-
-        for fmt in formats:
-            try:
-                dt = datetime.strptime(value, fmt)
-                break
-            except ValueError:
-                continue
-
-        if dt is None:
-            try:
-                from dateutil import parser as date_parser
-
-                dt = date_parser.parse(
-                    value,
-                    fuzzy=True,
-                )
-            except (ValueError, TypeError, OverflowError):
-                return None
-
-    else:
+    if value is None or value == "":
         return None
 
+    # ---------------------------------------------------------
+    # Already a Python datetime
+    # ---------------------------------------------------------
+    if isinstance(value, datetime):
+
+        dt = value
+
+        if timezone.is_naive(dt):
+            dt = timezone.make_aware(
+                dt,
+                NEPAL_TZ,
+            )
+
+        return dt
+
+    if not isinstance(value, str):
+        return None
+
+    value = clean_text(value)
+
+    # ---------------------------------------------------------
+    # Convert Nepali numerals to English numerals
+    #
+    # १२ श्रावण २०८३
+    # ->
+    # 12 श्रावण 2083
+    # ---------------------------------------------------------
+    value = value.translate(
+        str.maketrans(
+            "०१२३४५६७८९",
+            "0123456789",
+        )
+    )
+
+    # ---------------------------------------------------------
+    # Bikram Sambat month mapping
+    # ---------------------------------------------------------
+    bs_months = {
+        "बैशाख": 1,
+        "बैसाख": 1,
+        "जेठ": 2,
+        "असार": 3,
+        "श्रावण": 4,
+        "साउन": 4,
+        "भाद्र": 5,
+        "भाद्रपद": 5,
+        "आश्विन": 6,
+        "कार्तिक": 7,
+        "मंसिर": 8,
+        "पौष": 9,
+        "माघ": 10,
+        "फाल्गुण": 11,
+        "फाल्गुन": 11,
+        "चैत्र": 12,
+    }
+
+    # ---------------------------------------------------------
+    # Detect Bikram Sambat date
+    #
+    # Example:
+    # 12 श्रावण 2083, मंगलवार 15:50
+    #
+    # Also supports:
+    # 12 श्रावण 2083
+    # ---------------------------------------------------------
+    bs_pattern = re.compile(
+        r"(?P<day>\d{1,2})\s+"
+        r"(?P<month>"
+        r"बैशाख|बैसाख|"
+        r"जेठ|"
+        r"असार|"
+        r"श्रावण|साउन|"
+        r"भाद्र|भाद्रपद|"
+        r"आश्विन|"
+        r"कार्तिक|"
+        r"मंसिर|"
+        r"पौष|"
+        r"माघ|"
+        r"फाल्गुण|फाल्गुन|"
+        r"चैत्र"
+        r")\s+"
+        r"(?P<year>\d{4})"
+        r"(?:.*?"
+        r"(?P<hour>\d{1,2}):"
+        r"(?P<minute>\d{2}))?"
+    )
+
+    match = bs_pattern.search(value)
+
+    if match:
+
+        day = int(match.group("day"))
+        year = int(match.group("year"))
+        month_name = match.group("month")
+
+        month = bs_months.get(month_name)
+
+        if month is None:
+            return None
+
+        hour = (
+            int(match.group("hour"))
+            if match.group("hour")
+            else 0
+        )
+
+        minute = (
+            int(match.group("minute"))
+            if match.group("minute")
+            else 0
+        )
+
+        try:
+
+            # -------------------------------------------------
+            # Create Bikram Sambat datetime
+            # -------------------------------------------------
+            bs_dt = nepali_datetime.datetime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+            )
+
+            # -------------------------------------------------
+            # Convert BS date -> AD date
+            # -------------------------------------------------
+            ad_date = bs_dt.to_datetime_date()
+
+            # -------------------------------------------------
+            # Create normal Python datetime
+            # -------------------------------------------------
+            dt = datetime(
+                ad_date.year,
+                ad_date.month,
+                ad_date.day,
+                hour,
+                minute,
+            )
+
+            # -------------------------------------------------
+            # Nepal timezone
+            # -------------------------------------------------
+            dt = timezone.make_aware(
+                dt,
+                NEPAL_TZ,
+            )
+
+            return dt
+
+        except (
+            ValueError,
+            TypeError,
+        ):
+
+            return None
+
+    # ---------------------------------------------------------
+    # Gregorian formats
+    # ---------------------------------------------------------
+    formats = [
+        "%a, %b %d, %Y %I:%M %p",
+        "%a, %b %d, %Y %I:%M:%S %p",
+        "%B %d, %Y, %I:%M:%S %p",
+        "%B %d, %Y, %I:%M %p",
+        "%B %d, %Y %I:%M:%S %p",
+        "%B %d, %Y %I:%M %p",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ]
+
+    dt = None
+
+    for fmt in formats:
+
+        try:
+
+            dt = datetime.strptime(
+                value,
+                fmt,
+            )
+
+            break
+
+        except ValueError:
+
+            continue
+
+    # ---------------------------------------------------------
+    # dateutil fallback
+    # ---------------------------------------------------------
+    if dt is None:
+
+        try:
+
+            from dateutil import parser as date_parser
+
+            dt = date_parser.parse(
+                value,
+                fuzzy=True,
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            OverflowError,
+        ):
+
+            return None
+
+    # ---------------------------------------------------------
+    # Make timezone aware
+    # ---------------------------------------------------------
     if timezone.is_naive(dt):
+
         dt = timezone.make_aware(
             dt,
-            timezone.get_current_timezone(),
+            NEPAL_TZ,
         )
 
     return dt
-
 
 def update_crawl_metrics(spider, status=None):
     crawl_run_id = getattr(spider, "crawl_run_id", None)
@@ -531,6 +708,12 @@ class NewsPipeline:
 
                 self.created_count += 1
                 spider.news_created += 1
+
+                # Trigger asynchronous news categorization in Celery worker
+                article_id = article.id
+                transaction.on_commit(
+                    lambda: categorize_article_task.delay(article_id)
+                )
 
                 spider.logger.info(
                     "News article saved successfully | id=%s | %s",

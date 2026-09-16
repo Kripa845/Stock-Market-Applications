@@ -181,6 +181,7 @@ CELERY_ENABLE_UTC = True
 
 CELERY_TASK_ROUTES = {
     "apps.crawler_runs.tasks.*": {"queue": "crawling"},
+    "apps.news.tasks.*": {"queue": "crawling"},
 }
 CELERY_TASK_DEFAULT_QUEUE = "crawling"
 
@@ -198,6 +199,10 @@ CELERY_BEAT_SCHEDULE = {
     "crawl-floorsheet-evening": {
         "task": "apps.crawler_runs.tasks.crawl_floorsheet",
         "schedule": crontab(minute=15, hour=18),
+    },
+    "categorize-unprocessed-news-every-10-minutes": {
+        "task": "apps.news.tasks.categorize_unprocessed_news_task",
+        "schedule": crontab(minute="*/10"),
     },
 }
 # Internationalization
@@ -264,3 +269,20 @@ REDIS_URL = os.getenv(
     "REDIS_URL",
     "redis://localhost:6379/0",
 )
+
+# -------------------------------------------------------------------
+# AUTOMATIC NEWS CATEGORIZATION SETTINGS
+# -------------------------------------------------------------------
+CATEGORIZATION_EMBEDDING_MODEL = os.getenv(
+    "CATEGORIZATION_EMBEDDING_MODEL",
+    "all-MiniLM-L6-v2",
+)
+CATEGORIZATION_EMBEDDING_WEIGHT = float(
+    os.getenv("CATEGORIZATION_EMBEDDING_WEIGHT", "0.60")
+)
+CATEGORIZATION_KEYWORD_WEIGHT = float(
+    os.getenv("CATEGORIZATION_KEYWORD_WEIGHT", "0.40")
+)
+CATEGORIZATION_THRESHOLD = float(
+    os.getenv("CATEGORIZATION_THRESHOLD", "0.65")
+)

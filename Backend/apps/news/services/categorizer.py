@@ -1,26 +1,7 @@
-def categorize_article(article):
+"""
+Categorizer wrapper forwarding to the unified categorization service.
+"""
 
-    candidates = find_company_candidates(article)
+from apps.news.services.categorization import categorize_article
 
-    results = []
-
-    for candidate in candidates:
-
-        confidence = calculate_confidence(
-            article,
-            candidate,
-        )
-
-        if confidence >= 0.45:
-            results.append(
-                {
-                    "company": candidate["company"],
-                    "confidence": confidence,
-                    "method": "keyword_weighted",
-                    "evidence": candidate["evidence"],
-                }
-            )
-
-    save_tags(article, results)
-
-    return results
+__all__ = ["categorize_article"]

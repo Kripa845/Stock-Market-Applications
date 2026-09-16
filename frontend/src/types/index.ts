@@ -61,6 +61,22 @@ export interface CompanyTag {
   is_manual: boolean;
 }
 
+export interface CategorizationCorrection {
+  id: number;
+  article: number;
+  article_headline?: string;
+  company: number;
+  company_symbol?: string;
+  company_name?: string;
+  previous_confidence: number | null;
+  previous_method: string;
+  action: 'add' | 'remove' | 'update';
+  reason: string;
+  corrected_by: number | null;
+  corrected_by_username?: string;
+  corrected_at: string;
+}
+
 export interface NewsArticle {
   id: number;
   headline: string;
@@ -72,6 +88,7 @@ export interface NewsArticle {
   sentiment_label: SentimentLabel;
   is_processed: boolean;
   company_tags: CompanyTag[];
+  corrections?: CategorizationCorrection[];
   created_at: string;
   updated_at?: string;
 }
@@ -84,6 +101,7 @@ export interface NewsStats {
   by_source: { source: string; count: number }[];
   by_company: { company__symbol: string; company__name: string; count: number }[];
 }
+
 
 // ── Analysis ──────────────────────────────────────────────────────────
 

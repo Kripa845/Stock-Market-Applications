@@ -2,9 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, Edit3, Plus, RefreshCw, Search, Trash2, UserRound, X } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import Badge from '../../components/common/Badge';
-import { usersApi, type AdminUser } from '../../api/users';
+import { usersApi, type AdminUser, type BuiltInRole as Role } from '../../api/users';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
-import type { Role, UserPayload } from '../../api/users';
+import type { UserPayload } from '../../api/users';
 
 const roleColors = {
   admin: 'red',

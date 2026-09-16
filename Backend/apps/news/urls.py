@@ -4,6 +4,8 @@ from .views import (
     NewsArticleDetailAPIView,
     NewsArticleListAPIView,
     NewsRecategorizeAPIView,
+    NewsStatsAPIView,
+    NewsTriggerCategorizeAPIView,
 )
 
 urlpatterns = [
@@ -11,6 +13,11 @@ urlpatterns = [
         "",
         NewsArticleListAPIView.as_view(),
         name="news-list",
+    ),
+    path(
+        "stats/",
+        NewsStatsAPIView.as_view(),
+        name="news-stats",
     ),
     path(
         "corrections/",
@@ -26,5 +33,10 @@ urlpatterns = [
         "<int:pk>/recategorize/",
         NewsRecategorizeAPIView.as_view(),
         name="news-recategorize",
+    ),
+    path(
+        "<int:pk>/trigger-categorize/",
+        NewsTriggerCategorizeAPIView.as_view(),
+        name="news-trigger-categorize",
     ),
 ]

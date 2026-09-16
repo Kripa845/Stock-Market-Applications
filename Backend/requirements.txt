@@ -50,6 +50,7 @@ kombu==5.6.2
 langcodes==3.5.1
 lxml==6.1.2
 markdown-it-py==4.2.0
+nepali_datetime==1.0.8.5
 MarkupSafe==3.0.3
 mdurl==0.1.2
 murmurhash==1.0.15
@@ -110,3 +111,6 @@ wcwidth==0.8.3
 weasel==0.4.3
 wrapt==2.4.0
 zope.interface==8.6
+sentence-transformers>=3.0.0
+scikit-learn>=1.4.0
+torch>=2.2.0

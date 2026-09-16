@@ -1,6 +1,6 @@
 import { apiClient } from "./client";
 
-export type Role =
+export type BuiltInRole =
   | "admin"
   | "analyst"
   | "viewer";
@@ -13,7 +13,11 @@ export interface AdminUser {
   first_name: string;
   last_name: string;
 
-  role: Role;
+  role: BuiltInRole;
+
+  custom_role_id?: number | null;
+  custom_role_name?: string | null;
+  effective_role?: string;
 
   is_active: boolean;
 
@@ -30,7 +34,10 @@ export interface UserPayload {
 
   password?: string;
 
-  role: Role;
+  role?: BuiltInRole;
+
+  custom_role_id?: number | null;
+
   is_active?: boolean;
 }
 
@@ -42,26 +49,34 @@ interface PaginatedResponse<T> {
 const unwrap = <T>(
   data: T[] | PaginatedResponse<T>
 ): T[] => {
-  return Array.isArray(data) ? data : data.results;
+  return Array.isArray(data)
+    ? data
+    : data.results;
 };
 
 export const usersApi = {
   list: async () => {
     const response =
       await apiClient.get<
-        AdminUser[] | PaginatedResponse<AdminUser>
-      >("/admin/users/");
+        AdminUser[] |
+        PaginatedResponse<AdminUser>
+      >(
+        "/users/admin/users/"
+      );
 
     return unwrap(response.data);
   },
 
-  create: async (payload: UserPayload) => {
+  create: async (
+    payload: UserPayload
+  ) => {
     const response =
       await apiClient.post<AdminUser>(
-        "/admin/users/",
+        "/users/admin/users/",
         {
           ...payload,
-          password_confirm: payload.password,
+          password_confirm:
+            payload.password,
         }
       );
 
@@ -74,7 +89,7 @@ export const usersApi = {
   ) => {
     const response =
       await apiClient.patch<AdminUser>(
-        `/admin/users/${id}/`,
+        `/users/admin/users/${id}/`,
         payload
       );
 
@@ -83,7 +98,7 @@ export const usersApi = {
 
   delete: async (id: number) => {
     await apiClient.delete(
-      `/admin/users/${id}/`
+      `/users/admin/users/${id}/`
     );
   },
 };

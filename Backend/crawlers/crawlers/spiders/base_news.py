@@ -4,10 +4,10 @@ import scrapy
 
 from django.utils import timezone
 
-from crawlers.items import NewsItem
-from crawlers.utils.text import clean_text
-from crawlers.utils.dates import parse_datetime
-from crawlers.utils.urls import canonicalize_url
+from crawlers.crawlers.items import NewsItem
+from crawlers.crawlers.utils.text import clean_text
+from crawlers.crawlers.utils.dates import parse_datetime
+from crawlers.crawlers.utils.urls import canonicalize_url
 
 
 class BaseNewsSpider(scrapy.Spider):
