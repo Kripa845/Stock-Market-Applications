@@ -21,6 +21,7 @@ import { newsApi } from '../api/news';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
 import type { NewsArticle, SentimentLabel, CompanyTag, CategorizationCorrection } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 function SentimentBadge({ label }: { label: SentimentLabel }) {
   if (!label) return null;
@@ -31,6 +32,7 @@ function SentimentBadge({ label }: { label: SentimentLabel }) {
 export default function NewsDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { canCategorizeNews, canCorrectCategories } = useAuth();
 
   const [article, setArticle] = useState<NewsArticle | null>(null);
   const [corrections, setCorrections] = useState<CategorizationCorrection[]>([]);
@@ -47,10 +49,8 @@ export default function NewsDetail() {
   const [reasonInput, setReasonInput] = useState<string>('');
   const [modalError, setModalError] = useState<string>('');
 
-  // Get current user role
-  const userJson = localStorage.getItem('user');
-  const user = userJson ? JSON.parse(userJson) : null;
-  const isAnalystOrAdmin = user?.role === 'analyst' || user?.role === 'admin';
+  // Check if user can categorize news (admin, analyst, or has permission)
+  const canCategorize = canCategorizeNews || canCorrectCategories;
 
   const loadData = () => {
     if (!id) return;
@@ -192,7 +192,7 @@ export default function NewsDetail() {
           <ArrowLeft size={14} /> Back to News
         </button>
 
-        {isAnalystOrAdmin && (
+        {canCategorize && (
           <div className="flex items-center gap-2">
             <button
               onClick={handleTriggerCategorize}
@@ -262,7 +262,7 @@ export default function NewsDetail() {
           {article.company_tags.length === 0 ? (
             <div className="p-4 rounded-lg bg-bg-elevated/40 border border-dashed border-bg-border text-center text-xs text-text-muted">
               <p>No company tags matched above the confidence threshold (Needs Review).</p>
-              {isAnalystOrAdmin && (
+              {canCategorize && (
                 <button onClick={handleOpenAddModal} className="text-accent-light hover:underline font-medium mt-1">
                   Assign a company tag manually
                 </button>
@@ -316,7 +316,7 @@ export default function NewsDetail() {
                       </div>
 
                       {/* Analyst Actions */}
-                      {isAnalystOrAdmin && (
+{canCategorize && (
                         <div className="flex items-center gap-1 border-l border-bg-border pl-3">
                           <button
                             onClick={() => handleOpenUpdateModal(tag)}

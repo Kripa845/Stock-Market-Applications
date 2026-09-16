@@ -29,6 +29,8 @@ import {
   type AdminUser,
 } from "../../api/users";
 
+import { useAuth } from "../../contexts/AuthContext";
+
 
 type BuiltInRole =
   | "admin"
@@ -52,6 +54,7 @@ const emptyForm: RoleForm = {
 
 export default function RolesPermissionsPage() {
   const navigate = useNavigate();
+  const { refreshPermissions } = useAuth();
   const [
     permissionGroups,
     setPermissionGroups,
@@ -268,6 +271,8 @@ export default function RolesPermissionsPage() {
 
       closeRoleEditor();
       await loadData();
+      // Refresh current user's permissions so changes apply on next navigation
+      await refreshPermissions();
     } catch (err: any) {
       const data = err?.response?.data;
 

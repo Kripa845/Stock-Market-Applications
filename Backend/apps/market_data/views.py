@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from rest_framework import generics
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from apps.users.permissions import HasAppPermission
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
@@ -30,7 +30,8 @@ class FloorsheetFilter(django_filters.FilterSet):
 
 
 class CompanyPriceList(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
 
     def get(self, request):
         prices = DailyPrice.objects.filter(
@@ -47,7 +48,8 @@ class CompanyPriceList(APIView):
 
 class FloorsheetListAPIView(generics.ListAPIView):
     serializer_class = FloorsheetSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_trading_volume"
     queryset = FloorsheetTransaction.objects.select_related("company").all()
 
     filter_backends = [

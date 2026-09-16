@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from django.db.models import Q
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.market_data.serializers import DailyPriceSerializers, FloorsheetSerializer
-from apps.users.permissions import IsAdminUserRole, ReadOnlyOrAdmin
+from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 from .models import Company, TrackedCompany
 from .serializers import CompanySerializer
 
@@ -18,8 +18,11 @@ class CompanyListCreateAPIView(generics.ListCreateAPIView):
     GET /api/companies/ - List tracked or all companies
     POST /api/companies/ - Create company (Admin only)
     """
-    permission_classes = [ReadOnlyOrAdmin]
+    permission_classes = [HasViewMethodPermissions]
     serializer_class = CompanySerializer
+
+    def get_required_permissions(self, request):
+        return ["view_companies"] if request.method == "GET" else ["create_companies"]
 
     def get_queryset(self):
      queryset = (
@@ -99,9 +102,17 @@ class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     PATCH/PUT /api/companies/:id/ - Update company (Admin only)
     DELETE /api/companies/:id/ - Delete company (Admin only)
     """
-    permission_classes = [ReadOnlyOrAdmin]
+    permission_classes = [HasViewMethodPermissions]
     serializer_class = CompanySerializer
     queryset = Company.objects.all()
+
+    def get_required_permissions(self, request):
+        return {
+            "GET": ["view_companies"],
+            "PUT": ["edit_companies"],
+            "PATCH": ["edit_companies"],
+            "DELETE": ["delete_companies"],
+        }.get(request.method, [])
 
 
 class CompanyToggleTrackAPIView(APIView):
@@ -109,7 +120,8 @@ class CompanyToggleTrackAPIView(APIView):
     POST /api/companies/:id/toggle-track/
     Role-gated: Admin only
     """
-    permission_classes = [IsAdminUserRole]
+    permission_classes = [HasAppPermission]
+    permission_key = "manage_tracked_companies"
 
     def post(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
@@ -141,7 +153,8 @@ class CompanyPricesAPIView(APIView):
     GET /api/companies/:id/prices?range=30d
     Ranges: 7d, 30d, 90d, 1y, all
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
@@ -181,7 +194,8 @@ class CompanyFloorsheetAPIView(APIView):
     """
     GET /api/companies/:id/floorsheet?date=YYYY-MM-DD
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
@@ -213,7 +227,8 @@ class CompanyFloorsheetAPIView(APIView):
         
         
 class CompanySectorsAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_companies"
 
     def get(self, request):
         sectors = (

@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -7,107 +6,61 @@ import {
   EyeOff,
   ArrowLeft,
 } from 'lucide-react';
-import { authApi } from '../api/auth';
+import { useAuth } from '../contexts/AuthContext';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const { login, loading, error, clearError } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState('');
 
-  const [showPassword, setShowPassword] =
-    useState(false);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  useEffect(() => {
+    clearError();
+  }, [clearError]);
 
   const handleSubmit = async (
     e: React.FormEvent
   ) => {
     e.preventDefault();
 
-    setError('');
+    setLocalError('');
 
     if (!username || !password) {
-      setError(
+      setLocalError(
         'Please enter your username and password.'
       );
       return;
     }
 
     try {
-      setLoading(true);
+      await login(username, password);
 
-      const response = await authApi.login(
-        username,
-        password
-      );
-
-      /*
-       * Store JWT tokens
-       */
-      localStorage.setItem(
-        'access_token',
-        response.access
-      );
-
-      localStorage.setItem(
-        'refresh_token',
-        response.refresh
-      );
-
-      /*
-       * Store logged-in user
-       */
-      localStorage.setItem(
-        'user',
-        JSON.stringify(response.user)
-      );
-
-      /*
-       * Redirect according to role
-       */
-      switch (response.user.role) {
-        case 'admin':
-          navigate('/admin', {
-            replace: true,
-          });
-          break;
-
-        case 'analyst':
-          navigate('/analyst', {
-            replace: true,
-          });
-          break;
-
-        case 'viewer':
-        default:
-          navigate('/viewer', {
-            replace: true,
-          });
-          break;
+      // Redirect according to role
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        switch (user.role) {
+          case 'admin':
+            navigate('/admin', { replace: true });
+            break;
+          case 'analyst':
+            navigate('/analyst', { replace: true });
+            break;
+          case 'viewer':
+          default:
+            navigate('/viewer', { replace: true });
+            break;
+        }
       }
-
     } catch (err: any) {
-      const data = err?.response?.data;
-
-      if (data?.detail) {
-        setError(data.detail);
-      } else if (data?.non_field_errors) {
-        setError(
-          Array.isArray(data.non_field_errors)
-            ? data.non_field_errors.join(', ')
-            : String(data.non_field_errors)
-        );
-      } else {
-        setError(
-          'Invalid username or password.'
-        );
-      }
-    } finally {
-      setLoading(false);
+      // Error already handled by auth context
     }
   };
+
+  const displayError = localError || error;
 
   return (
     <div className="min-h-screen bg-bg-primary flex">
@@ -168,7 +121,6 @@ const LoginPage: React.FC = () => {
             <span className="text-accent-light">
               {' '}StockScope.
             </span>
-
           </h1>
 
           <p className="mt-5 text-text-secondary">
@@ -238,7 +190,7 @@ const LoginPage: React.FC = () => {
 
           {/* Error */}
 
-          {error && (
+          {displayError && (
             <div
               className="
                 mt-6
@@ -251,7 +203,7 @@ const LoginPage: React.FC = () => {
                 text-sm
               "
             >
-              {error}
+              {displayError}
             </div>
           )}
 
@@ -370,7 +322,6 @@ const LoginPage: React.FC = () => {
             "
           >
             Don't have an account?{' '}
-
             <Link
               to="/register"
               className="
@@ -380,7 +331,6 @@ const LoginPage: React.FC = () => {
             >
               Create account
             </Link>
-
           </p>
 
         </div>
@@ -392,4 +342,3 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
-

@@ -11,6 +11,7 @@ from .views import (
     CustomRoleListCreateAPIView,
     CustomTokenObtainPairView,
     MeAPIView,
+    MePermissionsAPIView,
     RegisterAPIView,
     RolePermissionDetailAPIView,
     RolePermissionDefinitionsAPIView,
@@ -43,6 +44,12 @@ urlpatterns = [
         "me/",
         MeAPIView.as_view(),
         name="me",
+    ),
+
+    path(
+        "me/permissions/",
+        MePermissionsAPIView.as_view(),
+        name="me-permissions",
     ),
 
     # Users

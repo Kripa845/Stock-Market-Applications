@@ -1,9 +1,10 @@
 import {
-  BrowserRouter,
   Routes,
   Route,
   Navigate,
 } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import PermissionRefreshOnRouteChange from './components/PermissionRefreshOnRouteChange';
 
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -24,10 +25,7 @@ import TradingPage from './pages/Trading';
 // ADMIN PAGES
 // =========================
 import AdminDashboard from './pages/Dashboard';
-// import CrawlRunsPage from './pages/admin/CrawlRunsPage';
-// import CrawlRunDetailPage from './pages/admin/CrawlRunDetailPage';
 import AnalystsPage from './pages/AnalystDashboard';
-// import SettingsPage from './pages/admin/SettingsPage';
 
 // Existing pages
 import AdminNewsPage from './pages/News';
@@ -39,24 +37,6 @@ import AnalystDashboard from './pages/AnalystDashboard';
 import ViewerDashboard from './pages/ViewerDashboard';
 
 import NotFound from './pages/NotFound';
-
-
-// ======================================================
-// GET CURRENT USER
-// ======================================================
-function getUser() {
-  const value = localStorage.getItem('user');
-
-  if (!value) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
 
 
 // ======================================================
@@ -78,37 +58,33 @@ function PrivateRoute({
 
 
 // ======================================================
-// ROLE ROUTE
+// PERMISSION ROUTE
 // ======================================================
-function RoleRoute({
-  role,
+function PermissionRoute({
+  requiredPermissions,
   children,
 }: {
-  role: string;
+  requiredPermissions?: string[];
   children: React.ReactNode;
 }) {
-  const user = getUser();
+  const { user, canAccessRoute, loading } = useAuth();
 
-  // No logged-in user
+  if (loading) {
+    return <div className="p-6 text-center">Loading...</div>;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
 
-  // User does not have permission for this route
-  if (user.role !== role) {
+  if (!canAccessRoute(requiredPermissions)) {
     if (user.role === 'admin') {
       return <Navigate to="/admin" replace />;
     }
-
     if (user.role === 'analyst') {
       return <Navigate to="/analyst" replace />;
     }
-
-    if (user.role === 'viewer') {
-      return <Navigate to="/viewer" replace />;
-    }
-
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/viewer" replace />;
   }
 
   return <>{children}</>;
@@ -120,26 +96,24 @@ function RoleRoute({
 // ======================================================
 export default function App() {
   return (
-    <BrowserRouter>
+    <AuthProvider>
+      <PermissionRefreshOnRouteChange />
       <Routes>
 
         {/* =================================================
             PUBLIC ROUTES
             ================================================= */}
 
-        {/* Landing page */}
         <Route
           path="/"
           element={<LandingPage />}
         />
 
-        {/* Login */}
         <Route
           path="/login"
           element={<LoginPage />}
         />
 
-        {/* Registration */}
         <Route
           path="/register"
           element={<RegisterPage />}
@@ -153,110 +127,91 @@ export default function App() {
         <Route
           element={
             <PrivateRoute>
-              <RoleRoute role="admin">
-                <Layout />
-              </RoleRoute>
+              <Layout />
             </PrivateRoute>
           }
         >
 
-          {/* -----------------------------------------------
-              ADMIN DASHBOARD
-              URL: /admin
-              ----------------------------------------------- */}
           <Route
             path="/admin"
             element={<AdminDashboard />}
           />
 
-
-          {/* -----------------------------------------------
-              COMPANIES
-              URL: /admin/companies
-              ----------------------------------------------- */}
           <Route
             path="/admin/companies"
-            element={<CompaniesPage />}
+            element={
+              <PermissionRoute requiredPermissions={["view_companies", "manage_tracked_companies"]}>
+                <CompaniesPage />
+              </PermissionRoute>
+            }
           />
 
           <Route
             path="/admin/watchlist"
-            element={<WatchlistPage />}
+            element={
+              <PermissionRoute requiredPermissions={["view_watchlist", "add_watchlist"]}>
+                <WatchlistPage />
+              </PermissionRoute>
+            }
           />
 
+          <Route path="/admin/crawl" element={
+            <PermissionRoute requiredPermissions={["view_crawl_runs", "run_crawler"]}>
+              <CrawlerStatusPage />
+            </PermissionRoute>
+          } />
+          <Route path="/admin/crawl-runs" element={
+            <PermissionRoute requiredPermissions={["view_crawl_runs", "run_crawler"]}>
+              <CrawlerStatusPage />
+            </PermissionRoute>
+          } />
 
-          {/* -----------------------------------------------
-              CRAWL RUNS
-              URL: /admin/crawl-runs
-              ----------------------------------------------- */}
-          <Route path="/admin/crawl" element={<CrawlerStatusPage />} />
-          <Route path="/admin/crawl-runs" element={<CrawlerStatusPage />} />
-
-
-          {/* -----------------------------------------------
-              CRAWL RUN DETAIL
-              URL: /admin/crawl-runs/:id
-              ----------------------------------------------- */}
-          {/* <Route
-            path="/admin/crawl-runs/:id"
-            element={<CrawlRunDetailPage />}
-          /> */}
-
-
-          {/* -----------------------------------------------
-              USERS
-              URL: /admin/users
-              ----------------------------------------------- */}
           <Route
             path="/admin/users"
-            element={<UserManagementPage />}
+            element={
+              <PermissionRoute requiredPermissions={["view_users", "create_users", "edit_users"]}>
+                <UserManagementPage />
+              </PermissionRoute>
+            }
           />
 
-
-          {/* -----------------------------------------------
-              ANALYSTS
-              URL: /admin/analysts
-              ----------------------------------------------- */}
           <Route
             path="/admin/analysts"
-            element={<AnalystsPage />}
+            element={
+              <PermissionRoute requiredPermissions={["view_users"]}>
+                <AnalystsPage />
+              </PermissionRoute>
+            }
           />
 
-
-          {/* -----------------------------------------------
-              NEWS REVIEW
-              URL: /admin/news
-              ----------------------------------------------- */}
           <Route
             path="/admin/news"
-            element={<AdminNewsPage />}
+            element={
+              <PermissionRoute requiredPermissions={["view_news", "categorize_news", "correct_categories"]}>
+                <AdminNewsPage />
+              </PermissionRoute>
+            }
           />
           <Route
             path="/admin/news/:id"
-            element={<NewsDetail />}
+            element={
+              <PermissionRoute requiredPermissions={["view_news", "categorize_news", "correct_categories"]}>
+                <NewsDetail />
+              </PermissionRoute>
+            }
           />
           <Route
             path="/news/:id"
             element={<NewsDetail />}
           />
 
-
-          {/* -----------------------------------------------
-              SETTINGS
-              URL: /admin/settings
-              ----------------------------------------------- */}
-          {/* <Route
-            path="/admin/settings"
-            element={<SettingsPage />}
-          /> */}
-
-          {/* -----------------------------------------------
-              ROLES & PERMISSIONS
-              URL: /admin/roles-permissions
-              ----------------------------------------------- */}
           <Route
             path="/admin/roles-permissions"
-            element={<RolesPermissionsPage />}
+            element={
+              <PermissionRoute requiredPermissions={["view_roles", "edit_roles"]}>
+                <RolesPermissionsPage />
+              </PermissionRoute>
+            }
           />
 
         </Route>
@@ -269,9 +224,7 @@ export default function App() {
         <Route
           element={
             <PrivateRoute>
-              <RoleRoute role="analyst">
-                <Layout />
-              </RoleRoute>
+              <Layout />
             </PrivateRoute>
           }
         >
@@ -300,9 +253,7 @@ export default function App() {
         <Route
           element={
             <PrivateRoute>
-              <RoleRoute role="viewer">
-                <Layout />
-              </RoleRoute>
+              <Layout />
             </PrivateRoute>
           }
         >
@@ -323,7 +274,6 @@ export default function App() {
         </Route>
 
 
-
         {/* =================================================
             404
             ================================================= */}
@@ -333,6 +283,6 @@ export default function App() {
         />
 
       </Routes>
-    </BrowserRouter>
+    </AuthProvider>
   );
 }

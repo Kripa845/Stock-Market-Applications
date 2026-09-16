@@ -20,17 +20,55 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import clsx from "clsx";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
 }
 
+interface NavItem {
+  label: string;
+  icon?: any;
+  to?: string;
+  type?: "divider";
+  requiredPermissions?: string[];
+}
+
+// One permission mapping is shared by every role-specific layout.  Roles pick
+// the URL namespace only; permission data decides whether an item is visible.
+const PATH_PERMISSIONS: Record<string, string[]> = {
+  "/admin": ["view_analysis"],
+  "/analyst": ["view_analysis"],
+  "/viewer": ["view_analysis"],
+  "/admin/companies": ["view_companies", "manage_tracked_companies"],
+  "/admin/watchlist": ["view_watchlist", "add_watchlist"],
+  "/admin/users": ["view_users", "create_users", "edit_users"],
+  "/admin/roles-permissions": ["view_roles", "edit_roles"],
+  "/admin/news": ["view_news", "categorize_news", "correct_categories"],
+  "/admin/crawl": ["view_crawl_runs", "run_crawler"],
+  "/analyst/market": ["view_market_data"],
+  "/viewer/market": ["view_market_data"],
+  "/analyst/stocks": ["view_companies"],
+  "/viewer/stocks": ["view_companies"],
+  "/analyst/trading": ["view_market_data"],
+  "/viewer/trading": ["view_market_data"],
+  "/analyst/analytics": ["view_analysis"],
+  "/viewer/analytics": ["view_analysis"],
+  "/analyst/news": ["view_news"],
+  "/viewer/news": ["view_news"],
+  "/analyst/news-review": ["correct_categories", "categorize_news"],
+  "/analyst/watchlist": ["view_watchlist"],
+  "/viewer/watchlist": ["view_watchlist"],
+  "/analyst/reports": ["view_reports", "export_reports"],
+  "/viewer/reports": ["view_reports"],
+};
+
 /* =========================
    ADMIN NAVIGATION
    ========================= */
 
-const ADMIN_NAV = [
+const ADMIN_NAV: NavItem[] = [
   {
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -43,28 +81,33 @@ const ADMIN_NAV = [
   },
 
   {
-    label: "Watchlist",
+    label: "Companies",
     icon: Briefcase,
     to: "/admin/companies",
+    requiredPermissions: ["view_companies", "manage_tracked_companies"],
   },
 
   {
-    label: "Live Trading",
+    label: "Watchlist",
     icon: Star,
     to: "/admin/watchlist",
+    requiredPermissions: ["view_watchlist", "add_watchlist"],
   },
 
   {
     label: "User Management",
     icon: Users,
     to: "/admin/users",
+    requiredPermissions: ["view_users", "create_users", "edit_users"],
   },
 
   {
     label: "Roles & Permissions",
     icon: ShieldCheck,
     to: "/admin/roles-permissions",
-},
+    requiredPermissions: ["view_roles", "edit_roles"],
+  },
+
   {
     type: "divider",
     label: "News & Data",
@@ -74,12 +117,14 @@ const ADMIN_NAV = [
     label: "News Review",
     icon: Newspaper,
     to: "/admin/news",
+    requiredPermissions: ["view_news", "categorize_news", "correct_categories"],
   },
 
   {
     label: "Crawl Management",
     icon: Radio,
     to: "/admin/crawl",
+    requiredPermissions: ["view_crawl_runs", "run_crawler"],
   },
 
   {
@@ -98,7 +143,7 @@ const ADMIN_NAV = [
    ANALYST NAVIGATION
    ========================= */
 
-const ANALYST_NAV = [
+const ANALYST_NAV: NavItem[] = [
   {
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -189,7 +234,7 @@ const ANALYST_NAV = [
    VIEWER NAVIGATION
    ========================= */
 
-const VIEWER_NAV = [
+const VIEWER_NAV: NavItem[] = [
   {
     label: "Dashboard",
     icon: LayoutDashboard,
@@ -279,6 +324,21 @@ export default function Sidebar({
   onToggle,
 }: SidebarProps) {
   const { pathname } = useLocation();
+  const { user, hasAnyPermission } = useAuth();
+
+  const canSeeItem = (item: NavItem): boolean => {
+    const required = item.requiredPermissions || (item.to ? PATH_PERMISSIONS[item.to] : undefined);
+    if (!required || required.length === 0) {
+      return true;
+    }
+
+    // Admin always has access
+    if (user?.role === "admin") {
+      return true;
+    }
+
+    return hasAnyPermission(required);
+  };
 
   /*
    * Select navigation based on current URL.
@@ -288,15 +348,17 @@ export default function Sidebar({
    * /viewer/*  -> Viewer sidebar
    */
 
-  let NAV = VIEWER_NAV;
+  let NAV: NavItem[] = VIEWER_NAV;
 
   if (pathname.startsWith("/admin")) {
-    NAV = ADMIN_NAV;
+    NAV = ADMIN_NAV.filter((item) => item.type === "divider" || canSeeItem(item));
   } else if (pathname.startsWith("/analyst")) {
     NAV = ANALYST_NAV;
   } else if (pathname.startsWith("/viewer")) {
     NAV = VIEWER_NAV;
   }
+
+  NAV = NAV.filter((item) => item.type === "divider" || canSeeItem(item));
 
   return (
     <aside

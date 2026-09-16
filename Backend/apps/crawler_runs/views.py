@@ -12,10 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
-from apps.users.permissions import (
-    IsAdminUserRole,
-    ReadOnlyOrAdmin,
-)
+from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
 from .models import CrawlRun
 from .serializers import (
@@ -41,8 +38,11 @@ NEWS_SOURCE_MAP = {
 class CrawlRunListCreateAPIView(
     generics.ListCreateAPIView
 ):
-    permission_classes = [ReadOnlyOrAdmin]
+    permission_classes = [HasViewMethodPermissions]
     serializer_class = CrawlRunSerializer
+
+    def get_required_permissions(self, request):
+        return ["view_crawl_runs"] if request.method == "GET" else ["run_crawler"]
 
     def get_queryset(self):
         qs = (
@@ -274,7 +274,8 @@ class CrawlRunListCreateAPIView(
 class CrawlRunDetailAPIView(
     generics.RetrieveAPIView
 ):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_crawl_runs"
     serializer_class = CrawlRunSerializer
 
     queryset = (
@@ -288,7 +289,8 @@ class CrawlRunDetailAPIView(
 
 class CrawlRunCancelAPIView(APIView):
 
-    permission_classes = [IsAdminUserRole]
+    permission_classes = [HasAppPermission]
+    permission_key = "run_crawler"
 
     def post(self, request, pk):
 
@@ -409,7 +411,8 @@ class CrawlRunCancelAPIView(APIView):
             ).data
         )
 class CrawlRunRetryAPIView(APIView):
-    permission_classes = [IsAdminUserRole]
+    permission_classes = [HasAppPermission]
+    permission_key = "retry_failed_crawl"
 
     def post(self, request, pk):
         crawl_run = get_object_or_404(

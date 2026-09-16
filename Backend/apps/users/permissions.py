@@ -64,6 +64,28 @@ class HasAppPermission(permissions.BasePermission):
         )
 
 
+class HasViewMethodPermissions(permissions.BasePermission):
+    """Check permissions selected by the view for the current request."""
+
+    message = "You do not have permission to perform this action."
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+
+        required = (
+            view.get_required_permissions(request)
+            if hasattr(view, "get_required_permissions")
+            else getattr(view, "permission_key", None)
+        )
+        if isinstance(required, str):
+            required = [required]
+        return bool(required) and all(
+            user.has_app_permission(key) for key in required
+        )
+
+
 class ReadOnlyOrAdmin(permissions.BasePermission):
     message = "Admin role required to modify this resource."
 

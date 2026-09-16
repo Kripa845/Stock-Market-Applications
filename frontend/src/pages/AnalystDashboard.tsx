@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
+  ArrowRight,
   CheckCircle,
   ExternalLink,
   History,
   Newspaper,
+  RefreshCw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -12,12 +14,12 @@ import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import { newsApi } from '../api/news';
 import type { CategorizationCorrection, NewsArticle, NewsStats } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 
 const AnalystDashboard: React.FC = () => {
   const navigate = useNavigate();
-
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const { user } = useAuth();
 
   const [stats, setStats] = useState<NewsStats | null>(null);
   const [needsReviewArticles, setNeedsReviewArticles] = useState<NewsArticle[]>([]);
@@ -43,7 +45,29 @@ const AnalystDashboard: React.FC = () => {
     <div className="space-y-6">
       <PageHeader
         title="Analyst Dashboard"
-        subtitle={`Welcome back, ${user.first_name || user.username || 'Analyst'}. Review AI auto-categorization and verify company news tags.`}
+        subtitle={`Welcome back, ${user?.first_name || user?.username || 'Analyst'}. Review AI auto-categorization and verify company news tags.`}
+        actions={
+          <button
+            onClick={() => {
+              setLoading(true);
+              Promise.all([
+                newsApi.getStats().catch(() => null),
+                newsApi.getNews({ needs_review: true, page: 1 }).catch(() => ({ results: [] })),
+                newsApi.getCorrections().catch(() => ({ results: [] })),
+              ])
+                .then(([statsData, reviewData, corrData]) => {
+                  setStats(statsData);
+                  setNeedsReviewArticles(reviewData.results || []);
+                  setRecentCorrections(corrData.results || []);
+                })
+                .finally(() => setLoading(false));
+            }}
+            className="btn-ghost flex items-center gap-2"
+          >
+            <RefreshCw size={14} />
+            Refresh
+          </button>
+        }
       />
 
       {/* Metric Cards */}
@@ -194,6 +218,166 @@ const AnalystDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* =====================================================
+          QUICK ACTIONS
+          ====================================================== */}
+
+      <div
+        className="
+          bg-bg-secondary
+          border
+          border-bg-border
+          rounded-xl
+          p-5
+        "
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <Newspaper
+            size={17}
+            className="text-accent-light"
+          />
+          <h2 className="text-base font-semibold text-text-primary">
+            Quick Actions
+          </h2>
+        </div>
+
+        <p className="text-sm text-text-secondary mb-5">
+          Common analyst tasks for news categorization.
+        </p>
+
+        <div className="space-y-3">
+          {/* Review News */}
+          <button
+            onClick={() => navigate('/analyst/news')}
+            className="
+              w-full
+              flex
+              items-center
+              justify-between
+              p-3
+              rounded-lg
+              border
+              border-bg-border
+              bg-bg-primary
+              hover:border-accent-light/40
+              transition-colors
+            "
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className="
+                  w-8
+                  h-8
+                  rounded-lg
+                  bg-purple-500/10
+                  flex items-center
+                  justify-center
+                "
+              >
+                <Newspaper
+                  size={16}
+                  className="text-purple-400"
+                />
+              </span>
+              <span className="text-sm font-medium text-text-primary">
+                Review News
+              </span>
+            </span>
+            <ArrowRight
+              size={15}
+              className="text-text-secondary"
+            />
+          </button>
+
+          {/* Needs Review Queue */}
+          <button
+            onClick={() => navigate('/analyst/news?needs_review=true')}
+            className="
+              w-full
+              flex
+              items-center
+              justify-between
+              p-3
+              rounded-lg
+              border
+              border-bg-border
+              bg-bg-primary
+              hover:border-yellow-500/40
+              transition-colors
+            "
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className="
+                  w-8
+                  h-8
+                  rounded-lg
+                  bg-yellow-500/10
+                  flex items-center
+                  justify-center
+                "
+              >
+                <AlertCircle
+                  size={16}
+                  className="text-yellow-400"
+                />
+              </span>
+              <span className="text-sm font-medium text-text-primary">
+                Needs Review Queue
+              </span>
+            </span>
+            <ArrowRight
+              size={15}
+              className="text-text-secondary"
+            />
+          </button>
+
+          {/* Corrections Audit Trail */}
+          <button
+            onClick={() => navigate('/analyst/news')}
+            className="
+              w-full
+              flex
+              items-center
+              justify-between
+              p-3
+              rounded-lg
+              border
+              border-bg-border
+              bg-bg-primary
+              hover:border-accent-light/40
+              transition-colors
+            "
+          >
+            <span className="flex items-center gap-3">
+              <span
+                className="
+                  w-8
+                  h-8
+                  rounded-lg
+                  bg-accent/10
+                  flex items-center
+                  justify-center
+                "
+              >
+                <History
+                  size={16}
+                  className="text-accent-light"
+                />
+              </span>
+              <span className="text-sm font-medium text-text-primary">
+                Corrections Audit Trail
+              </span>
+            </span>
+            <ArrowRight
+              size={15}
+              className="text-text-secondary"
+            />
+          </button>
+        </div>
+      </div>
+
     </div>
   );
 };

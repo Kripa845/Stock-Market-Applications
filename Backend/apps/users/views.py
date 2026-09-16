@@ -15,7 +15,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
 )
 
-from .permissions import IsAdminUserRole
+from .permissions import HasAppPermission, HasViewMethodPermissions, IsAdminUserRole
 
 from .models import CustomRole, RolePermissionConfig
 
@@ -167,9 +167,8 @@ class RolePermissionDefinitionsAPIView(APIView):
     the Create Role page.
     """
 
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_roles"
 
     def get(self, request):
         groups = []
@@ -241,7 +240,7 @@ class MeAPIView(APIView):
 
     def get(self, request):
         return Response(
-            UserSerializer(
+            MeSerializer(
                 request.user
             ).data
         )
@@ -260,7 +259,64 @@ class MeAPIView(APIView):
         user = serializer.save()
 
         return Response(
-            UserSerializer(user).data
+            MeSerializer(user).data
+        )
+
+
+class MePermissionsAPIView(APIView):
+    """
+    Returns the current user's effective permissions.
+    Admins receive all permission keys.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+
+        if user.is_admin():
+            return Response(
+                {
+                    "permissions": list(
+                        VALID_PERMISSION_KEYS
+                    ),
+                    "role": user.role,
+                    "effective_role": (
+                        user.get_effective_role_name()
+                    ),
+                }
+            )
+
+        if user.custom_role:
+            if not user.custom_role.is_active:
+                permissions = []
+            else:
+                permissions = list(
+                    user.custom_role.permissions or []
+                )
+        else:
+            config = (
+                RolePermissionConfig.objects
+                .filter(
+                    role_key=user.role,
+                    is_active=True,
+                )
+                .first()
+            )
+            permissions = (
+                list(config.permissions or [])
+                if config
+                else []
+            )
+
+        return Response(
+            {
+                "permissions": permissions,
+                "role": user.role,
+                "effective_role": (
+                    user.get_effective_role_name()
+                ),
+            }
         )
 
 
@@ -278,11 +334,12 @@ class AdminUserListCreateAPIView(
     POST -> create user
     """
 
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasViewMethodPermissions]
 
     queryset = User.objects.all()
+
+    def get_required_permissions(self, request):
+        return ["view_users"] if request.method == "GET" else ["create_users"]
 
     def get_queryset(self):
         queryset = (
@@ -374,11 +431,25 @@ class AdminUserDetailAPIView(
     Admin-only individual user management.
     """
 
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasViewMethodPermissions]
 
     queryset = User.objects.all()
+
+    def get_required_permissions(self, request):
+        if request.method == "GET":
+            return ["view_users"]
+        if request.method == "DELETE":
+            return ["delete_users"]
+
+        required = []
+        fields = request.data.keys()
+        if any(field in fields for field in ("first_name", "last_name", "email", "password")):
+            required.append("edit_users")
+        if any(field in fields for field in ("role", "custom_role_id")):
+            required.append("change_user_roles")
+        if "is_active" in fields:
+            required.append("activate_users")
+        return required or ["edit_users"]
 
     def get_serializer_class(self):
         if self.request.method in [
@@ -464,9 +535,10 @@ class RolePermissionDetailAPIView(APIView):
     Admin only.
     """
 
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasViewMethodPermissions]
+
+    def get_required_permissions(self, request):
+        return ["view_roles"] if request.method == "GET" else ["edit_roles"]
 
     def get_object(self, role_key):
         config = (
@@ -573,6 +645,10 @@ class RolePermissionDetailAPIView(APIView):
             }
         )
 
+    # PUT is the documented replacement operation; PATCH is retained for
+    # backwards compatibility with the existing admin page.
+    put = patch
+
 
 class RolePermissionsAPIView(APIView):
     """
@@ -582,9 +658,8 @@ class RolePermissionsAPIView(APIView):
     Admin always has full access.
     """
 
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_roles"
 
     def get(self, request):
         configs = (

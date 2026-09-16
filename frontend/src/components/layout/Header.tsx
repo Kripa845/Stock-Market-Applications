@@ -1,23 +1,18 @@
 import { Bell, Search, ChevronDown, User, LogOut } from 'lucide-react';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Header() {
   const [profileOpen, setProfileOpen] = useState(false);
-  const navigate = useNavigate();
-  const storedUser = localStorage.getItem('user');
-  let roleLabel = 'User';
+  const { user, logout } = useAuth();
 
-  if (storedUser) {
-    try {
-      const user = JSON.parse(storedUser) as { role?: string };
-      roleLabel = user.role
-        ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
-        : roleLabel;
-    } catch {
-      roleLabel = 'User';
-    }
-  }
+  const roleLabel = user?.role
+    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+    : 'User';
+
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <header className="h-14 bg-bg-secondary border-b border-bg-border flex items-center gap-4 px-6 shrink-0">
@@ -58,7 +53,7 @@ export default function Header() {
               </button>
               <div className="h-px bg-bg-border my-1" />
               <button
-                onClick={() => { localStorage.clear(); navigate('/login'); }}
+                onClick={handleLogout}
                 className="w-full flex items-center gap-2 px-4 py-2 text-sm text-down hover:bg-bg-card transition-colors"
               >
                 <LogOut size={13} /> Sign out

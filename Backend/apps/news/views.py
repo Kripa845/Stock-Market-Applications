@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
-from apps.users.permissions import IsAnalystUserRole
+from apps.users.permissions import HasAppPermission
 from .models import ArticleCompanyTag, CategorizationCorrection, NewsArticle
 from .serializers import (
     CategorizationCorrectionSerializer,
@@ -20,7 +20,8 @@ class NewsArticleListAPIView(generics.ListAPIView):
     """
     GET /api/news/?company_id=&sentiment=&source=&search=&confidence_min=&confidence_max=&needs_review=
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_news"
     serializer_class = NewsArticleSerializer
 
     def get_queryset(self):
@@ -77,7 +78,8 @@ class NewsArticleDetailAPIView(generics.RetrieveAPIView):
     """
     GET /api/news/:id/
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_news"
     serializer_class = NewsArticleSerializer
     queryset = NewsArticle.objects.prefetch_related(
         "company_tags__company", "corrections__corrected_by"
@@ -87,7 +89,7 @@ class NewsArticleDetailAPIView(generics.RetrieveAPIView):
 class NewsRecategorizeAPIView(APIView):
     """
     POST /api/news/:id/recategorize/
-    Role-gated: Analyst & Admin only.
+    Permission-gated: requires categorize_news or correct_categories.
     Body:
     {
       "company_id": 1,
@@ -96,7 +98,8 @@ class NewsRecategorizeAPIView(APIView):
       "reason": "Explicit company name mention in 2nd paragraph"
     }
     """
-    permission_classes = [IsAnalystUserRole]
+    permission_classes = [HasAppPermission]
+    permission_key = "categorize_news"
 
     def post(self, request, pk):
         article = get_object_or_404(NewsArticle, pk=pk)
@@ -174,10 +177,11 @@ class NewsRecategorizeAPIView(APIView):
 class NewsTriggerCategorizeAPIView(APIView):
     """
     POST /api/news/:id/trigger-categorize/
-    Role-gated: Analyst & Admin only.
+    Permission-gated: requires categorize_news permission.
     Dispatches asynchronous Celery auto-categorization task for an article.
     """
-    permission_classes = [IsAnalystUserRole]
+    permission_classes = [HasAppPermission]
+    permission_key = "categorize_news"
 
     def post(self, request, pk):
         article = get_object_or_404(NewsArticle, pk=pk)
@@ -198,7 +202,8 @@ class NewsStatsAPIView(APIView):
     Provides metrics on total articles, categorized, uncategorized,
     multi-company articles, source breakdown, and company breakdown.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_news"
 
     def get(self, request):
         total_articles = NewsArticle.objects.count()
@@ -241,7 +246,8 @@ class CategorizationCorrectionListAPIView(generics.ListAPIView):
     GET /api/news/corrections/?article_id=
     Audit log of all manual categorization corrections.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "correct_categories"
     serializer_class = CategorizationCorrectionSerializer
 
     def get_queryset(self):
