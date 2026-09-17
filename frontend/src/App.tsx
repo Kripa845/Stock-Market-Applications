@@ -13,6 +13,7 @@ import RegisterPage from './pages/RegistrationPage';
 import Layout from './components/layout/Layout';
 
 import Dashboard from './pages/Dashboard';
+import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import WatchlistPage from './pages/admin/WatchlistPage';
@@ -230,6 +231,16 @@ export default function App() {
             element={
               <PermissionRoute requiredPermissions={['view_analysis']}>
                 <TradingPage />
+              </PermissionRoute>
+            }
+          />
+
+          {/* ---- Company Behavior Analysis Dashboard ---- */}
+          <Route
+            path="/company-analysis"
+            element={
+              <PermissionRoute requiredPermissions={['view_analysis', 'view_market_data']}>
+                <CompanyAnalysisDashboard />
               </PermissionRoute>
             }
           />

@@ -20,7 +20,6 @@ import { newsApi } from '../api/news';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
 import type { NewsArticle, SentimentLabel } from '../types';
-import { useLiveRefresh } from '../hooks/useLiveRefresh';
 import { useAuth } from '../contexts/AuthContext';
 
 function Sentiment({ label }: { label: SentimentLabel }) {
@@ -86,7 +85,6 @@ export default function NewsPage() {
   useEffect(() => {
     loadNews();
   }, [loadNews]);
-  // useLiveRefresh(loadNews);
 
   const handleRecategorize = async (
     e: React.MouseEvent,

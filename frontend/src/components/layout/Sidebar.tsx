@@ -73,6 +73,12 @@ const NAV_ITEMS: NavItem[] = [
     requiredPermissions: ['view_analysis'],
   },
   {
+    label: 'Company Analysis',
+    icon: Activity,
+    to: '/company-analysis',
+    requiredPermissions: ['view_analysis'],
+  },
+  {
     label: 'Watchlist',
     icon: Star,
     to: '/watchlist',

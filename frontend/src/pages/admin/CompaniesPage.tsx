@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import apiClient from '../../api/client';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Company {
   id: number;
@@ -39,6 +40,15 @@ const emptyForm: CompanyForm = {
 };
 
 export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: boolean }) {
+  const { hasPermission } = useAuth();
+
+  // Derive every capability from the live permission list
+  const canCreate  = hasPermission('create_companies');
+  const canEdit    = hasPermission('edit_companies');
+  const canDelete  = hasPermission('delete_companies');
+  const canTrack   = hasPermission('manage_tracked_companies');  // toggle tracking
+  const canToggleActive = canEdit; // editing company status needs edit_companies
+
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -402,15 +412,16 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
             Refresh
           </button>
 
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="btn-primary inline-flex items-center justify-center gap-2"
-          >
-            <Plus size={17} />
-
-            Add Company
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="btn-primary inline-flex items-center justify-center gap-2"
+            >
+              <Plus size={17} />
+              Add Company
+            </button>
+          )}
         </div>
       </div>
 
@@ -623,87 +634,81 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                         </span>
                       </td>
 
-
                       <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            toggleActive(company)
-                          }
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        {canToggleActive ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleActive(company)}
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                              company.is_active
+                                ? 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                                : 'bg-bg-elevated text-text-muted border border-bg-border'
+                            }`}
+                          >
+                            {company.is_active ? 'Active' : 'Inactive'}
+                          </button>
+                        ) : (
+                          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                             company.is_active
                               ? 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
                               : 'bg-bg-elevated text-text-muted border border-bg-border'
-                          }`}
-                        >
-                          {company.is_active
-                            ? 'Active'
-                            : 'Inactive'}
-                        </button>
+                          }`}>
+                            {company.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        )}
                       </td>
 
 
                       <td className="px-5 py-4">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            toggleTracking(company)
-                          }
-                          className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-text-secondary transition hover:bg-bg-elevated"
-                        >
-                          {tracked ? (
-                            <>
-                              <ToggleRight
-                                size={22}
-                                className="text-blue-600"
-                              />
-
-                              <span className="text-blue-700">
-                                Tracked
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <ToggleLeft
-                                size={22}
-                                className="text-slate-400"
-                              />
-
-                              <span className="text-slate-500">
-                                Not tracked
-                              </span>
-                            </>
-                          )}
-                        </button>
+                        {canTrack ? (
+                          <button
+                            type="button"
+                            onClick={() => toggleTracking(company)}
+                            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-text-secondary transition hover:bg-bg-elevated"
+                          >
+                            {tracked ? (
+                              <><ToggleRight size={22} className="text-blue-600" /><span className="text-blue-700">Tracked</span></>
+                            ) : (
+                              <><ToggleLeft size={22} className="text-slate-400" /><span className="text-slate-500">Not tracked</span></>
+                            )}
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-2 px-2 py-1 text-sm text-text-muted">
+                            {tracked ? (
+                              <><ToggleRight size={22} className="text-blue-600 opacity-50" /><span className="text-blue-700 opacity-50">Tracked</span></>
+                            ) : (
+                              <><ToggleLeft size={22} className="text-slate-400 opacity-50" /><span className="text-slate-500 opacity-50">Not tracked</span></>
+                            )}
+                          </span>
+                        )}
                       </td>
 
 
                       <td className="px-5 py-4">
                         <div className="flex justify-end gap-2">
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              openEditModal(company)
-                            }
-                            className="rounded-lg border border-bg-border p-2 text-text-muted transition hover:bg-bg-elevated hover:text-text-primary"
-                            title="Edit company"
-                          >
-                            <Pencil size={16} />
-                          </button>
-
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteCompany(company)
-                            }
-                            className="rounded-lg border border-down/30 p-2 text-down transition hover:bg-down/10"
-                            title="Delete company"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(company)}
+                              className="rounded-lg border border-bg-border p-2 text-text-muted transition hover:bg-bg-elevated hover:text-text-primary"
+                              title="Edit company"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => deleteCompany(company)}
+                              className="rounded-lg border border-down/30 p-2 text-down transition hover:bg-down/10"
+                              title="Delete company"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          )}
+                          {!canEdit && !canDelete && (
+                            <span className="text-xs text-text-muted px-2 py-1">View only</span>
+                          )}
                         </div>
                       </td>
 
@@ -721,23 +726,20 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
 
 
       {/* =================================================
-          ADD / EDIT MODAL
+      {/* =================================================
+          ADD / EDIT MODAL — only rendered for users with create or edit permission
           ================================================= */}
-      {showModal && (
+      {showModal && (canCreate || canEdit) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
 
           <div className="w-full max-w-lg rounded-2xl border border-bg-border bg-bg-secondary shadow-xl">
 
             {/* Modal header */}
             <div className="flex items-center justify-between border-b border-bg-border px-5 py-4">
-
               <div>
                 <h2 className="font-semibold text-text-primary">
-                  {editingCompany
-                    ? 'Edit Company'
-                    : 'Add Company'}
+                  {editingCompany ? 'Edit Company' : 'Add Company'}
                 </h2>
-
                 <p className="mt-1 text-xs text-text-secondary">
                   {editingCompany
                     ? 'Update company information.'

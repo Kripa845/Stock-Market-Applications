@@ -4,6 +4,7 @@ import PageHeader from '../../components/common/PageHeader';
 import EmptyState from '../../components/common/EmptyState';
 import { getCompanies } from '../../api/companies';
 import { stocksApi } from '../../api/stocks';
+import { useAuth } from '../../contexts/AuthContext';
 import type { Company, DailyPrice, FloorsheetTransaction } from '../../types';
 
 interface WatchlistItem {
@@ -21,6 +22,9 @@ interface FloorsheetFilters {
 }
 
 export default function WatchlistPage() {
+  const { hasPermission } = useAuth();
+  const canViewMarketData = hasPermission('view_market_data');
+
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -116,14 +120,22 @@ export default function WatchlistPage() {
       </div>}
       <section className="space-y-4">
         <div><h2 className="text-lg font-semibold text-text-primary">Floorsheet</h2><p className="text-sm text-text-secondary">Search transactions for tracked companies by date and broker.</p></div>
-        <div className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <select value={floorFilters.company} onChange={event => setFloorFilters(current => ({ ...current, company: event.target.value }))} className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary"><option value="">All tracked companies</option>{items.map(({ company }) => <option key={company.id} value={company.id}>{company.symbol} - {company.name}</option>)}</select>
-          <input type="date" value={floorFilters.date} onChange={event => setFloorFilters(current => ({ ...current, date: event.target.value }))} className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" />
-          <input value={floorFilters.buyer_broker} onChange={event => setFloorFilters(current => ({ ...current, buyer_broker: event.target.value }))} placeholder="Buyer broker" className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" />
-          <input value={floorFilters.seller_broker} onChange={event => setFloorFilters(current => ({ ...current, seller_broker: event.target.value }))} placeholder="Seller broker" className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" />
-          <button onClick={() => searchFloorsheet()} className="btn-primary flex items-center justify-center gap-2" disabled={floorLoading}><RefreshCw size={14} className={floorLoading ? 'animate-spin' : ''} />Search</button>
-        </div>
-        <div className="card overflow-x-auto"><div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-semibold text-text-primary">Transaction results</h3><span className="text-xs text-text-muted">{floorCount} transactions</span></div><table className="w-full min-w-[850px] text-sm"><thead><tr className="border-b border-bg-border text-text-secondary"><th className="text-left py-3 font-medium">Company</th><th className="text-left py-3 font-medium">Date</th><th className="text-left py-3 font-medium">Transaction</th><th className="text-left py-3 font-medium">Buyer broker</th><th className="text-left py-3 font-medium">Seller broker</th><th className="text-right py-3 font-medium">Quantity</th><th className="text-right py-3 font-medium">Rate</th><th className="text-right py-3 font-medium">Amount</th></tr></thead><tbody>{floorRows.map(row => { const company = items.find(item => item.company.id === row.company)?.company; return <tr key={row.id} className="table-row"><td className="py-3 font-mono text-accent-light">{company?.symbol || `#${row.company}`}</td><td className="py-3 text-text-secondary">{row.date}</td><td className="py-3 text-text-muted">{row.transaction_id || '—'}</td><td className="py-3 text-text-secondary">{row.buyer_broker}</td><td className="py-3 text-text-secondary">{row.seller_broker}</td><td className="py-3 text-right font-mono">{row.quantity.toLocaleString()}</td><td className="py-3 text-right font-mono">{Number(row.rate).toFixed(2)}</td><td className="py-3 text-right font-mono">{row.amount ? Number(row.amount).toLocaleString() : '—'}</td></tr>; })}</tbody></table>{!floorLoading && floorRows.length === 0 && <p className="py-8 text-center text-sm text-text-muted">No floorsheet transactions match these filters.</p>}</div>
+        {canViewMarketData ? (
+          <>
+            <div className="card grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+              <select value={floorFilters.company} onChange={event => setFloorFilters(current => ({ ...current, company: event.target.value }))} className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary"><option value="">All tracked companies</option>{items.map(({ company }) => <option key={company.id} value={company.id}>{company.symbol} - {company.name}</option>)}</select>
+              <input type="date" value={floorFilters.date} onChange={event => setFloorFilters(current => ({ ...current, date: event.target.value }))} className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" />
+              <input value={floorFilters.buyer_broker} onChange={event => setFloorFilters(current => ({ ...current, buyer_broker: event.target.value }))} placeholder="Buyer broker" className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" />
+              <input value={floorFilters.seller_broker} onChange={event => setFloorFilters(current => ({ ...current, seller_broker: event.target.value }))} placeholder="Seller broker" className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary" />
+              <button onClick={() => searchFloorsheet()} className="btn-primary flex items-center justify-center gap-2" disabled={floorLoading}><RefreshCw size={14} className={floorLoading ? 'animate-spin' : ''} />Search</button>
+            </div>
+            <div className="card overflow-x-auto"><div className="mb-4 flex items-center justify-between"><h3 className="text-sm font-semibold text-text-primary">Transaction results</h3><span className="text-xs text-text-muted">{floorCount} transactions</span></div><table className="w-full min-w-[850px] text-sm"><thead><tr className="border-b border-bg-border text-text-secondary"><th className="text-left py-3 font-medium">Company</th><th className="text-left py-3 font-medium">Date</th><th className="text-left py-3 font-medium">Transaction</th><th className="text-left py-3 font-medium">Buyer broker</th><th className="text-left py-3 font-medium">Seller broker</th><th className="text-right py-3 font-medium">Quantity</th><th className="text-right py-3 font-medium">Rate</th><th className="text-right py-3 font-medium">Amount</th></tr></thead><tbody>{floorRows.map(row => { const company = items.find(item => item.company.id === row.company)?.company; return <tr key={row.id} className="table-row"><td className="py-3 font-mono text-accent-light">{company?.symbol || `#${row.company}`}</td><td className="py-3 text-text-secondary">{row.date}</td><td className="py-3 text-text-muted">{row.transaction_id || '—'}</td><td className="py-3 text-text-secondary">{row.buyer_broker}</td><td className="py-3 text-text-secondary">{row.seller_broker}</td><td className="py-3 text-right font-mono">{row.quantity.toLocaleString()}</td><td className="py-3 text-right font-mono">{Number(row.rate).toFixed(2)}</td><td className="py-3 text-right font-mono">{row.amount ? Number(row.amount).toLocaleString() : '—'}</td></tr>; })}</tbody></table>{!floorLoading && floorRows.length === 0 && <p className="py-8 text-center text-sm text-text-muted">No floorsheet transactions match these filters.</p>}</div>
+          </>
+        ) : (
+          <div className="card py-8 text-center">
+            <p className="text-sm text-text-muted">You do not have permission to view market data.</p>
+          </div>
+        )}
       </section>
     </div>
   );
