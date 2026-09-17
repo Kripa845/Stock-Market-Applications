@@ -460,6 +460,36 @@ class AdminUserDetailAPIView(
 
         return UserSerializer
 
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Prevent role changes on admin accounts by non-superusers
+        new_role = request.data.get("role")
+        if (
+            instance.role == User.Role.ADMIN
+            and not request.user.is_superuser
+            and new_role is not None
+            and new_role != User.Role.ADMIN
+        ):
+            return Response(
+                {"detail": "Admin user roles cannot be changed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Prevent self-demotion for admins
+        if (
+            instance.id == request.user.id
+            and new_role is not None
+            and new_role != User.Role.ADMIN
+            and request.user.role == User.Role.ADMIN
+        ):
+            return Response(
+                {"detail": "You cannot demote your own admin account."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().update(request, *args, **kwargs)
+
     def destroy(
         self,
         request,
@@ -476,6 +506,13 @@ class AdminUserDetailAPIView(
                     "own account."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Prevent deleting admin accounts (only superusers can)
+        if instance.role == User.Role.ADMIN and not request.user.is_superuser:
+            return Response(
+                {"detail": "Admin accounts cannot be deleted."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         self.perform_destroy(instance)

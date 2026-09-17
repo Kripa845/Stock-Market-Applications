@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   AlertCircle,
   Building2,
+  CheckCircle2,
   Clock,
   ExternalLink,
   Search,
+  Tag,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react';
@@ -19,6 +21,7 @@ import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
 import type { NewsArticle, SentimentLabel } from '../types';
 import { useLiveRefresh } from '../hooks/useLiveRefresh';
+import { useAuth } from '../contexts/AuthContext';
 
 function Sentiment({ label }: { label: SentimentLabel }) {
   if (!label) return null;
@@ -35,6 +38,14 @@ function Sentiment({ label }: { label: SentimentLabel }) {
 
 export default function NewsPage() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+
+  // Permission flags
+  const canCategorize = hasPermission('categorize_news');
+  const canCorrect = hasPermission('correct_categories');
+  const canEdit = hasPermission('edit_news');
+  const canDelete = hasPermission('delete_news');
+
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [search, setSearch] = useState('');
@@ -75,51 +86,57 @@ export default function NewsPage() {
   useEffect(() => {
     loadNews();
   }, [loadNews]);
-  useLiveRefresh(loadNews);
+  // useLiveRefresh(loadNews);
 
-  const groupedArticles = articles.reduce<Record<string, NewsArticle[]>>((groups, article) => {
-    const portal = article.source || 'Other portals';
-    groups[portal] = [...(groups[portal] ?? []), article];
-    return groups;
-  }, {});
+  const handleRecategorize = async (
+    e: React.MouseEvent,
+    articleId: number,
+  ) => {
+    e.stopPropagation();
+    try {
+      await newsApi.triggerCategorize(articleId);
+    } catch {
+      // silent — article detail shows status
+    }
+    loadNews();
+  };
+
+  const groupedArticles = articles.reduce<Record<string, NewsArticle[]>>(
+    (groups, article) => {
+      const portal = article.source || 'Other portals';
+      groups[portal] = [...(groups[portal] ?? []), article];
+      return groups;
+    },
+    {},
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="News Feed & Auto-Categorization"
-        subtitle="Multi-label stock news categorizer with embedding similarity & entity matching"
+        title="News Feed & Auto-Categorisation"
+        subtitle="Multi-label stock news categoriser with embedding similarity & entity matching"
       />
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
         <div className="relative flex-1 min-w-56">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
           <input
             value={search}
-            onChange={(e) => {
-              setPage(1);
-              setSearch(e.target.value);
-            }}
+            onChange={(e) => { setPage(1); setSearch(e.target.value); }}
             placeholder="Search headlines or body content..."
             className="w-full bg-bg-card border border-bg-border rounded-lg pl-9 pr-3 py-2 text-sm text-text-primary focus:border-accent focus:outline-none"
           />
         </div>
 
-        {/* Company Filter */}
         <div className="flex items-center gap-1.5 bg-bg-card border border-bg-border rounded-lg px-2.5 py-1">
           <Building2 size={13} className="text-text-muted" />
           <select
             value={selectedCompanyId}
-            onChange={(e) => {
-              setPage(1);
-              setSelectedCompanyId(e.target.value);
-            }}
+            onChange={(e) => { setPage(1); setSelectedCompanyId(e.target.value); }}
             className="bg-transparent text-sm text-text-primary focus:outline-none py-1"
           >
-            <option value="" className="bg-bg-card">
-              All Companies
-            </option>
+            <option value="" className="bg-bg-card">All Companies</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id} className="bg-bg-card">
                 {c.symbol} — {c.name}
@@ -128,52 +145,37 @@ export default function NewsPage() {
           </select>
         </div>
 
-        {/* Sentiment Filter */}
         <select
           value={sentiment}
-          onChange={(e) => {
-            setPage(1);
-            setSentiment(e.target.value);
-          }}
+          onChange={(e) => { setPage(1); setSentiment(e.target.value); }}
           className="bg-bg-card border border-bg-border rounded-lg px-3 py-2 text-sm text-text-primary focus:outline-none"
         >
-          <option value="" className="bg-bg-card">
-            All sentiment
-          </option>
-          <option value="positive" className="bg-bg-card">
-            Positive
-          </option>
-          <option value="neutral" className="bg-bg-card">
-            Neutral
-          </option>
-          <option value="negative" className="bg-bg-card">
-            Negative
-          </option>
+          <option value="" className="bg-bg-card">All sentiment</option>
+          <option value="positive" className="bg-bg-card">Positive</option>
+          <option value="neutral" className="bg-bg-card">Neutral</option>
+          <option value="negative" className="bg-bg-card">Negative</option>
         </select>
 
-        {/* Needs Review Toggle */}
-        <button
-          onClick={() => {
-            setPage(1);
-            setNeedsReviewOnly(!needsReviewOnly);
-          }}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-            needsReviewOnly
-              ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
-              : 'bg-bg-card border-bg-border text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          <AlertCircle size={13} />
-          Needs Review (&lt; 65% / Unassigned)
-        </button>
+        {/* "Needs Review" filter — only visible to users who can act on it */}
+        {(canCategorize || canCorrect) && (
+          <button
+            onClick={() => { setPage(1); setNeedsReviewOnly(!needsReviewOnly); }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+              needsReviewOnly
+                ? 'bg-yellow-500/20 border-yellow-500 text-yellow-400'
+                : 'bg-bg-card border-bg-border text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            <AlertCircle size={13} />
+            Needs Review (&lt; 65% / Unassigned)
+          </button>
+        )}
       </div>
 
       {error && (
         <div className="text-sm text-down flex items-center gap-2">
           <span>{error}</span>
-          <button onClick={loadNews} className="underline">
-            Retry
-          </button>
+          <button onClick={loadNews} className="underline">Retry</button>
         </div>
       )}
 
@@ -182,7 +184,7 @@ export default function NewsPage() {
       {!loading && !error && articles.length === 0 && (
         <EmptyState
           title="No news articles found"
-          description="Try changing the search, company, or needs-review filter."
+          description="Try changing the search, company, or filter settings."
         />
       )}
 
@@ -191,7 +193,9 @@ export default function NewsPage() {
         {Object.entries(groupedArticles).map(([portal, portalArticles]) => (
           <section key={portal} className="space-y-3">
             <div className="flex items-center gap-3">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-accent-light">{portal}</h2>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-accent-light">
+                {portal}
+              </h2>
               <span className="text-xs text-text-muted">{portalArticles.length} articles</span>
               <div className="h-px flex-1 bg-bg-border" />
             </div>
@@ -215,7 +219,7 @@ export default function NewsPage() {
                   </p>
 
                   <div className="pt-2 border-t border-bg-border space-y-2.5">
-                    {/* Multi-Label Company Badges with Confidence */}
+                    {/* Company tags with confidence */}
                     <div className="flex flex-wrap items-center gap-1.5">
                       {article.company_tags.length === 0 ? (
                         <span className="text-[11px] text-yellow-400/90 font-medium flex items-center gap-1">
@@ -240,6 +244,38 @@ export default function NewsPage() {
                       <Sentiment label={article.sentiment_label} />
                     </div>
 
+                    {/* Permission-gated action buttons */}
+                    {(canCategorize || canCorrect || canEdit || canDelete) && (
+                      <div
+                        className="flex flex-wrap gap-1.5 pt-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {canCategorize && (
+                          <button
+                            onClick={(e) => handleRecategorize(e, article.id)}
+                            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-accent/10 text-accent-light hover:bg-accent/20 transition-colors"
+                            title="Re-run auto-categorisation"
+                          >
+                            <Tag size={10} />
+                            Re-categorise
+                          </button>
+                        )}
+                        {canCorrect && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/news/${article.id}`);
+                            }}
+                            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20 transition-colors"
+                            title="Manually correct category"
+                          >
+                            <CheckCircle2 size={10} />
+                            Correct
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between text-[11px] text-text-muted">
                       <span className="flex items-center gap-1">
                         <Clock size={11} />
@@ -257,7 +293,7 @@ export default function NewsPage() {
         ))}
       </div>
 
-      {/* Pagination Footer */}
+      {/* Pagination */}
       {!loading && count > 0 && (
         <div className="flex items-center justify-between text-sm text-text-secondary pt-4 border-t border-bg-border">
           <span>{count} total articles</span>

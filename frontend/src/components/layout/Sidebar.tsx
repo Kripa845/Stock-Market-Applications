@@ -1,26 +1,22 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   TrendingUp,
   Newspaper,
   BarChart3,
   Activity,
-  LineChart,
   Briefcase,
   Star,
-  BookOpen,
   Database,
-  
   Settings,
   Radio,
   ChevronLeft,
   ChevronRight,
-  Zap,
   Users,
   ShieldCheck,
-} from "lucide-react";
-import clsx from "clsx";
-import { useAuth } from "../../contexts/AuthContext";
+} from 'lucide-react';
+import clsx from 'clsx';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -29,451 +25,219 @@ interface SidebarProps {
 
 interface NavItem {
   label: string;
-  icon?: any;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
   to?: string;
-  type?: "divider";
+  type?: 'divider';
+  /**
+   * ALL of these permissions must be held (or the user is admin) for the item
+   * to be visible.  When the array is empty / undefined the item is always
+   * shown.
+   */
   requiredPermissions?: string[];
 }
 
-// One permission mapping is shared by every role-specific layout.  Roles pick
-// the URL namespace only; permission data decides whether an item is visible.
-const PATH_PERMISSIONS: Record<string, string[]> = {
-  "/admin": ["view_analysis"],
-  "/analyst": ["view_analysis"],
-  "/viewer": ["view_analysis"],
-  "/admin/companies": ["view_companies", "manage_tracked_companies"],
-  "/admin/watchlist": ["view_watchlist", "add_watchlist"],
-  "/admin/users": ["view_users", "create_users", "edit_users"],
-  "/admin/roles-permissions": ["view_roles", "edit_roles"],
-  "/admin/news": ["view_news", "categorize_news", "correct_categories"],
-  "/admin/crawl": ["view_crawl_runs", "run_crawler"],
-  "/analyst/market": ["view_market_data"],
-  "/viewer/market": ["view_market_data"],
-  "/analyst/stocks": ["view_companies"],
-  "/viewer/stocks": ["view_companies"],
-  "/analyst/trading": ["view_market_data"],
-  "/viewer/trading": ["view_market_data"],
-  "/analyst/analytics": ["view_analysis"],
-  "/viewer/analytics": ["view_analysis"],
-  "/analyst/news": ["view_news"],
-  "/viewer/news": ["view_news"],
-  "/analyst/watchlist": ["view_watchlist"],
-  "/viewer/watchlist": ["view_watchlist"],
-  "/analyst/reports": ["view_reports", "export_reports"],
-  "/viewer/reports": ["view_reports"],
-};
-
-/* =========================
-   ADMIN NAVIGATION
-   ========================= */
-
-const ADMIN_NAV: NavItem[] = [
+// ---------------------------------------------------------------------------
+// Single navigation list — permission-gated, shared by all roles.
+// ---------------------------------------------------------------------------
+const NAV_ITEMS: NavItem[] = [
   {
-    label: "Dashboard",
+    label: 'Dashboard',
     icon: LayoutDashboard,
-    to: "/admin",
+    to: '/dashboard',
   },
 
-  {
-    type: "divider",
-    label: "Management",
-  },
+  { type: 'divider', label: 'Market' },
 
   {
-    label: "Companies",
+    label: 'Market Overview',
+    icon: TrendingUp,
+    to: '/market',
+    requiredPermissions: ['view_market_data'],
+  },
+  {
+    label: 'Companies',
     icon: Briefcase,
-    to: "/admin/companies",
-    requiredPermissions: ["view_companies", "manage_tracked_companies"],
+    to: '/companies',
+    requiredPermissions: ['view_companies'],
   },
-
   {
-    label: "Watchlist",
+    label: 'Trading Behaviour',
+    icon: Activity,
+    to: '/trading',
+    requiredPermissions: ['view_trading_volume'],
+  },
+  {
+    label: 'Analytics',
+    icon: BarChart3,
+    to: '/analytics',
+    requiredPermissions: ['view_analysis'],
+  },
+  {
+    label: 'Watchlist',
     icon: Star,
-    to: "/admin/watchlist",
-    requiredPermissions: ["view_watchlist", "add_watchlist"],
+    to: '/watchlist',
+    requiredPermissions: ['view_watchlist'],
   },
 
-  {
-    label: "User Management",
-    icon: Users,
-    to: "/admin/users",
-    requiredPermissions: ["view_users", "create_users", "edit_users"],
-  },
+  { type: 'divider', label: 'News' },
 
   {
-    label: "Roles & Permissions",
-    icon: ShieldCheck,
-    to: "/admin/roles-permissions",
-    requiredPermissions: ["view_roles", "edit_roles"],
-  },
-
-  {
-    type: "divider",
-    label: "News & Data",
-  },
-
-  {
-    label: "News Review",
+    label: 'News Feed',
     icon: Newspaper,
-    to: "/admin/news",
-    requiredPermissions: ["view_news", "categorize_news", "correct_categories"],
+    to: '/news',
+    requiredPermissions: ['view_news'],
   },
 
+  { type: 'divider', label: 'Data Collection' },
+
   {
-    label: "Crawl Management",
+    label: 'Crawl Management',
     icon: Radio,
-    to: "/admin/crawl",
-    requiredPermissions: ["view_crawl_runs", "run_crawler"],
+    to: '/crawl',
+    requiredPermissions: ['view_crawl_runs'],
   },
 
-  {
-    type: "divider",
-    label: "System",
-  },
+  { type: 'divider', label: 'Reports' },
 
   {
-    label: "Settings",
-    icon: Settings,
-    to: "/admin/settings",
-  },
-];
-
-/* =========================
-   ANALYST NAVIGATION
-   ========================= */
-
-const ANALYST_NAV: NavItem[] = [
-  {
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    to: "/analyst",
-  },
-
-  {
-    type: "divider",
-    label: "Market",
-  },
-
-  {
-    label: "Market Overview",
-    icon: TrendingUp,
-    to: "/analyst/market",
-  },
-
-  {
-    label: "Companies",
-    icon: Briefcase,
-    to: "/analyst/companies",
-    requiredPermissions: ["view_companies"],
-  },
-
-  {
-    label: "Trading Behavior",
-    icon: Activity,
-    to: "/analyst/trading",
-  },
-
-  {
-    label: "Analytics",
-    icon: BarChart3,
-    to: "/analyst/analytics",
-  },
-
-  {
-    type: "divider",
-    label: "News",
-  },
-
-  {
-    label: "News",
-    icon: Newspaper,
-    to: "/analyst/news",
-  },
-
-  {
-    type: "divider",
-    label: "Comparison",
-  },
-
-  {
-    label: "Watchlist Comparison",
-    icon: Star,
-    to: "/analyst/watchlist",
-  },
-
-  {
-    type: "divider",
-    label: "Reports",
-  },
-
-  {
-    label: "Export Reports",
+    label: 'Reports',
     icon: Database,
-    to: "/analyst/reports",
+    to: '/reports',
+    requiredPermissions: ['view_reports'],
   },
 
-  {
-    type: "divider",
-    label: "System",
-  },
+  { type: 'divider', label: 'Administration' },
 
   {
-    label: "Settings",
-    icon: Settings,
-    to: "/analyst/settings",
+    label: 'User Management',
+    icon: Users,
+    to: '/users',
+    requiredPermissions: ['view_users'],
+  },
+  {
+    label: 'Roles & Permissions',
+    icon: ShieldCheck,
+    to: '/roles-permissions',
+    requiredPermissions: ['view_roles'],
   },
 ];
 
-/* =========================
-   VIEWER NAVIGATION
-   ========================= */
-
-const VIEWER_NAV: NavItem[] = [
-  {
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    to: "/viewer",
-  },
-
-  {
-    type: "divider",
-    label: "Market",
-  },
-
-  {
-    label: "Market Overview",
-    icon: TrendingUp,
-    to: "/viewer/market",
-  },
-
-  {
-    label: "Stocks",
-    icon: LineChart,
-    to: "/viewer/stocks",
-  },
-
-  {
-    label: "Trading Behavior",
-    icon: Activity,
-    to: "/viewer/trading",
-  },
-
-  {
-    label: "Analytics",
-    icon: BarChart3,
-    to: "/viewer/analytics",
-  },
-
-  {
-    type: "divider",
-    label: "News",
-  },
-
-  {
-    label: "News",
-    icon: Newspaper,
-    to: "/viewer/news",
-  },
-
-  {
-    type: "divider",
-    label: "Comparison",
-  },
-
-  {
-    label: "Watchlist Comparison",
-    icon: Star,
-    to: "/viewer/watchlist",
-  },
-
-  {
-    type: "divider",
-    label: "Reports",
-  },
-
-  {
-    label: "Reports",
-    icon: BookOpen,
-    to: "/viewer/reports",
-  },
-
-  {
-    type: "divider",
-    label: "System",
-  },
-
-  {
-    label: "Settings",
-    icon: Settings,
-    to: "/viewer/settings",
-  },
-];
-
-/* =========================
-   SIDEBAR COMPONENT
-   ========================= */
-
-export default function Sidebar({
-  collapsed,
-  onToggle,
-}: SidebarProps) {
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { pathname } = useLocation();
-  const { user, hasAnyPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
 
+  /**
+   * Returns true if the current user is allowed to see this nav item.
+   *
+   * Logic:
+   *  - Admin always sees everything.
+   *  - Items with no requiredPermissions are always visible.
+   *  - Otherwise the user must hold ALL listed permissions.
+   */
   const canSeeItem = (item: NavItem): boolean => {
-    const required = item.requiredPermissions || (item.to ? PATH_PERMISSIONS[item.to] : undefined);
-    if (!required || required.length === 0) {
-      return true;
-    }
-
-    // Admin always has access
-    if (user?.role === "admin") {
-      return true;
-    }
-
-    return hasAnyPermission(required);
+    const required = item.requiredPermissions;
+    if (!required || required.length === 0) return true;
+    if (user?.role === 'admin') return true;
+    // Require ALL listed permissions (not ANY) — prevents showing nav items
+    // the user only partially has access to.
+    return required.every((p) => hasPermission(p));
   };
 
-  /*
-   * Select navigation based on current URL.
-   *
-   * /admin/*   -> Admin sidebar
-   * /analyst/* -> Analyst sidebar
-   * /viewer/*  -> Viewer sidebar
-   */
-
-  let NAV: NavItem[] = VIEWER_NAV;
-
-  if (pathname.startsWith("/admin")) {
-    NAV = ADMIN_NAV.filter((item) => item.type === "divider" || canSeeItem(item));
-  } else if (pathname.startsWith("/analyst")) {
-    NAV = ANALYST_NAV;
-  } else if (pathname.startsWith("/viewer")) {
-    NAV = VIEWER_NAV;
-  }
-
-  NAV = NAV.filter((item) => item.type === "divider" || canSeeItem(item));
+  const isActive = (to: string): boolean => {
+    if (to === '/dashboard') return pathname === '/dashboard';
+    return pathname === to || pathname.startsWith(to + '/');
+  };
 
   return (
     <aside
       className={clsx(
-        "flex flex-col bg-bg-secondary border-r border-bg-border transition-all duration-300 shrink-0 z-20",
-        collapsed ? "w-14" : "w-56"
+        'flex flex-col h-full bg-bg-secondary border-r border-bg-border transition-all duration-300',
+        collapsed ? 'w-16' : 'w-60',
       )}
     >
-      {/* =========================
-          LOGO
-         ========================= */}
-
-      <div className="flex items-center gap-3 h-14 px-4 border-b border-bg-border shrink-0">
-        <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center shrink-0">
-          <Zap size={14} className="text-white" />
-        </div>
-
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b border-bg-border min-h-[57px]">
         {!collapsed && (
-          <span className="font-bold text-sm text-text-primary tracking-wide whitespace-nowrap">
+          <span className="text-sm font-bold text-text-primary tracking-wide truncate">
             StockScope
           </span>
         )}
+        <button
+          onClick={onToggle}
+          className="ml-auto text-text-muted hover:text-text-primary transition-colors"
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
-      {/* =========================
-          NAVIGATION
-         ========================= */}
-
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {NAV.map((item, i) => {
-          /* =========================
-             DIVIDER
-             ========================= */
-
-          if ("type" in item && item.type === "divider") {
+      {/* Nav Items */}
+      <nav className="flex-1 overflow-y-auto py-3 space-y-0.5 px-2">
+        {NAV_ITEMS.map((item, idx) => {
+          if (item.type === 'divider') {
+            if (collapsed) return null;
             return (
               <div
-                key={`divider-${i}`}
-                className="pt-4 pb-1"
+                key={`divider-${idx}`}
+                className="pt-4 pb-1 px-2"
               >
-                {!collapsed && (
-                  <span className="px-2 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
-                    {item.label}
-                  </span>
-                )}
-
-                {collapsed && (
-                  <div className="h-px bg-bg-border mx-1" />
-                )}
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-text-muted">
+                  {item.label}
+                </span>
               </div>
             );
           }
 
-          /* =========================
-             NAVIGATION ITEM
-             ========================= */
+          if (!canSeeItem(item)) return null;
 
           const Icon = item.icon;
-
-          if (!item.to || !Icon) {
-            return null;
-          }
-
-          /*
-           * Dashboard should only be active
-           * when we are exactly on:
-           *
-           * /admin
-           * /analyst
-           * /viewer
-           */
-
-          const isDashboard =
-            item.to === "/admin" ||
-            item.to === "/analyst" ||
-            item.to === "/viewer";
-
-          const isActive = isDashboard
-            ? pathname === item.to
-            : pathname.startsWith(item.to);
+          const active = item.to ? isActive(item.to) : false;
 
           return (
             <NavLink
-              key={`${item.to}-${i}`}
-              to={item.to}
-              className={clsx(
-                "nav-item",
-                isActive && "active",
-                collapsed && "justify-center px-2"
-              )}
+              key={item.to}
+              to={item.to!}
               title={collapsed ? item.label : undefined}
-            >
-              <Icon
-                size={16}
-                className="shrink-0"
-              />
-
-              {!collapsed && (
-                <span className="truncate">
-                  {item.label}
-                </span>
+              className={clsx(
+                'flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors',
+                active
+                  ? 'bg-accent/10 text-accent-light font-medium'
+                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
+                collapsed && 'justify-center',
               )}
+            >
+              {Icon && (
+                <Icon
+                  size={17}
+                  className={clsx(
+                    'shrink-0',
+                    active ? 'text-accent-light' : 'text-text-muted',
+                  )}
+                />
+              )}
+              {!collapsed && <span className="truncate">{item.label}</span>}
             </NavLink>
           );
         })}
       </nav>
 
-      {/* =========================
-          COLLAPSE TOGGLE
-         ========================= */}
-
-      <button
-        onClick={onToggle}
-        className="flex items-center justify-center h-10 border-t border-bg-border text-text-muted hover:text-text-primary hover:bg-bg-elevated transition-colors"
-      >
-        {collapsed ? (
-          <ChevronRight size={15} />
-        ) : (
-          <ChevronLeft size={15} />
-        )}
-      </button>
+      {/* Footer — Settings link always visible */}
+      <div className="border-t border-bg-border p-2">
+        <NavLink
+          to="/dashboard"
+          title={collapsed ? 'Dashboard' : undefined}
+          className={clsx(
+            'flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors',
+            collapsed && 'justify-center',
+          )}
+        >
+          <Settings size={17} className="shrink-0 text-text-muted" />
+          {!collapsed && <span>Settings</span>}
+        </NavLink>
+      </div>
     </aside>
   );
 }

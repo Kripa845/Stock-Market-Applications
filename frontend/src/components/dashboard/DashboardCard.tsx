@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import clsx from 'clsx';
 import type { DashboardCardData } from './dashboardConfig';
-import { useAuth } from '../../contexts/AuthContext';
 
 interface DashboardCardProps {
   card: DashboardCardData;
@@ -11,12 +10,9 @@ interface DashboardCardProps {
 
 export default function DashboardCard({ card, value }: DashboardCardProps) {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const role = user?.role?.toLowerCase();
 
-  if (card.allowedRoles && card.allowedRoles.length > 0 && !card.allowedRoles.includes(role ?? '')) {
-    return null;
-  }
+  // Note: permission-based card visibility is handled by RoleDashboard.
+  // DashboardCard itself renders unconditionally once it receives the card.
 
   const handleClick = () => {
     navigate(card.route);

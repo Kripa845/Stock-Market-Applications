@@ -10,12 +10,14 @@ from rest_framework.views import APIView
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle
+from apps.users.permissions import HasAppPermission
 from .models import DailyAnalysis
 from .serializers import DailyAnalysisSerializer
 
 
 class DailyAnalysisListAPIView(generics.ListAPIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
     serializer_class = DailyAnalysisSerializer
 
     def get_queryset(self):
@@ -32,7 +34,8 @@ class CompanyBehaviorSummaryAPIView(APIView):
     Provides VWAP, price vs VWAP spread, pressure indicator, volume anomalies,
     broker concentration, and news sentiment summary.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
@@ -162,7 +165,8 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
     GET /api/companies/:id/news-pricecorrelation/
     Correlates news sentiment/activity spikes with price changes over time.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
@@ -289,7 +293,8 @@ class CrossCompanyAnalysisAPIView(APIView):
     - Sector Performance
     - Buying vs Selling Pressure Breakdown
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
 
     def get(self, request):
         companies = Company.objects.filter(is_active=True).prefetch_related("dailyprice_set", "article_tags__article")
@@ -399,7 +404,8 @@ class DashboardSummaryAPIView(APIView):
     GET /api/analysis/dashboard-summary/
     High-level aggregate portfolio and market indicators for Genex top cards.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
 
     def get(self, request):
         companies = Company.objects.filter(is_active=True).prefetch_related("dailyprice_set")

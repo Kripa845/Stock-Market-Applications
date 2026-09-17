@@ -4,11 +4,19 @@ import { useAuth } from '../../contexts/AuthContext';
 
 export default function Header() {
   const [profileOpen, setProfileOpen] = useState(false);
-  const { user, logout } = useAuth();
+  const { user, effectiveRole, logout } = useAuth();
 
-  const roleLabel = user?.role
-    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
-    : 'User';
+  // Show effective role (may be a custom role name) with first+last name fallback
+  const displayName =
+    [user?.first_name, user?.last_name].filter(Boolean).join(' ') ||
+    user?.username ||
+    'User';
+
+  const roleLabel =
+    effectiveRole ??
+    (user?.role
+      ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+      : 'User');
 
   const handleLogout = () => {
     logout();
@@ -42,12 +50,16 @@ export default function Header() {
             <div className="w-7 h-7 rounded-full bg-accent-dim flex items-center justify-center">
               <User size={14} className="text-accent-light" />
             </div>
-            <span className="text-sm text-text-primary hidden sm:block">{roleLabel}</span>
+            <span className="text-sm text-text-primary hidden sm:block">{displayName}</span>
             <ChevronDown size={12} className="text-text-muted" />
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 top-10 w-44 bg-bg-elevated border border-bg-border rounded-xl py-1 z-50 shadow-xl">
+            <div className="absolute right-0 top-10 w-52 bg-bg-elevated border border-bg-border rounded-xl py-1 z-50 shadow-xl">
+              <div className="px-4 py-2 border-b border-bg-border">
+                <p className="text-sm font-medium text-text-primary">{displayName}</p>
+                <p className="text-xs text-text-muted mt-0.5">{roleLabel}</p>
+              </div>
               <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-card transition-colors">
                 <User size={13} /> Profile
               </button>

@@ -613,7 +613,7 @@ const openCreate = () => {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => navigate("/admin")}
+            onClick={() => navigate("/dashboard")}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-bg-border bg-bg-card px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-bg-elevated hover:text-text-primary"
           >
             <ArrowLeft size={18} />

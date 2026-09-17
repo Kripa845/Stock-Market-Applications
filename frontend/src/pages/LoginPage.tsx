@@ -37,24 +37,8 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(username, password);
-
-      // Redirect according to role
-      const storedUser = localStorage.getItem('user');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        switch (user.role) {
-          case 'admin':
-            navigate('/admin', { replace: true });
-            break;
-          case 'analyst':
-            navigate('/analyst', { replace: true });
-            break;
-          case 'viewer':
-          default:
-            navigate('/viewer', { replace: true });
-            break;
-        }
-      }
+      // All roles share the unified permission-driven dashboard
+      navigate('/dashboard', { replace: true });
     } catch (err: any) {
       // Error already handled by auth context
     }

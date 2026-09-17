@@ -1,5 +1,3 @@
-import RoleDashboard from '../components/dashboard/RoleDashboard';
-
-export default function ViewerDashboard() {
-  return <RoleDashboard role="viewer" />;
-}
+// Kept for backwards compatibility — both Viewer and other users share the
+// same permission-driven dashboard component.
+export { default } from './Dashboard';
