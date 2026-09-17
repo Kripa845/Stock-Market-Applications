@@ -57,7 +57,6 @@ const PATH_PERMISSIONS: Record<string, string[]> = {
   "/viewer/analytics": ["view_analysis"],
   "/analyst/news": ["view_news"],
   "/viewer/news": ["view_news"],
-  "/analyst/news-review": ["correct_categories", "categorize_news"],
   "/analyst/watchlist": ["view_watchlist"],
   "/viewer/watchlist": ["view_watchlist"],
   "/analyst/reports": ["view_reports", "export_reports"],
@@ -189,12 +188,6 @@ const ANALYST_NAV: NavItem[] = [
     label: "News",
     icon: Newspaper,
     to: "/analyst/news",
-  },
-
-  {
-    label: "News Review",
-    icon: BookOpen,
-    to: "/analyst/news-review",
   },
 
   {

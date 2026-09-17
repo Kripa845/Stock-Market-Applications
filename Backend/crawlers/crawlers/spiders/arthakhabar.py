@@ -95,13 +95,13 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
       
 
         body_parts = response.css(
-            "div.entry-content p::text"
+            "div.entry- p::text"
         ).getall()
 
         if not body_parts:
 
             body_parts = response.css(
-                "div.entry-content ::text"
+                "div.entry- ::text"
             ).getall()
 
         body = " ".join(

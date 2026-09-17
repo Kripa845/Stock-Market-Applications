@@ -36,6 +36,7 @@ import AdminNewsPage from './pages/News';
 import AnalystDashboard from './pages/AnalystDashboard';
 import ViewerDashboard from './pages/ViewerDashboard';
 
+import ReportsComingSoon from './pages/ReportsComingSoon';
 import NotFound from './pages/NotFound';
 
 
@@ -167,6 +168,15 @@ export default function App() {
           } />
 
           <Route
+            path="/admin/reports"
+            element={
+              <PermissionRoute requiredPermissions={["view_reports"]}>
+                <ReportsComingSoon />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
             path="/admin/users"
             element={
               <PermissionRoute requiredPermissions={["view_users"]}>
@@ -239,10 +249,10 @@ export default function App() {
           <Route path="/analyst/stocks/:symbol" element={<StockDetail />} />
           <Route path="/stocks/:symbol" element={<StockDetail />} />
           <Route path="/analyst/news" element={<PermissionRoute requiredPermissions={["view_news"]}><NewsPage /></PermissionRoute>} />
-          <Route path="/analyst/news-review" element={<PermissionRoute requiredPermissions={["correct_categories"]}><NewsPage /></PermissionRoute>} />
           <Route path="/analyst/news/:id" element={<NewsDetail />} />
           <Route path="/news/:id" element={<NewsDetail />} />
           <Route path="/analyst/trading" element={<PermissionRoute requiredPermissions={["view_market_data"]}><TradingPage /></PermissionRoute>} />
+          <Route path="/analyst/watchlist" element={<PermissionRoute requiredPermissions={["view_watchlist"]}><WatchlistPage /></PermissionRoute>} />
 
         </Route>
 
@@ -271,6 +281,9 @@ export default function App() {
           <Route path="/viewer/news/:id" element={<NewsDetail />} />
           <Route path="/news/:id" element={<NewsDetail />} />
           <Route path="/viewer/trading" element={<PermissionRoute requiredPermissions={["view_market_data"]}><TradingPage /></PermissionRoute>} />
+
+          <Route path="/viewer/companies" element={<PermissionRoute requiredPermissions={["view_companies"]}><CompaniesPage /></PermissionRoute>} />
+          <Route path="/reports" element={<PermissionRoute requiredPermissions={["view_reports"]}><ReportsComingSoon /></PermissionRoute>} />
 
         </Route>
 
