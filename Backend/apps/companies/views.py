@@ -151,31 +151,49 @@ class CompanyToggleTrackAPIView(APIView):
 class CompanyPricesAPIView(APIView):
     """
     GET /api/companies/:id/prices?range=30d
-    Ranges: 7d, 30d, 90d, 1y, all
+    Ranges: 7d, 30d, 31d, 90d, 180d, 1y, all
+
+    Rolling window design
+    ---------------------
+    The window is anchored to **today** (not the latest stored date) so
+    the result is always the genuine last N calendar days of stored data.
+    This means:
+      - range=31d  → today - 31 days  (the canonical rolling month)
+      - range=30d  → today - 30 days  (kept for backwards compatibility)
+      - range=7d   → today - 7 days
+      etc.
+
+    Historical records are never deleted; the filter is query-time only.
     """
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
+    # Rolling window sizes in calendar days
+    RANGE_DAYS = {
+        "7d":   7,
+        "30d":  30,
+        "31d":  31,
+        "90d":  90,
+        "180d": 180,
+        "1y":   365,
+        "365d": 365,
+    }
+
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
-        range_param = request.query_params.get("range", "30d").lower()
+        range_param = request.query_params.get("range", "31d").lower()
 
         prices_qs = DailyPrice.objects.filter(company=company).order_by("date")
 
-        days_map = {
-            "7d": 7,
-            "30d": 30,
-            "90d": 90,
-            "180d": 180,
-            "1y": 365,
-            "365d": 365,
-        }
-
-        if range_param in days_map:
-            latest_price = prices_qs.last()
-            if latest_price:
-                start_date = latest_price.date - timedelta(days=days_map[range_param])
-                prices_qs = prices_qs.filter(date__gte=start_date)
+        if range_param in self.RANGE_DAYS:
+            # Anchor to today so the window is always the current rolling period.
+            start_date = timezone.localdate() - timedelta(days=self.RANGE_DAYS[range_param])
+            prices_qs = prices_qs.filter(date__gte=start_date)
+        elif range_param != "all":
+            # Unknown range — fall back to 31-day rolling window.
+            start_date = timezone.localdate() - timedelta(days=31)
+            prices_qs = prices_qs.filter(date__gte=start_date)
+        # range == "all" → no date filter; return full history
 
         serializer = DailyPriceSerializers(prices_qs, many=True)
         return Response(
@@ -184,7 +202,7 @@ class CompanyPricesAPIView(APIView):
                 "symbol": company.symbol,
                 "name": company.name,
                 "range": range_param,
-                "count": len(serializer.data),
+                "count": prices_qs.count(),
                 "prices": serializer.data,
             }
         )

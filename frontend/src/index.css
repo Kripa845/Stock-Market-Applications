@@ -12,10 +12,16 @@
     user-select: none;
   }
 
-  /* Allow text selection in inputs and textareas */
-  input,
-  textarea,
-  [contenteditable="true"] {
+  html[data-theme="light"] * {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  html[data-theme="light"] input,
+  html[data-theme="light"] textarea,
+  html[data-theme="light"] [contenteditable="true"] {
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
@@ -30,6 +36,11 @@
     background-color: #0B0E1A;
     color: #E2E8F0;
     -webkit-font-smoothing: antialiased;
+  }
+
+  html[data-theme="light"] body {
+    background-color: #F8FAFC;
+    color: #0F172A;
   }
 
   ::-webkit-scrollbar {
@@ -49,26 +60,105 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #7C3AED;
   }
+
+  html[data-theme="light"] ::-webkit-scrollbar-track {
+    background: #E2E8F0;
+  }
+
+  html[data-theme="light"] ::-webkit-scrollbar-thumb {
+    background: #94A3B8;
+  }
+
+  html[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+    background: #7C3AED;
+  }
 }
 
 @layer components {
 
+  html[data-theme="light"] .sidebar-wrap {
+    background-color: #FFFFFF !important;
+    border-right-color: #E2E8F0 !important;
+  }
+
+  html[data-theme="light"] .sidebar-wrap .nav-item {
+    color: #475569 !important;
+  }
+
+  html[data-theme="light"] .sidebar-wrap .nav-item:hover {
+    color: #0F172A !important;
+    background-color: #F1F5F9 !important;
+  }
+
+  html[data-theme="light"] .sidebar-wrap .nav-item.active {
+    color: #7C3AED !important;
+    background-color: #F3E8FF !important;
+  }
+
+  html[data-theme="light"] .sidebar-text {
+    color: #0F172A !important;
+  }
+
+  html[data-theme="light"] .sidebar-sub {
+    color: #475569 !important;
+  }
+
+  html[data-theme="light"] .sidebar-watchlist-header {
+    color: #0F172A !important;
+  }
+
+  html[data-theme="light"] .sidebar-separator {
+    background-color: #E2E8F0 !important;
+  }
+
+  html[data-theme="light"] .ticker-wrap {
+    background-color: #FFFFFF !important;
+    border-bottom-color: #E2E8F0 !important;
+  }
+
+  html[data-theme="light"] .ticker-scroll {
+    color: #0F172A !important;
+  }
+
+  html[data-theme="light"] .ticker-change {
+    color: #16A34A !important;
+  }
+
+  html[data-theme="light"] .ticker-change-down {
+    color: #DC2626 !important;
+  }
+
+  html[data-theme="light"] .ticker-symbol {
+    color: #475569 !important;
+  }
+
+
   /* =========================
      CARDS
-  ========================= */
+   ========================= */
 
   .card {
     @apply bg-bg-card border border-bg-border rounded-xl p-4;
+  }
+
+  html[data-theme="light"] .card {
+    background-color: #FFFFFF !important;
+    border-color: #E2E8F0 !important;
   }
 
   .card-elevated {
     @apply bg-bg-elevated border border-bg-border rounded-xl p-4;
   }
 
+  html[data-theme="light"] .card-elevated {
+    background-color: #F1F5F9 !important;
+    border-color: #E2E8F0 !important;
+  }
+
 
   /* =========================
      BUTTONS
-  ========================= */
+   ========================= */
 
   .btn-primary {
     @apply bg-accent hover:bg-accent-light
@@ -86,10 +176,19 @@
            transition-colors;
   }
 
+  html[data-theme="light"] .btn-ghost {
+    color: #475569 !important;
+  }
+
+  html[data-theme="light"] .btn-ghost:hover {
+    color: #0F172A !important;
+    background-color: #F1F5F9 !important;
+  }
+
 
   /* =========================
      LOGIN / REGISTER LABEL
-  ========================= */
+   ========================= */
 
   .label {
     @apply block
@@ -99,10 +198,14 @@
            mb-2;
   }
 
+  html[data-theme="light"] .label {
+    color: #0F172A !important;
+  }
+
 
   /* =========================
      LOGIN / REGISTER INPUT
-  ========================= */
+   ========================= */
 
   .input {
     @apply w-full
@@ -117,17 +220,7 @@
            outline-none
            transition-all;
 
-    /*
-     * Force typed text to be BLACK.
-     * This prevents the dark theme from
-     * making the input text invisible.
-     */
     color: #000000 !important;
-
-    /*
-     * Keep the input background WHITE
-     * so black text is clearly visible.
-     */
     background-color: #ffffff !important;
   }
 
@@ -146,7 +239,7 @@
 
   /* =========================
      BADGES
-  ========================= */
+   ========================= */
 
   .badge {
     @apply inline-flex
@@ -161,7 +254,7 @@
 
   /* =========================
      NAVIGATION
-  ========================= */
+   ========================= */
 
   .nav-item {
     @apply flex
@@ -188,7 +281,7 @@
 
   /* =========================
      TABLE
-  ========================= */
+   ========================= */
 
   .table-row {
     @apply border-b
@@ -197,22 +290,34 @@
            transition-colors;
   }
 
+  html[data-theme="light"] .table-row {
+    border-bottom-color: #E2E8F0 !important;
+  }
+
+  html[data-theme="light"] .table-row:hover {
+    background-color: #F1F5F9 !important;
+  }
+
 
   /* =========================
      SKELETON LOADING
-  ========================= */
+   ========================= */
 
   .skeleton {
     @apply animate-pulse
            bg-bg-elevated
            rounded;
   }
+
+  html[data-theme="light"] .skeleton {
+    background-color: #E2E8F0 !important;
+  }
 }
 
 
 /* =========================
    TICKER
-========================= */
+ ========================= */
 
 .ticker-scroll {
   display: flex;
@@ -227,7 +332,7 @@
 
 /* =========================
    TICKER ANIMATION
-========================= */
+ ========================= */
 
 @keyframes ticker {
   0% {
@@ -265,5 +370,207 @@
   background-color: #111527 !important;
   color: #E2E8F0 !important;
   border-color: #1E2538 !important;
+}
+
+/* =========================
+   LIGHT THEME OVERRIDES
+ ========================= */
+
+/* Sidebar */
+html[data-theme="light"] .sidebar-wrap {
+  background-color: #FFFFFF !important;
+  border-right-color: #E2E8F0 !important;
+}
+
+html[data-theme="light"] .sidebar-wrap .nav-item {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .sidebar-wrap .nav-item:hover {
+  color: #0F172A !important;
+  background-color: #F1F5F9 !important;
+}
+
+html[data-theme="light"] .sidebar-wrap .nav-item.active {
+  color: #7C3AED !important;
+  background-color: #F3E8FF !important;
+}
+
+html[data-theme="light"] .sidebar-text {
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] .sidebar-sub {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .sidebar-watchlist-header {
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] .sidebar-separator {
+  background-color: #E2E8F0 !important;
+}
+
+/* Ticker */
+html[data-theme="light"] .ticker-wrap {
+  background-color: #FFFFFF !important;
+  border-bottom-color: #E2E8F0 !important;
+}
+
+html[data-theme="light"] .ticker-scroll {
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] .ticker-change {
+  color: #16A34A !important;
+}
+
+html[data-theme="light"] .ticker-change-down {
+  color: #DC2626 !important;
+}
+
+html[data-theme="light"] .ticker-symbol {
+  color: #475569 !important;
+}
+
+/* Dashboard cards */
+html[data-theme="light"] .dashboard-card {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+html[data-theme="light"] .dashboard-card:hover {
+  border-color: #7C3AED !important;
+  background-color: #F8F5FF !important;
+}
+
+/* Header */
+html[data-theme="light"] header {
+  background-color: #FFFFFF !important;
+  border-bottom-color: #E2E8F0 !important;
+}
+
+/* Market table */
+html[data-theme="light"] .market-table {
+  background-color: #FFFFFF !important;
+  border-color: #E2E8F0 !important;
+}
+
+/* Spinner overlay */
+html[data-theme="light"] .bg-bg-primary\/50 {
+  background-color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* =========================
+   LIGHT THEME — Tailwind utility overrides
+   ========================= */
+html[data-theme="light"] .bg-bg-primary {
+  background-color: #F8FAFC !important;
+}
+html[data-theme="light"] .bg-bg-secondary {
+  background-color: #FFFFFF !important;
+}
+html[data-theme="light"] .bg-bg-card {
+  background-color: #FFFFFF !important;
+}
+html[data-theme="light"] .bg-bg-elevated {
+  background-color: #F1F5F9 !important;
+}
+html[data-theme="light"] .bg-bg-border {
+  background-color: #E2E8F0 !important;
+}
+html[data-theme="light"] .border-bg-border {
+  border-color: #E2E8F0 !important;
+}
+html[data-theme="light"] .text-text-primary {
+  color: #0F172A !important;
+}
+html[data-theme="light"] .text-text-secondary {
+  color: #475569 !important;
+}
+html[data-theme="light"] .text-text-muted {
+  color: #64748B !important;
+}
+html[data-theme="light"] .hover\:text-text-primary:hover {
+  color: #0F172A !important;
+}
+html[data-theme="light"] .hover\:bg-bg-elevated:hover {
+  background-color: #F1F5F9 !important;
+}
+html[data-theme="light"] .hover\:text-text-secondary:hover {
+  color: #475569 !important;
+}
+html[data-theme="light"] .hover\:text-text-muted:hover {
+  color: #64748B !important;
+}
+html[data-theme="light"] .focus\:border-accent:focus {
+  border-color: #7C3AED !important;
+}
+html[data-theme="light"] .focus\:ring-accent\/20:focus {
+  --tw-ring-color: rgba(124, 58, 237, 0.2) !important;
+}
+html[data-theme="light"] .focus\:ring-accent\/30:focus {
+  --tw-ring-color: rgba(124, 58, 237, 0.3) !important;
+}
+html[data-theme="light"] .bg-accent\/10 {
+  background-color: rgba(124, 58, 237, 0.1) !important;
+}
+html[data-theme="light"] .bg-accent\/15 {
+  background-color: rgba(124, 58, 237, 0.15) !important;
+}
+html[data-theme="light"] .bg-accent\/20 {
+  background-color: rgba(124, 58, 237, 0.2) !important;
+}
+html[data-theme="light"] .bg-accent\/30 {
+  background-color: rgba(124, 58, 237, 0.3) !important;
+}
+html[data-theme="light"] .border-accent\/30 {
+  border-color: rgba(124, 58, 237, 0.3) !important;
+}
+html[data-theme="light"] .border-accent\/40 {
+  border-color: rgba(124, 58, 237, 0.4) !important;
+}
+html[data-theme="light"] .border-accent\/50 {
+  border-color: rgba(124, 58, 237, 0.5) !important;
+}
+html[data-theme="light"] .text-accent {
+  color: #7C3AED !important;
+}
+html[data-theme="light"] .text-accent-light {
+  color: #8B5CF6 !important;
+}
+html[data-theme="light"] .bg-accent-glow {
+  background-color: rgba(124, 58, 237, 0.1) !important;
+}
+html[data-theme="light"] .bg-accent-dim {
+  background-color: rgba(124, 58, 237, 0.15) !important;
+}
+html[data-theme="light"] .bg-up\/15 {
+  background-color: rgba(34, 197, 94, 0.15) !important;
+}
+html[data-theme="light"] .bg-up\/10 {
+  background-color: rgba(34, 197, 94, 0.1) !important;
+}
+html[data-theme="light"] .bg-down\/10 {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+}
+html[data-theme="light"] .bg-down\/15 {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+}
+html[data-theme="light"] .text-up {
+  color: #22C55E !important;
+}
+html[data-theme="light"] .text-down {
+  color: #EF4444 !important;
+}
+html[data-theme="light"] .hover\:text-up:hover {
+  color: #22C55E !important;
+}
+html[data-theme="light"] .hover\:text-down:hover {
+  color: #EF4444 !important;
+}
+html[data-theme="light"] .stroke-down {
+  stroke: #EF4444 !important;
 }
 

@@ -6,6 +6,7 @@ import {
   Activity,
   Database,
 } from 'lucide-react';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function LandingPage() {
   return (
@@ -27,6 +28,8 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ThemeToggle />
+
           <Link
             to="/login"
             className="btn-ghost"

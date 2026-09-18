@@ -2,6 +2,7 @@ from datetime import timedelta
 import math
 from django.db.models import Avg, Count, Sum, Max, Min, StdDev
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -33,13 +34,27 @@ class CompanyBehaviorSummaryAPIView(APIView):
     GET /api/companies/:id/behaviorsummary/
     Provides VWAP, price vs VWAP spread, pressure indicator, volume anomalies,
     broker concentration, and news sentiment summary.
+
+    Rolling window: always the last 31 calendar days anchored to today,
+    so the analysis window advances automatically each day without any
+    code changes.  Old records are never deleted from the database.
     """
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    # Number of calendar days in the rolling analysis window.
+    WINDOW_DAYS = 31
+
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
-        prices = list(DailyPrice.objects.filter(company=company).order_by("-date")[:30])
+
+        # Rolling 31-day window anchored to today (not the latest stored date).
+        window_start = timezone.localdate() - timedelta(days=self.WINDOW_DAYS)
+        prices = list(
+            DailyPrice.objects
+            .filter(company=company, date__gte=window_start)
+            .order_by("-date")
+        )
 
         if not prices:
             # Fallback when no daily prices exist yet
@@ -98,22 +113,28 @@ class CompanyBehaviorSummaryAPIView(APIView):
             pressure = "neutral"
             pressure_score = 50.0 + (price_change_pct * 4.0)
 
-        # Broker concentration from floorsheet
+        # Broker concentration from floorsheet — scoped to the same rolling window
         buyer_brokers = (
-            FloorsheetTransaction.objects.filter(company=company)
+            FloorsheetTransaction.objects
+            .filter(company=company, date__gte=window_start)
             .values("buyer_broker")
             .annotate(total_qty=Sum("quantity"), total_amt=Sum("amount"))
             .order_by("-total_qty")[:5]
         )
         seller_brokers = (
-            FloorsheetTransaction.objects.filter(company=company)
+            FloorsheetTransaction.objects
+            .filter(company=company, date__gte=window_start)
             .values("seller_broker")
             .annotate(total_qty=Sum("quantity"), total_amt=Sum("amount"))
             .order_by("-total_qty")[:5]
         )
 
-        # News stats
-        tags = ArticleCompanyTag.objects.filter(company=company).select_related("article")
+        # News stats — scoped to the rolling window
+        tags = (
+            ArticleCompanyTag.objects
+            .filter(company=company, article__published_at__date__gte=window_start)
+            .select_related("article")
+        )
         news_sentiments = [
             t.article.sentiment
             for t in tags
@@ -127,14 +148,14 @@ class CompanyBehaviorSummaryAPIView(APIView):
 
         # Generate insightful summary text
         if pressure == "buying":
-            summary_text = f"{company.symbol} is showing strong buying pressure with price ({close_price}) trading {spread_pct}% above its 30-day VWAP ({vwap})."
+            summary_text = f"{company.symbol} is showing strong buying pressure with price ({close_price}) trading {spread_pct}% above its 31-day VWAP ({vwap})."
         elif pressure == "selling":
-            summary_text = f"{company.symbol} is currently experiencing selling pressure with price ({close_price}) trading {abs(spread_pct)}% below 30-day VWAP ({vwap})."
+            summary_text = f"{company.symbol} is currently experiencing selling pressure with price ({close_price}) trading {abs(spread_pct)}% below 31-day VWAP ({vwap})."
         else:
-            summary_text = f"{company.symbol} is trading in a neutral consolidation range near its 30-day VWAP of {vwap}."
+            summary_text = f"{company.symbol} is trading in a neutral consolidation range near its 31-day VWAP of {vwap}."
 
         if volume_anomaly:
-            summary_text += f" Volume spike alert: Current volume is {vol_ratio}x the 30-day average."
+            summary_text += f" Volume spike alert: Current volume is {vol_ratio}x the 31-day average."
 
         return Response(
             {
@@ -164,13 +185,28 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
     """
     GET /api/companies/:id/news-pricecorrelation/
     Correlates news sentiment/activity spikes with price changes over time.
+
+    Rolling window: last 60 calendar days anchored to today.
+    60 days covers ~2 months of trading sessions which gives enough data
+    points for a meaningful Pearson correlation while keeping the response
+    size small and the window genuinely rolling.
     """
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    WINDOW_DAYS = 60
+
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
-        prices = list(DailyPrice.objects.filter(company=company).order_by("date"))
+
+        window_start = timezone.localdate() - timedelta(days=self.WINDOW_DAYS)
+
+        # DB-level date filter — no Python-side slicing needed
+        prices = list(
+            DailyPrice.objects
+            .filter(company=company, date__gte=window_start)
+            .order_by("date")
+        )
 
         if not prices:
             return Response(
@@ -184,7 +220,8 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
             )
 
         tags = ArticleCompanyTag.objects.filter(
-            company=company
+            company=company,
+            article__published_at__date__gte=window_start,
         ).select_related("article").order_by("article__published_at")
 
         # Aggregate news by date
@@ -275,10 +312,10 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                 "company_id": company.id,
                 "symbol": company.symbol,
                 "correlation_coefficient": corr_coeff,
-                "correlation_label": "Moderate-to-Strong Positive" if corr_coeff > 0.4 else "Neutral",
+                "correlation_label": "Moderate-to-Strong Positive" if corr_coeff and corr_coeff > 0.4 else "Neutral",
                 "lead_lag_days": 1,
                 "analysis_note": f"News releases for {company.symbol} typically lead price and volume movements by 1–2 trading sessions.",
-                "data_points": data_points[-60:],  # Last 60 sessions
+                "data_points": data_points,  # Already bounded by the 60-day DB filter
             }
         )
 
@@ -292,19 +329,33 @@ class CrossCompanyAnalysisAPIView(APIView):
     - Most In-The-News
     - Sector Performance
     - Buying vs Selling Pressure Breakdown
+
+    Rolling window: last 31 calendar days anchored to today.
     """
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    WINDOW_DAYS = 31
+
     def get(self, request):
-        companies = Company.objects.filter(is_active=True).prefetch_related("dailyprice_set", "article_tags__article")
+        window_start = timezone.localdate() - timedelta(days=self.WINDOW_DAYS)
+
+        companies = Company.objects.filter(is_active=True).prefetch_related(
+            "article_tags__article"
+        )
 
         company_stats = []
         sector_stats = {}
         pressure_counts = {"buying": 0, "selling": 0, "neutral": 0}
 
         for c in companies:
-            prices = list(c.dailyprice_set.order_by("-date")[:30])
+            # Use date__gte so the window always reflects the last 31 calendar
+            # days from today, not a Python-side slice of arbitrary depth.
+            prices = list(
+                DailyPrice.objects
+                .filter(company=c, date__gte=window_start)
+                .order_by("-date")
+            )
             latest_price = float(prices[0].close) if prices else 0.0
             prev_price = float(prices[1].close) if len(prices) > 1 else latest_price
             change_pct = round(((latest_price - prev_price) / prev_price) * 100, 2) if prev_price > 0 else 0.0

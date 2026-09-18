@@ -1,6 +1,7 @@
 import { Bell, Search, ChevronDown, User, LogOut } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import ThemeToggle from '../ThemeToggle';
 
 export default function Header() {
   const [profileOpen, setProfileOpen] = useState(false);
@@ -35,6 +36,8 @@ export default function Header() {
       </div>
 
       <div className="flex items-center gap-3 ml-auto">
+        <ThemeToggle />
+
         {/* Notification */}
         <button className="relative p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors">
           <Bell size={16} />

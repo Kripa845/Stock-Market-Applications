@@ -160,7 +160,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={clsx(
-        'flex flex-col h-full bg-bg-secondary border-r border-bg-border transition-all duration-300',
+        'sidebar-wrap flex flex-col h-full bg-bg-secondary border-r border-bg-border transition-all duration-300',
         collapsed ? 'w-16' : 'w-60',
       )}
     >
