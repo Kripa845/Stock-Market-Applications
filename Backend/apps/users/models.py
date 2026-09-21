@@ -161,46 +161,60 @@ class User(AbstractUser):
             self.custom_role.permissions or []
         )
 
+    # def has_app_permission(self, permission_key):
+    #     """
+    #     Central permission checker.
+
+    #     Admin always has full access.
+    #     Custom roles use their selected permissions.
+    #     Analyst and Viewer use the database-backed
+    #     RolePermissionConfig.
+    #     """
+
+    #     if self.is_superuser:
+    #         return True
+
+    #     # Admin has everything.
+    #     if self.role == self.Role.ADMIN:
+    #         return True
+
+    #     # Custom role.
+    #     if self.custom_role:
+    #         return self.has_custom_permission(
+    #             permission_key
+    #         )
+
+    #     # Database-backed built-in roles.
+    #     config = (
+    #         RolePermissionConfig.objects
+    #         .filter(
+    #             role_key=self.role,
+    #             is_active=True,
+    #         )
+    #         .first()
+    #     )
+
+    #     if config:
+    #         return permission_key in (
+    #             config.permissions or []
+    #         )
+
+    #     return False
+    def get_app_permissions(self):
+        from .serializers import VALID_PERMISSION_KEYS  # local import: avoids circular import
+
+        if self.is_admin():
+            return set(VALID_PERMISSION_KEYS)
+        if self.custom_role_id:
+            role = self.custom_role
+            return set(role.permissions or []) if role and role.is_active else set()
+        config = RolePermissionConfig.objects.filter(
+            role_key=self.role, is_active=True
+        ).first()
+        return set(config.permissions or []) if config else set()
+
     def has_app_permission(self, permission_key):
-        """
-        Central permission checker.
-
-        Admin always has full access.
-        Custom roles use their selected permissions.
-        Analyst and Viewer use the database-backed
-        RolePermissionConfig.
-        """
-
-        if self.is_superuser:
-            return True
-
-        # Admin has everything.
-        if self.role == self.Role.ADMIN:
-            return True
-
-        # Custom role.
-        if self.custom_role:
-            return self.has_custom_permission(
-                permission_key
-            )
-
-        # Database-backed built-in roles.
-        config = (
-            RolePermissionConfig.objects
-            .filter(
-                role_key=self.role,
-                is_active=True,
-            )
-            .first()
-        )
-
-        if config:
-            return permission_key in (
-                config.permissions or []
-            )
-
-        return False
-
+        return permission_key in self.get_app_permissions()
     def get_effective_role_name(self):
         if self.custom_role:
             return self.custom_role.name

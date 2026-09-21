@@ -15,7 +15,8 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
 )
 
-from .permissions import HasAppPermission, HasViewMethodPermissions, IsAdminUserRole
+from .permissions import (HasAppPermission, HasViewMethodPermissions, IsAdminUserRole,
+                          is_admin_account, missing_grants)
 
 from .models import CustomRole, RolePermissionConfig
 
@@ -31,11 +32,25 @@ from .serializers import (
     CustomRoleSerializer,
     ROLE_PERMISSIONS,
     VALID_PERMISSION_KEYS,
+    validate_permission_dependencies,
 )
-
 User = get_user_model()
 
-
+def assignment_escalation(request, instance=None):
+    """Permissions a non-admin actor tries to hand out (via role or custom role) but does not hold."""
+    actor = request.user
+    if actor.is_admin():
+        return []
+    wanted = set()
+    cid = request.data.get("custom_role_id")
+    if cid and str(cid).isdigit() and (instance is None or int(cid) != instance.custom_role_id):
+        role = CustomRole.objects.filter(pk=int(cid), is_active=True).first()
+        wanted |= set(role.permissions or []) if role else set()
+    new_role = request.data.get("role")
+    if new_role in (User.Role.ANALYST, User.Role.VIEWER) and (instance is None or new_role != instance.role):
+        cfg = RolePermissionConfig.objects.filter(role_key=new_role, is_active=True).first()
+        wanted |= set(cfg.permissions or []) if cfg else set()
+    return missing_grants(actor, wanted)
 class CustomRoleListCreateAPIView(APIView):
     """
     GET:
@@ -48,8 +63,11 @@ class CustomRoleListCreateAPIView(APIView):
     """
 
     permission_classes = [
-        IsAdminUserRole
+        HasViewMethodPermissions
     ]
+
+    def get_required_permissions(self, request):
+        return ["view_roles"] if request.method == "GET" else ["create_roles"]
 
     def get(self, request):
         roles = CustomRole.objects.all()
@@ -66,14 +84,12 @@ class CustomRoleListCreateAPIView(APIView):
         )
 
     def post(self, request):
-        serializer = CustomRoleSerializer(
-            data=request.data
-        )
-
-        serializer.is_valid(
-            raise_exception=True
-        )
-
+        serializer = CustomRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        missing = missing_grants(request.user, serializer.validated_data.get("permissions", []))
+        if missing:
+            return Response({"detail": "You cannot grant permissions you do not hold.",
+                             "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
         role = serializer.save()
 
         return Response(
@@ -97,8 +113,12 @@ class CustomRoleDetailAPIView(APIView):
     """
 
     permission_classes = [
-        IsAdminUserRole
+        HasViewMethodPermissions
     ]
+
+    def get_required_permissions(self, request):
+        return {"GET": ["view_roles"], "PATCH": ["edit_roles"], "PUT": ["edit_roles"],
+                "DELETE": ["delete_roles"]}.get(request.method, [])
 
     def get_object(self, pk):
         return get_object_or_404(
@@ -117,7 +137,9 @@ class CustomRoleDetailAPIView(APIView):
 
     def patch(self, request, pk):
         role = self.get_object(pk)
-
+        actor = request.user
+        if not actor.is_admin() and actor.custom_role_id == role.pk:
+            return Response({"detail": "You cannot edit your own role."}, status=status.HTTP_403_FORBIDDEN)
         serializer = CustomRoleSerializer(
             role,
             data=request.data,
@@ -128,6 +150,11 @@ class CustomRoleDetailAPIView(APIView):
             raise_exception=True
         )
 
+        added = set(serializer.validated_data.get("permissions", [])) - set(role.permissions or [])
+        missing = missing_grants(actor, added)
+        if missing:
+            return Response({"detail": "You cannot grant permissions you do not hold.",
+                             "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
         role = serializer.save()
 
         return Response(
@@ -311,7 +338,7 @@ class MePermissionsAPIView(APIView):
 
         return Response(
             {
-                "permissions": permissions,
+                "permissions": sorted(user.get_app_permissions()),
                 "role": user.role,
                 "effective_role": (
                     user.get_effective_role_name()
@@ -404,6 +431,12 @@ class AdminUserListCreateAPIView(
         *args,
         **kwargs,
     ):
+        if request.data.get("role") == User.Role.ADMIN and not request.user.is_admin():
+            return Response({"detail": "Only admins can create admin accounts."}, status=status.HTTP_403_FORBIDDEN)
+        missing = assignment_escalation(request)
+        if missing:
+            return Response({"detail": "You cannot assign permissions you do not hold.",
+                             "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
         serializer = self.get_serializer(
             data=request.data
         )
@@ -462,7 +495,65 @@ class AdminUserDetailAPIView(
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
+        actor = request.user
 
+        if (
+            is_admin_account(instance)
+            and not actor.is_admin()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Only admins can modify admin accounts."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if (
+            request.data.get("role") == User.Role.ADMIN
+            and instance.role != User.Role.ADMIN
+            and not actor.is_admin()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Only admins can grant the admin role."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if (
+            is_admin_account(instance)
+            and request.data.get("custom_role_id")
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Custom roles cannot be assigned "
+                        "to admin accounts."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        missing = assignment_escalation(
+            request,
+            instance,
+        )
+
+        if missing:
+            return Response(
+                {
+                    "detail": (
+                        "You cannot assign permissions "
+                        "you do not hold."
+                    ),
+                    "missing_permissions": missing,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
         # Prevent role changes on admin accounts by non-superusers
         new_role = request.data.get("role")
         if (
@@ -509,7 +600,7 @@ class AdminUserDetailAPIView(
             )
 
         # Prevent deleting admin accounts (only superusers can)
-        if instance.role == User.Role.ADMIN and not request.user.is_superuser:
+        if (instance.role == User.Role.ADMIN or instance.is_superuser) and not request.user.is_superuser:
             return Response(
                 {"detail": "Admin accounts cannot be deleted."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -520,8 +611,6 @@ class AdminUserDetailAPIView(
         return Response(
             status=status.HTTP_204_NO_CONTENT
         )
-
-
 # ======================================================
 # ADMIN ANALYSTS
 # ======================================================
@@ -665,6 +754,22 @@ class RolePermissionDetailAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Dependency validation — prerequisites must be included
+        dep_errors = validate_permission_dependencies(permissions)
+        if dep_errors:
+            return Response(
+                {"permissions": dep_errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        actor = request.user
+        if not actor.is_admin():
+            if not actor.custom_role_id and actor.role == role_key:
+                return Response({"detail": "You cannot edit your own role."}, status=status.HTTP_403_FORBIDDEN)
+            missing = missing_grants(actor, set(permissions) - set(config.permissions or []))
+            if missing:
+                return Response({"detail": "You cannot grant permissions you do not hold.",
+                                 "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
         config.permissions = list(
             dict.fromkeys(permissions)
         )
@@ -790,5 +895,7 @@ class RoleStatisticsAPIView(APIView):
                         is_active=False
                     ).count(),
             }
-        )
+         )
 
+
+# ======================================================

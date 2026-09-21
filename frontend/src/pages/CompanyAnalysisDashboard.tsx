@@ -679,7 +679,7 @@ export default function CompanyAnalysisDashboard() {
               {behavior ? (
                 <>
                   <PressureGauge
-                    score={behavior.pressure_score}
+                    score={behavior.pressure_score !== null ? Number(behavior.pressure_score) : 50}
                     pressure={behavior.pressure}
                   />
                   <div className="grid grid-cols-2 gap-2 text-xs">
@@ -692,7 +692,7 @@ export default function CompanyAnalysisDashboard() {
                     <div className="bg-bg-elevated rounded-lg p-2 text-center">
                       <p className="text-text-muted text-[10px] mb-0.5">Vol anomaly ratio</p>
                       <p className={clsx('font-semibold', behavior.volume_anomaly ? 'text-down' : 'text-text-primary')}>
-                        {behavior.volume_ratio.toFixed(2)}×
+                        {behavior.volume_ratio !== null ? `${Number(behavior.volume_ratio).toFixed(2)}×` : '—'}
                       </p>
                     </div>
                     <div className="bg-bg-elevated rounded-lg p-2 text-center col-span-2">
@@ -786,7 +786,7 @@ export default function CompanyAnalysisDashboard() {
                 <div className="bg-bg-elevated rounded-lg p-3">
                   <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Volume Anomaly</p>
                   <p className={clsx('text-sm font-semibold', behavior.volume_anomaly ? 'text-down' : 'text-up')}>
-                    {behavior.volume_anomaly ? `⚡ Yes (${behavior.volume_ratio.toFixed(2)}×)` : '✓ Normal'}
+                    {behavior.volume_anomaly ? `⚡ Yes (${behavior.volume_ratio !== null ? Number(behavior.volume_ratio).toFixed(2) : '?'}×)` : '✓ Normal'}
                   </p>
                 </div>
                 <div className="bg-bg-elevated rounded-lg p-3">
@@ -800,9 +800,12 @@ export default function CompanyAnalysisDashboard() {
                 </div>
                 <div className="bg-bg-elevated rounded-lg p-3">
                   <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">Spread vs VWAP</p>
-                  <p className={clsx('text-sm font-semibold', behavior.price_to_vwap_spread_pct >= 0 ? 'text-up' : 'text-down')}>
-                    {behavior.price_to_vwap_spread_pct >= 0 ? '+' : ''}
-                    {behavior.price_to_vwap_spread_pct.toFixed(2)}%
+                  <p className={clsx('text-sm font-semibold',
+                    behavior.price_to_vwap_spread_pct === null ? 'text-text-secondary'
+                    : behavior.price_to_vwap_spread_pct >= 0 ? 'text-up' : 'text-down')}>
+                    {behavior.price_to_vwap_spread_pct !== null
+                      ? `${behavior.price_to_vwap_spread_pct >= 0 ? '+' : ''}${behavior.price_to_vwap_spread_pct.toFixed(2)}%`
+                      : '—'}
                   </p>
                 </div>
               </div>

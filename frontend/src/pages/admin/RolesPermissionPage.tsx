@@ -176,44 +176,111 @@ export default function RolesPermissionsPage() {
     setCurrentPermissions([]);
   };
 
-  const togglePermissionInGrid = (
-    permissionKey: string
-  ) => {
-    setCurrentPermissions((current) => {
-      const exists = current.includes(
-        permissionKey
-      );
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEQUENTIAL DEPENDENCY HELPERS
+  //
+  // The backend returns group.permissions[] in dependency order:
+  //   index 0 → no prerequisite
+  //   index N → requires index 0…N-1
+  //
+  // All logic derives from this order alone — no hardcoded key lists.
+  // ─────────────────────────────────────────────────────────────────────────
 
-      return exists
-        ? current.filter(
-            (p) => p !== permissionKey
-          )
-        : [...current, permissionKey];
-    });
+  /**
+   * Returns true when the checkbox at `index` inside `group` may be
+   * interacted with (its direct prerequisite at index-1 is already checked).
+   * The first permission in every group is always enabled.
+   */
+  const isEnabled = (
+    group: PermissionGroup,
+    index: number,
+    checked: string[]
+  ): boolean => {
+    if (index === 0) return true;
+    return checked.includes(group.permissions[index - 1].key);
   };
 
-  const toggleGroupPermissions = (
-    group: PermissionGroup
+  /**
+   * Toggle a single permission key while enforcing cascade rules:
+   *
+   * CHECKING   → simply add the key (caller must only call this when
+   *               isEnabled() returned true, so prerequisites are already present).
+   *
+   * UNCHECKING → remove the key AND all subsequent keys in the same group
+   *               (cascade-off), because they depended on the unchecked one.
+   */
+  const applySequentialToggle = (
+    group: PermissionGroup,
+    permissionKey: string,
+    current: string[]
+  ): string[] => {
+    const index = group.permissions.findIndex((p) => p.key === permissionKey);
+    const isChecked = current.includes(permissionKey);
+
+    if (isChecked) {
+      // Uncheck this + everything after it in the group
+      const keysToRemove = group.permissions
+        .slice(index)
+        .map((p) => p.key);
+      return current.filter((k) => !keysToRemove.includes(k));
+    }
+
+    // Check: just add (prerequisites already satisfied per isEnabled guard)
+    return [...current, permissionKey];
+  };
+
+  /**
+   * "Select All" for a group:
+   *   all checked → remove all keys in group.
+   *   otherwise   → add all keys (sequential order is naturally satisfied).
+   */
+  const applyGroupToggle = (
+    group: PermissionGroup,
+    current: string[]
+  ): string[] => {
+    const keys = group.permissions.map((p) => p.key);
+    const allSelected = keys.every((k) => current.includes(k));
+
+    if (allSelected) {
+      return current.filter((k) => !keys.includes(k));
+    }
+    return Array.from(new Set([...current, ...keys]));
+  };
+
+  // ── Handlers used by the main role-editor grid ───────────────────────────
+
+  const togglePermissionInGrid = (
+    group: PermissionGroup,
+    permissionKey: string
   ) => {
-    const keys = group.permissions.map(
-      (p) => p.key
+    setCurrentPermissions((current) =>
+      applySequentialToggle(group, permissionKey, current)
     );
+  };
 
-    setCurrentPermissions((current) => {
-      const allSelected = keys.every(
-        (k) => current.includes(k)
-      );
+  const toggleGroupPermissions = (group: PermissionGroup) => {
+    setCurrentPermissions((current) =>
+      applyGroupToggle(group, current)
+    );
+  };
 
-      if (allSelected) {
-        return current.filter(
-          (p) => !keys.includes(p)
-        );
-      }
+  // ── Handlers used by the Create/Edit modal ───────────────────────────────
 
-      return Array.from(
-        new Set([...current, ...keys])
-      );
-    });
+  const togglePermission = (
+    group: PermissionGroup,
+    permissionKey: string
+  ) => {
+    setForm((current) => ({
+      ...current,
+      permissions: applySequentialToggle(group, permissionKey, current.permissions),
+    }));
+  };
+
+  const toggleGroup = (group: PermissionGroup) => {
+    setForm((current) => ({
+      ...current,
+      permissions: applyGroupToggle(group, current.permissions),
+    }));
   };
 
   const saveRoleEdits = async () => {
@@ -385,71 +452,6 @@ const openCreate = () => {
         "Unable to delete role."
       );
     }
-  };
-
-
-  const togglePermission = (
-    permissionKey: string
-  ) => {
-    setForm((current) => {
-      const exists =
-        current.permissions.includes(
-          permissionKey
-        );
-
-      return {
-        ...current,
-
-        permissions: exists
-          ? current.permissions.filter(
-              (permission) =>
-                permission !== permissionKey
-            )
-          : [
-              ...current.permissions,
-              permissionKey,
-            ],
-      };
-    });
-  };
-
-
-  const toggleGroup = (
-    group: PermissionGroup
-  ) => {
-    const keys =
-      group.permissions.map(
-        (permission) =>
-          permission.key
-      );
-
-    const allSelected =
-      keys.every((key) =>
-        form.permissions.includes(key)
-      );
-
-    setForm((current) => {
-      if (allSelected) {
-        return {
-          ...current,
-          permissions:
-            current.permissions.filter(
-              (permission) =>
-                !keys.includes(permission)
-            ),
-        };
-      }
-
-      return {
-        ...current,
-        permissions: Array.from(
-          new Set([
-            ...current.permissions,
-            ...keys,
-          ])
-        ),
-      };
-    });
   };
 
 
@@ -691,62 +693,96 @@ const openCreate = () => {
       </div>
 
       {/* PERMISSION GRID */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {permissionGroups.map((group) => {
-          const keys = group.permissions.map((p) => p.key);
-          const selectedCount = keys.filter((k) => currentPermissions.includes(k)).length;
-          const allSelected = selectedCount === keys.length && keys.length > 0;
-          const someSelected = selectedCount > 0 && !allSelected;
+      {(selectedRole || selectedCustomRole) ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {permissionGroups.map((group) => {
+            const keys = group.permissions.map((p) => p.key);
+            const selectedCount = keys.filter((k) => currentPermissions.includes(k)).length;
+            const allSelected = selectedCount === keys.length && keys.length > 0;
+            const someSelected = selectedCount > 0 && !allSelected;
+            const isAdminRole = selectedRole?.key === "admin";
 
-          return (
-            <div
-              key={group.key}
-              className="card overflow-hidden"
-            >
-              <div className="flex items-center justify-between border-b border-bg-border bg-bg-elevated px-4 py-3">
-                <h3 className="text-sm font-semibold text-text-primary">
-                  {group.name}
-                </h3>
-
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    ref={(el) => {
-                      if (el) {
-                        el.indeterminate = someSelected;
-                      }
-                    }}
-                    onChange={() => toggleGroupPermissions(group)}
-                    className="h-4 w-4 rounded border-bg-border bg-bg-card text-accent focus:ring-2 focus:ring-accent/30"
-                  />
-                  Select All
-                </label>
-              </div>
-
-              <div className="divide-y divide-bg-border">
-                {group.permissions.map((permission) => (
-                  <label
-                    key={permission.key}
-                    className="flex cursor-pointer items-center gap-3 px-4 py-2 hover:bg-bg-elevated"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={currentPermissions.includes(permission.key)}
-                      onChange={() => togglePermissionInGrid(permission.key)}
-                      className="h-4 w-4 rounded border-bg-border bg-bg-card text-accent focus:ring-2 focus:ring-accent/30"
-                    />
-
-                    <span className="text-sm text-text-secondary">
-                      {permission.name}
+            return (
+              <div key={group.key} className="card overflow-hidden">
+                <div className="flex items-center justify-between border-b border-bg-border bg-bg-elevated px-4 py-3">
+                  <h3 className="text-sm font-semibold text-text-primary capitalize">
+                    {group.name}
+                    <span className="ml-2 text-xs font-normal text-text-muted">
+                      ({selectedCount}/{keys.length})
                     </span>
-                  </label>
-                ))}
+                  </h3>
+
+                  {!isAdminRole && (
+                    <label className="flex cursor-pointer items-center gap-2 text-xs text-text-secondary select-none">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someSelected;
+                        }}
+                        onChange={() => toggleGroupPermissions(group)}
+                        className="h-4 w-4 rounded border-bg-border bg-bg-card accent-accent"
+                      />
+                      Select All
+                    </label>
+                  )}
+                </div>
+
+                <div className="divide-y divide-bg-border">
+                  {group.permissions.map((permission, idx) => {
+                    const checked = currentPermissions.includes(permission.key);
+                    const enabled = !isAdminRole && isEnabled(group, idx, currentPermissions);
+                    const locked = !isAdminRole && !enabled;
+                    const prerequisiteName = idx > 0 ? group.permissions[idx - 1].name : null;
+
+                    return (
+                      <label
+                        key={permission.key}
+                        className={`flex items-center gap-3 px-4 py-2.5 text-sm select-none ${
+                          isAdminRole || locked
+                            ? "cursor-default opacity-50"
+                            : "cursor-pointer hover:bg-bg-elevated"
+                        }`}
+                        title={locked && prerequisiteName ? `"${prerequisiteName}" is required first.` : undefined}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={isAdminRole || locked}
+                          onChange={() => {
+                            if (isAdminRole || locked) return;
+                            togglePermissionInGrid(group, permission.key);
+                          }}
+                          className="h-4 w-4 shrink-0 rounded border-bg-border bg-bg-card accent-accent disabled:cursor-not-allowed disabled:opacity-40"
+                        />
+                        <span className={checked ? "text-text-primary" : "text-text-secondary"}>
+                          {permission.name}
+                        </span>
+                        {locked && prerequisiteName && (
+                          <span className="ml-auto text-[11px] text-text-muted">
+                            requires {prerequisiteName}
+                          </span>
+                        )}
+                        {isAdminRole && checked && (
+                          <span className="ml-auto text-[10px] text-up">✓ always on</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="card flex flex-col items-center gap-3 py-16 text-center">
+          <Shield size={40} className="text-text-muted" />
+          <p className="font-semibold text-text-primary">Select a role to configure its permissions</p>
+          <p className="max-w-sm text-sm text-text-muted">
+            Click Analyst, Viewer, or any custom role above to view and edit its permission set.
+          </p>
+        </div>
+      )}
 
       {/* FOOTER */}
       {(selectedCustomRole || selectedRole) && (
@@ -1248,39 +1284,43 @@ const openCreate = () => {
                           {/* PERMISSION LIST */}
                           {expanded && (
                             <div className="space-y-1 p-3">
+                              {group.permissions.map((permission, idx) => {
+                                const isChecked = form.permissions.includes(permission.key);
+                                const enabled = isEnabled(group, idx, form.permissions);
+                                const locked = !enabled;
+                                const prerequisiteName = idx > 0 ? group.permissions[idx - 1].name : null;
 
-                              {group.permissions.map(
-                                (permission) => (
+                                return (
                                   <label
-                                    key={
-                                      permission.key
-                                    }
-                                    className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-bg-elevated"
+                                    key={permission.key}
+                                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 select-none ${
+                                      locked
+                                        ? "cursor-default opacity-50"
+                                        : "cursor-pointer hover:bg-bg-elevated"
+                                    }`}
+                                    title={locked && prerequisiteName ? `"${prerequisiteName}" is required first.` : undefined}
                                   >
-
                                     <input
                                       type="checkbox"
-                                      checked={form.permissions.includes(
-                                        permission.key
-                                      )}
-                                      onChange={() =>
-                                        togglePermission(
-                                          permission.key
-                                        )
-                                      }
-                                      className="h-4 w-4"
+                                      checked={isChecked}
+                                      disabled={locked}
+                                      onChange={() => {
+                                        if (locked) return;
+                                        togglePermission(group, permission.key);
+                                      }}
+                                      className="h-4 w-4 disabled:cursor-not-allowed disabled:opacity-40"
                                     />
-
-                                    <span className="text-sm">
-                                      {
-                                        permission.name
-                                      }
+                                    <span className={`text-sm ${locked ? "text-text-muted" : ""}`}>
+                                      {permission.name}
                                     </span>
-
+                                    {locked && prerequisiteName && (
+                                      <span className="ml-auto text-[11px] text-text-muted">
+                                        requires {prerequisiteName}
+                                      </span>
+                                    )}
                                   </label>
-                                )
-                              )}
-
+                                );
+                              })}
                             </div>
                           )}
 

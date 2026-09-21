@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     CompanyBehaviorSummaryAPIView,
+    CompanyBrokerActivityAPIView,
     CompanyNewsPriceCorrelationAPIView,
     CrossCompanyAnalysisAPIView,
     DailyAnalysisListAPIView,
@@ -27,6 +28,11 @@ urlpatterns = [
         "companies/<int:pk>/behaviorsummary/",
         CompanyBehaviorSummaryAPIView.as_view(),
         name="company-behavior-summary",
+    ),
+    path(
+        "companies/<int:pk>/brokers/",
+        CompanyBrokerActivityAPIView.as_view(),
+        name="company-broker-activity",
     ),
     path(
         "companies/<int:pk>/news-pricecorrelation/",

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
+import { ROUTE_RULES } from '../../config/routePermissions';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -28,11 +29,6 @@ interface NavItem {
   icon?: React.ComponentType<{ size?: number; className?: string }>;
   to?: string;
   type?: 'divider';
-  /**
-   * ALL of these permissions must be held (or the user is admin) for the item
-   * to be visible.  When the array is empty / undefined the item is always
-   * shown.
-   */
   requiredPermissions?: string[];
 }
 
@@ -52,37 +48,38 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Market Overview',
     icon: TrendingUp,
     to: '/market',
-    requiredPermissions: ['view_market_data'],
   },
   {
     label: 'Companies',
     icon: Briefcase,
     to: '/companies',
-    requiredPermissions: ['view_companies'],
   },
   {
     label: 'Trading Behaviour',
     icon: Activity,
     to: '/trading',
-    requiredPermissions: ['view_trading_volume'],
   },
   {
     label: 'Analytics',
     icon: BarChart3,
     to: '/analytics',
-    requiredPermissions: ['view_analysis'],
   },
   {
     label: 'Company Analysis',
     icon: Activity,
     to: '/company-analysis',
-    requiredPermissions: ['view_analysis'],
   },
   {
     label: 'Watchlist',
     icon: Star,
     to: '/watchlist',
     requiredPermissions: ['view_watchlist'],
+  },
+  {
+    label: 'Comparison',
+    icon: BarChart3,
+    to: '/watchlist-comparison',
+    requiredPermissions: ['view_analysis'],
   },
 
   { type: 'divider', label: 'News' },
@@ -91,7 +88,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'News Feed',
     icon: Newspaper,
     to: '/news',
-    requiredPermissions: ['view_news'],
   },
 
   { type: 'divider', label: 'Data Collection' },
@@ -100,7 +96,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Crawl Management',
     icon: Radio,
     to: '/crawl',
-    requiredPermissions: ['view_crawl_runs'],
   },
 
   { type: 'divider', label: 'Reports' },
@@ -109,7 +104,6 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Reports',
     icon: Database,
     to: '/reports',
-    requiredPermissions: ['view_reports'],
   },
 
   { type: 'divider', label: 'Administration' },
@@ -118,13 +112,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'User Management',
     icon: Users,
     to: '/users',
-    requiredPermissions: ['view_users'],
   },
   {
     label: 'Roles & Permissions',
     icon: ShieldCheck,
     to: '/roles-permissions',
-    requiredPermissions: ['view_roles'],
   },
 ];
 
@@ -133,23 +125,12 @@ const NAV_ITEMS: NavItem[] = [
 // ---------------------------------------------------------------------------
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { pathname } = useLocation();
-  const { user, hasPermission } = useAuth();
+  const { hasAnyPermission, hasAllPermissions } = useAuth();
 
-  /**
-   * Returns true if the current user is allowed to see this nav item.
-   *
-   * Logic:
-   *  - Admin always sees everything.
-   *  - Items with no requiredPermissions are always visible.
-   *  - Otherwise the user must hold ALL listed permissions.
-   */
   const canSeeItem = (item: NavItem): boolean => {
-    const required = item.requiredPermissions;
-    if (!required || required.length === 0) return true;
-    if (user?.role === 'admin') return true;
-    // Require ALL listed permissions (not ANY) — prevents showing nav items
-    // the user only partially has access to.
-    return required.every((p) => hasPermission(p));
+    const rule = item.to ? ROUTE_RULES[item.to] : undefined;
+    if (!rule) return true;
+    return rule.mode === 'all' ? hasAllPermissions(rule.permissions) : hasAnyPermission(rule.permissions);
   };
 
   const isActive = (to: string): boolean => {

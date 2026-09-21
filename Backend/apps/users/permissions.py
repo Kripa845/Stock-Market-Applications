@@ -116,3 +116,12 @@ class ReadOnlyOrAnalyst(permissions.BasePermission):
             return True
 
         return request.user.is_analyst()
+def is_admin_account(user):
+    return user.is_superuser or user.role == user.Role.ADMIN
+
+
+def missing_grants(actor, permission_keys):
+    """Keys in permission_keys that `actor` does not hold. Admins may grant anything."""
+    if actor.is_admin():
+        return []
+    return sorted(set(permission_keys) - actor.get_app_permissions())

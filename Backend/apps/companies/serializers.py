@@ -3,6 +3,22 @@ from .models import Company, TrackedCompany
 from .utils import normalize_symbol
 
 
+def _get_prices(obj, n=None):
+    """
+    Return daily prices for a company, using the prefetched cache
+    (_prices_cache) when available to avoid extra queries on list
+    endpoints.  Falls back to a direct queryset for detail endpoints
+    that don't carry the prefetch.
+
+    Prices are already ordered -date (most recent first) in both paths.
+    """
+    if hasattr(obj, "_prices_cache"):
+        cache = obj._prices_cache  # already ordered -date
+        return cache[:n] if n is not None else cache
+    qs = obj.dailyprice_set.order_by("-date")
+    return list(qs[:n]) if n is not None else list(qs)
+
+
 class CompanySerializer(serializers.ModelSerializer):
     is_tracked = serializers.SerializerMethodField()
     latest_price = serializers.SerializerMethodField()
@@ -45,37 +61,37 @@ class CompanySerializer(serializers.ModelSerializer):
         return True
 
     def get_latest_price(self, obj):
-        latest = obj.dailyprice_set.order_by("-date").first()
-        return float(latest.close) if latest else 0.0
+        prices = _get_prices(obj, 1)
+        return float(prices[0].close) if prices else 0.0
 
     def get_price_change(self, obj):
-        prices = list(obj.dailyprice_set.order_by("-date")[:2])
+        prices = _get_prices(obj, 2)
         if len(prices) >= 2:
             return round(float(prices[0].close - prices[1].close), 2)
         return 0.0
 
     def get_price_change_percent(self, obj):
-        prices = list(obj.dailyprice_set.order_by("-date")[:2])
+        prices = _get_prices(obj, 2)
         if len(prices) >= 2 and float(prices[1].close) > 0:
             diff = float(prices[0].close - prices[1].close)
             return round((diff / float(prices[1].close)) * 100, 2)
         return 0.0
 
     def get_volume_24h(self, obj):
-        latest = obj.dailyprice_set.order_by("-date").first()
-        return int(latest.volume) if latest else 0
+        prices = _get_prices(obj, 1)
+        return int(prices[0].volume) if prices else 0
 
     def get_turnover_24h(self, obj):
-        latest = obj.dailyprice_set.order_by("-date").first()
-        return float(latest.turnover) if latest else 0.0
+        prices = _get_prices(obj, 1)
+        return float(prices[0].turnover) if prices else 0.0
 
     def get_high_24h(self, obj):
-        latest = obj.dailyprice_set.order_by("-date").first()
-        return float(latest.high) if latest else 0.0
+        prices = _get_prices(obj, 1)
+        return float(prices[0].high) if prices else 0.0
 
     def get_low_24h(self, obj):
-        latest = obj.dailyprice_set.order_by("-date").first()
-        return float(latest.low) if latest else 0.0
+        prices = _get_prices(obj, 1)
+        return float(prices[0].low) if prices else 0.0
 
     def get_news_count(self, obj):
         return obj.article_tags.count()
@@ -92,9 +108,9 @@ class CompanySerializer(serializers.ModelSerializer):
         return 0.0
 
     def get_sparkline(self, obj):
-        prices = obj.dailyprice_set.order_by("-date")[:10]
-        reversed_prices = list(reversed(prices))
-        return [float(p.close) for p in reversed_prices]
+        # Last 10 prices in chronological order (oldest → newest)
+        prices = _get_prices(obj, 10)
+        return [float(p.close) for p in reversed(prices)]
 
     def validate_symbol(self, value):
         return normalize_symbol(value)

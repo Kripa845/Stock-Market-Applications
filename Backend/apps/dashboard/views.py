@@ -59,11 +59,12 @@ class DashboardSummaryAPIView(APIView):
                 .distinct()
                 .count()
             )
-            result["total_floorsheet_transactions"] = (
-                FloorsheetTransaction.objects
-                .filter(company__in=companies)
-                .count()
-            )
+            if user.has_app_permission("view_market_data"):
+                result["total_floorsheet_transactions"] = (
+                    FloorsheetTransaction.objects
+                    .filter(company__in=companies)
+                    .count()
+                )
 
         if user.has_app_permission("view_news"):
             result["total_news"] = NewsArticle.objects.count()

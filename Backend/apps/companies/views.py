@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
@@ -13,6 +14,32 @@ from .models import Company, TrackedCompany
 from .serializers import CompanySerializer
 
 
+def _company_list_queryset():
+    """
+    Shared queryset with all prefetches needed by CompanySerializer.
+
+    Using Prefetch with an ordered queryset so that serializer methods
+    such as get_latest_price() can call .first() / [:N] on the
+    already-cached prefetch result without issuing additional SQL.
+
+    Without this, every SerializerMethodField that calls
+    obj.dailyprice_set.order_by("-date")... fires a new query,
+    causing N×M extra queries for a list of N companies.
+    """
+    return (
+        Company.objects
+        .prefetch_related(
+            Prefetch(
+                "dailyprice_set",
+                queryset=DailyPrice.objects.order_by("-date"),
+                to_attr="_prices_cache",
+            ),
+            "article_tags__article",
+        )
+        .select_related("tracking")
+    )
+
+
 class CompanyListCreateAPIView(generics.ListCreateAPIView):
     """
     GET /api/companies/ - List tracked or all companies
@@ -25,75 +52,34 @@ class CompanyListCreateAPIView(generics.ListCreateAPIView):
         return ["view_companies"] if request.method == "GET" else ["create_companies"]
 
     def get_queryset(self):
-     queryset = (
-        Company.objects
-        .prefetch_related(
-            "dailyprice_set",
-            "article_tags__article",
-        )
-        .select_related(
-            "tracking",
-        )
-    )
+        queryset = _company_list_queryset()
 
-     search = self.request.query_params.get(
-        "search"
-    )
+        search = self.request.query_params.get("search")
+        sector = self.request.query_params.get("sector")
+        tracking = self.request.query_params.get("tracking")
+        tracked_only = self.request.query_params.get("tracked_only")
+        status_param = self.request.query_params.get("status")
 
-     sector = self.request.query_params.get(
-        "sector"
-    )
+        if search:
+            queryset = queryset.filter(
+                Q(symbol__icontains=search) | Q(name__icontains=search)
+            )
+        if sector:
+            queryset = queryset.filter(sector__iexact=sector)
+        if status_param == "active":
+            queryset = queryset.filter(is_active=True)
+        elif status_param == "inactive":
+            queryset = queryset.filter(is_active=False)
+        if tracking == "tracked":
+            queryset = queryset.filter(tracking__is_tracked=True)
+        elif tracking == "not_tracked":
+            queryset = queryset.filter(
+                Q(tracking__isnull=True) | Q(tracking__is_tracked=False)
+            )
+        if tracked_only and tracked_only.lower() == "true":
+            queryset = queryset.filter(tracking__is_tracked=True)
 
-     tracking = self.request.query_params.get(
-        "tracking"
-    )
-
-     tracked_only = self.request.query_params.get(
-        "tracked_only"
-     )
-
-     status_param = self.request.query_params.get(
-        "status"
-    )
-
-     if search:
-        queryset = queryset.filter(
-            Q(symbol__icontains=search)
-            | Q(name__icontains=search)
-        )
-
-     if sector:
-        queryset = queryset.filter(
-            sector__iexact=sector
-        )
-
-     if status_param == "active":
-        queryset = queryset.filter(
-            is_active=True
-        )
-
-     elif status_param == "inactive":
-        queryset = queryset.filter(
-            is_active=False
-        )
-
-     if tracking == "tracked":
-        queryset = queryset.filter(
-            tracking__is_tracked=True
-        )
-
-     elif tracking == "not_tracked":
-        queryset = queryset.filter(
-            Q(tracking__isnull=True)
-            | Q(tracking__is_tracked=False)
-        )
-
-     if tracked_only and tracked_only.lower() == "true":
-        queryset = queryset.filter(tracking__is_tracked=True)
-
-     return queryset.order_by("symbol")
-       
-     
+        return queryset.order_by("symbol")
 
 
 class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -104,7 +90,9 @@ class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     """
     permission_classes = [HasViewMethodPermissions]
     serializer_class = CompanySerializer
-    queryset = Company.objects.all()
+
+    def get_queryset(self):
+        return _company_list_queryset()
 
     def get_required_permissions(self, request):
         return {

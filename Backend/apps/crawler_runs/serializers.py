@@ -2,6 +2,13 @@ from rest_framework import serializers
 
 from .models import CrawlRun
 
+ALLOWED_SPIDER_ARGS = {
+    "max_pages",
+    "max_articles",
+    "mode",
+    "sample_offsets",
+}
+
 
 class CrawlRunSerializer(serializers.ModelSerializer):
     duration_seconds = serializers.SerializerMethodField()
@@ -90,6 +97,23 @@ class CrawlRunSerializer(serializers.ModelSerializer):
     def get_company_symbol(self, obj):
         return obj.company.symbol if obj.company else None
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+
+        if not (
+            user
+            and user.is_authenticated
+            and user.has_app_permission(
+                "view_crawl_logs"
+            )
+        ):
+            data.pop("logs", None)
+
+        return data
+
 
 class TriggerCrawlRequestSerializer(serializers.Serializer):
     crawl_type = serializers.ChoiceField(
@@ -117,3 +141,9 @@ class TriggerCrawlRequestSerializer(serializers.Serializer):
         required=False,
         default=dict,
     )
+
+    def validate_spider_args(self, value):
+        unknown = sorted(set(value) - ALLOWED_SPIDER_ARGS)
+        if unknown:
+            raise serializers.ValidationError(f"Unsupported spider_args: {unknown}")
+        return value

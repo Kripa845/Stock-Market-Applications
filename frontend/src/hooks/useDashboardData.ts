@@ -76,7 +76,7 @@ export function useDashboardData(_role: string | null) {
     const canViewCompanies = isAdmin || hasPermission('view_companies') || hasPermission('view_market_data');
     const canViewNews = isAdmin || hasPermission('view_news');
     const canViewCrawls = isAdmin || hasPermission('view_crawl_runs');
-    const canViewAnalysis = isAdmin || hasPermission('view_analysis') || hasPermission('view_market_data');
+    const canViewAnalysis = isAdmin || hasPermission('view_market_data');
     const canViewAdminDash = isAdmin || hasPermission('view_users') || hasPermission('view_crawl_runs');
 
     try {

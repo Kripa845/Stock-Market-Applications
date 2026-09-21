@@ -10,6 +10,8 @@ from .views import (
     CompanyPricesAPIView,
     CompanyToggleTrackAPIView,
 )
+from .views import CompanySectorsAPIView
+
 
 urlpatterns = [
     path(
@@ -59,5 +61,10 @@ path(
     "<int:pk>/news-price-correlation/",
     CompanyNewsPriceCorrelationAPIView.as_view(),
     name="company-news-price-correlation-spec",
+),
+path(
+    "sectors/",
+    CompanySectorsAPIView.as_view(),
+    name="company-sectors",
 ),
 ]

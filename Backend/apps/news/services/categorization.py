@@ -19,6 +19,11 @@ from django.db import transaction
 
 from apps.companies.models import Company
 from apps.news.models import ArticleCompanyTag, NewsArticle
+from apps.news.services.corrections import (
+    get_correction_map,
+    is_pinned,
+    is_suppressed,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +182,20 @@ def get_company_profiles_cache(force_refresh: bool = False) -> Dict[int, Dict[st
     Avoids recomputing company embeddings for every incoming article.
     """
     global _COMPANY_EMBEDDINGS_CACHE
+
+    # Staleness guard. The cache is a process-level global with no TTL, so
+    # a company added after the worker booted would otherwise never be
+    # categorized until the worker was restarted. Comparing the active
+    # company count is one cheap COUNT query and catches add/deactivate.
+    if _COMPANY_EMBEDDINGS_CACHE and not force_refresh:
+        current_count = Company.objects.filter(is_active=True).count()
+        if current_count != len(_COMPANY_EMBEDDINGS_CACHE):
+            logger.info(
+                "Company roster changed (%d cached vs %d active); refreshing.",
+                len(_COMPANY_EMBEDDINGS_CACHE),
+                current_count,
+            )
+            force_refresh = True
 
     if force_refresh or not _COMPANY_EMBEDDINGS_CACHE:
         companies = (
@@ -356,6 +375,191 @@ def calculate_hybrid_score(
 
 
 # ---------------------------------------------------------------------------
+# Evidence Tiers
+# ---------------------------------------------------------------------------
+#
+# WHY THE ORIGINAL THRESHOLDS NEEDED CHANGING
+# -------------------------------------------
+# The existing configuration is CATEGORIZATION_THRESHOLD=0.65 with
+# embedding weight 0.60 and keyword weight 0.40, combined as
+#
+#     final = 0.60 * semantic + 0.40 * lexical
+#
+# Two consequences fall straight out of that arithmetic:
+#
+# 1. A semantic-only match (lexical = 0) tops out at 0.60, which is below
+#    0.65. Semantic-only matching was therefore IMPOSSIBLE -- the
+#    embedding model could never tag anything on its own. The good news
+#    is that this also meant the "every generic market article tagged to
+#    every company" failure could not occur. The bad news is that the
+#    embedding layer was dead weight.
+#
+# 2. An exact ticker match in the headline scores lexical = 0.95, giving
+#    0.40 * 0.95 = 0.38. To clear 0.65 it still needed semantic >= 0.45.
+#    So an article whose headline literally names the ticker could be
+#    REJECTED because its prose did not resemble the company profile.
+#    That is the wrong way round: strong lexical evidence is the most
+#    reliable signal available and was being diluted by the weakest.
+#
+# The fix is to stop treating all evidence as one blended number and to
+# route each company through the strongest evidence that actually exists,
+# which is what "use stronger evidence when available" requires.
+#
+#     symbol        -- ticker matched          -> accept
+#     company_name  -- canonical name matched  -> accept
+#     alias         -- known alias matched     -> accept
+#     body_mention  -- matched in body only    -> accept (lower confidence)
+#     semantic_only -- no lexical match at all -> needs a HIGHER bar
+#
+# The weighted hybrid score is still computed and still stored, because
+# it is a useful ranking signal. It is simply no longer the sole gate.
+
+#: Semantic-only matches must clear this cosine similarity to be tagged.
+#: Higher than the hybrid threshold on purpose: with zero lexical
+#: evidence, the embedding is the only thing standing between a generic
+#: "market closes higher" article and a tag on every tracked company.
+DEFAULT_SEMANTIC_ONLY_THRESHOLD = 0.75
+
+#: Semantic-only matches between this and the threshold above are
+#: surfaced for human review rather than silently tagged or discarded.
+DEFAULT_SEMANTIC_REVIEW_FLOOR = 0.60
+
+MATCH_SYMBOL = "symbol"
+MATCH_COMPANY_NAME = "company_name"
+MATCH_ALIAS = "alias"
+MATCH_BODY_MENTION = "body_mention"
+MATCH_SEMANTIC_ONLY = "semantic_only"
+
+#: Relative reliability of each evidence type. Used to order tags and to
+#: floor the stored confidence, NOT as a probability.
+MATCH_STRENGTH = {
+    MATCH_SYMBOL: 0.95,
+    MATCH_COMPANY_NAME: 0.93,
+    MATCH_ALIAS: 0.85,
+    MATCH_BODY_MENTION: 0.70,
+    MATCH_SEMANTIC_ONLY: 0.65,
+}
+
+
+def classify_evidence(lexical_evidence: Dict[str, Any]) -> Tuple[Optional[str], bool]:
+    """
+    Reduce raw lexical evidence to a match type and a headline flag.
+
+    Returns ``(match_type, matched_in_headline)``; ``match_type`` is
+    ``None`` when there was no lexical match at all, which is the caller's
+    signal to fall through to the semantic-only path.
+    """
+    matched_terms = lexical_evidence.get("matched_terms") or []
+
+    if not matched_terms:
+        return None, False
+
+    in_headline = any(term.get("headline_count", 0) > 0 for term in matched_terms)
+
+    types = {term.get("type") for term in matched_terms}
+
+    if "symbol" in types:
+        strongest = MATCH_SYMBOL
+    elif "canonical_name" in types:
+        strongest = MATCH_COMPANY_NAME
+    elif "alias" in types:
+        strongest = MATCH_ALIAS
+    else:
+        strongest = MATCH_BODY_MENTION
+
+    # A match that appears only in the body is materially weaker than the
+    # same term in the headline: bodies quote peers, list sector tables
+    # and carry boilerplate.
+    if not in_headline and strongest in {MATCH_ALIAS, MATCH_BODY_MENTION}:
+        strongest = MATCH_BODY_MENTION
+
+    return strongest, in_headline
+
+
+def decide_company_match(
+    lexical_score: float,
+    lexical_evidence: Dict[str, Any],
+    semantic_similarity: float,
+    hybrid_score: float,
+    semantic_threshold: Optional[float] = None,
+    semantic_review_floor: Optional[float] = None,
+) -> Dict[str, Any]:
+    """
+    Decide whether one company should be tagged on one article.
+
+    Multi-label by construction: this is called once per company and each
+    company is judged on its own evidence, so an article can legitimately
+    carry several tags and evaluation never stops at the first match.
+
+    The returned ``confidence`` is a HEURISTIC SCORE, not a calibrated
+    probability. This project contains no labelled categorization dataset
+    and no calibration curve, so a 0.9 here does not mean "90% likely
+    correct" and must never be presented that way.
+    """
+    if semantic_threshold is None:
+        semantic_threshold = getattr(
+            settings,
+            "CATEGORIZATION_SEMANTIC_ONLY_THRESHOLD",
+            DEFAULT_SEMANTIC_ONLY_THRESHOLD,
+        )
+    if semantic_review_floor is None:
+        semantic_review_floor = getattr(
+            settings,
+            "CATEGORIZATION_SEMANTIC_REVIEW_FLOOR",
+            DEFAULT_SEMANTIC_REVIEW_FLOOR,
+        )
+
+    match_type, in_headline = classify_evidence(lexical_evidence)
+
+    # ---- Lexical evidence present: accept on the strongest tier found.
+    if match_type is not None:
+        floor = MATCH_STRENGTH[match_type]
+
+        # Keep the hybrid score as a ranking signal, but never let weak
+        # semantics drag a solid lexical match below its own tier.
+        confidence = round(max(hybrid_score, floor), 4)
+
+        return {
+            "accept": True,
+            "needs_review": False,
+            "match_type": match_type,
+            "matched_in_headline": in_headline,
+            "confidence": confidence,
+            "decision_basis": "lexical",
+        }
+
+    # ---- No lexical evidence: semantic-only path, higher bar.
+    if semantic_similarity >= semantic_threshold:
+        return {
+            "accept": True,
+            "needs_review": False,
+            "match_type": MATCH_SEMANTIC_ONLY,
+            "matched_in_headline": False,
+            "confidence": round(semantic_similarity, 4),
+            "decision_basis": "semantic_only",
+        }
+
+    if semantic_similarity >= semantic_review_floor:
+        return {
+            "accept": False,
+            "needs_review": True,
+            "match_type": MATCH_SEMANTIC_ONLY,
+            "matched_in_headline": False,
+            "confidence": round(semantic_similarity, 4),
+            "decision_basis": "semantic_only_weak",
+        }
+
+    return {
+        "accept": False,
+        "needs_review": False,
+        "match_type": None,
+        "matched_in_headline": False,
+        "confidence": round(hybrid_score, 4),
+        "decision_basis": "no_evidence",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main Categorization Pipeline
 # ---------------------------------------------------------------------------
 
@@ -412,11 +616,18 @@ def categorize_article(
         article.save(update_fields=["is_processed"])
         return []
 
-    # 4. Fetch existing tags for the article to respect manual corrections
+    # 4. Fetch existing tags AND the durable correction log.
+    #
+    # Existing tags alone are not enough. A removal deletes the tag row,
+    # so on the next run there is no tag left to carry is_manual=True and
+    # the model happily re-creates it. The correction log is the only
+    # place a removal survives, so it must be consulted here.
     existing_tags = {tag.company_id: tag for tag in article.company_tags.all()}
+    correction_map = get_correction_map(article)
 
     generated_tags: List[ArticleCompanyTag] = []
     tagged_company_symbols = []
+    review_candidates: List[Dict[str, Any]] = []
 
     with transaction.atomic():
         for company_id, comp_data in company_profiles.items():
@@ -434,52 +645,113 @@ def categorize_article(
             )
 
             existing_tag = existing_tags.get(company_id)
+            correction = correction_map.get(company_id)
 
-            # RULE: Manual correction takes precedence over automatic prediction
-            if existing_tag and existing_tag.is_manual:
-                logger.debug(
-                    "Article_id=%d company=%s has manual tag (confidence=%.2f); skipping overwrite.",
+            # RULE 1: a human REMOVED this company. Never recreate it.
+            # This is checked before anything else and does not depend on
+            # a tag row surviving, which is precisely why removals used
+            # to come back on every rerun.
+            if is_suppressed(correction):
+                logger.info(
+                    "Article_id=%d company=%s suppressed by manual removal "
+                    "(%s); automatic score %.2f ignored.",
                     article.id,
                     company.symbol,
-                    existing_tag.confidence,
+                    correction.corrected_at,
+                    final_confidence,
                 )
-                generated_tags.append(existing_tag)
+                if existing_tag and not existing_tag.is_manual:
+                    existing_tag.delete()
                 continue
 
-            # Independent threshold decision for each company
-            if final_confidence >= threshold:
+            # RULE 2: a human ADDED or UPDATED this tag. Preserve it
+            # verbatim, even when the model no longer predicts it.
+            if is_pinned(correction) or (existing_tag and existing_tag.is_manual):
+                if existing_tag:
+                    logger.debug(
+                        "Article_id=%d company=%s is manually pinned "
+                        "(confidence=%.2f); leaving untouched.",
+                        article.id,
+                        company.symbol,
+                        existing_tag.confidence,
+                    )
+                    generated_tags.append(existing_tag)
+                continue
+
+            # Independent decision for each company (multi-label): every
+            # company is judged on its own evidence and evaluation never
+            # short-circuits after the first match.
+            decision = decide_company_match(
+                lexical_score=lex_score,
+                lexical_evidence=lex_evidence,
+                semantic_similarity=semantic_sim,
+                hybrid_score=final_confidence,
+            )
+
+            if decision["accept"]:
                 evidence_payload = {
+                    # What kind of evidence carried the decision.
+                    "match_type": decision["match_type"],
+                    "matched_in_headline": decision["matched_in_headline"],
+                    "decision_basis": decision["decision_basis"],
+
+                    # Underlying signals, kept for auditability.
                     "lexical_score": lex_score,
                     "semantic_similarity": round(semantic_sim, 4),
-                    "final_score": final_confidence,
+                    "hybrid_score": final_confidence,
                     "weights": {
                         "embedding_weight": emb_weight,
                         "keyword_weight": kw_weight,
                     },
                     "lexical_evidence": lex_evidence,
+
+                    "score_interpretation": (
+                        "Heuristic confidence / similarity score. NOT a "
+                        "calibrated probability -- this project contains "
+                        "no labelled categorization dataset and no "
+                        "calibration curve."
+                    ),
                 }
 
                 tag, _ = ArticleCompanyTag.objects.update_or_create(
                     article=article,
                     company=company,
                     defaults={
-                        "confidence": final_confidence,
-                        "method": "hybrid",
+                        "confidence": decision["confidence"],
+                        "method": decision["match_type"],
                         "evidence": evidence_payload,
                         "is_manual": False,
                     },
                 )
                 generated_tags.append(tag)
-                tagged_company_symbols.append(f"{company.symbol}({final_confidence:.2f})")
+                tagged_company_symbols.append(
+                    f"{company.symbol}({decision['confidence']:.2f}"
+                    f"/{decision['match_type']})"
+                )
             else:
-                # Remove automatic tag if it previously existed but now falls below threshold
+                if decision["needs_review"]:
+                    logger.info(
+                        "Weak semantic-only match article_id=%d company=%s "
+                        "(similarity %.2f) -- flagged for review, not tagged.",
+                        article.id,
+                        company.symbol,
+                        semantic_sim,
+                    )
+                    review_candidates.append({
+                        "company": company.symbol,
+                        "similarity": round(semantic_sim, 4),
+                    })
+
+                # Remove a stale automatic tag that no longer qualifies.
+                # Manual tags are unreachable here: they were handled by
+                # the precedence rules above and skipped with `continue`.
                 if existing_tag and not existing_tag.is_manual:
                     logger.info(
-                        "Removing auto tag article_id=%d company=%s (confidence %.2f < threshold %.2f)",
+                        "Removing auto tag article_id=%d company=%s "
+                        "(no qualifying evidence; hybrid %.2f)",
                         article.id,
                         company.symbol,
                         final_confidence,
-                        threshold,
                     )
                     existing_tag.delete()
 
@@ -495,9 +767,10 @@ def categorize_article(
         )
     else:
         logger.warning(
-            "No company matched article_id=%d above threshold=%.2f (needs_review=True)",
+            "No company matched article_id=%d (needs_review=True). "
+            "Weak semantic candidates: %s",
             article.id,
-            threshold,
+            review_candidates or "none",
         )
 
     return generated_tags

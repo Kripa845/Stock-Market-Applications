@@ -6,6 +6,8 @@ from .views import (
     DashboardSummaryAPIView,
     ViewerDashboardAPIView,
 )
+from .export_views import ExportDataAPIView
+
 
 urlpatterns = [
     path(
@@ -31,4 +33,10 @@ urlpatterns = [
         ViewerDashboardAPIView.as_view(),
         name="viewer-dashboard",
     ),
+    
+    path(
+    "export/",
+    ExportDataAPIView.as_view(),
+    name="report-export",
+),
 ]

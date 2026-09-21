@@ -1,26 +1,7 @@
 // ── Company & Market Data ─────────────────────────────────────────────
-
-export interface Company {
-  id: number;
-  symbol: string;
-  name: string;
-  sector: string;
-  is_active: boolean;
-  aliases?: string[];
-  is_tracked?: boolean;
-  latest_price: number;
-  price_change: number;
-  price_change_percent: number;
-  volume_24h: number;
-  turnover_24h: number;
-  high_24h: number;
-  low_24h: number;
-  news_count: number;
-  sentiment_score: number;
-  sparkline: number[];
-  last_crawl?: string | null;
-  last_crawl_status?: string | null;
-}
+// Company is defined in ./company.ts — re-exported here for backwards
+// compatibility with files that import from '../types'.
+export type { Company } from './company';
 
 export interface DailyPrice {
   id: number;
@@ -104,91 +85,23 @@ export interface NewsStats {
 
 
 // ── Analysis ──────────────────────────────────────────────────────────
-
-export type Pressure = 'buying' | 'selling' | 'neutral';
-
-export interface DailyAnalysis {
-  id: number;
-  company: number;
-  symbol: string;
-  company_name: string;
-  date: string;
-  vwap: string | null;
-  close_price: string;
-  volume: number;
-  volume_average: string | null;
-  volume_anomaly: boolean;
-  pressure: Pressure;
-  news_count: number;
-  created_at: string;
-}
-
-export interface BehaviorSummary {
-  company_id: number;
-  symbol: string;
-  company_name: string;
-  latest_close: string | null;
-  latest_vwap: string | null;
-  current_pressure: Pressure | null;
-  volume_anomaly_days: number;
-  anomaly_threshold_multiplier: number;
-  avg_daily_volume: number | null;
-  daily_analysis: DailyAnalysis[];
-}
-
-export interface NewsPriceCorrelation {
-  date: string;
-  news_count: number;
-  avg_sentiment: number | null;
-  next_day_price_change_pct: number | null;
-  next_day_volume_change_pct: number | null;
-  pressure: Pressure | null;
-}
-
-export interface BrokerRow {
-  buyer_broker?: string;
-  seller_broker?: string;
-  total_quantity: number;
-  total_amount: number;
-  transaction_count: number;
-}
-
-export interface TopBrokers {
-  company_id: number;
-  symbol: string;
-  top_buyers: BrokerRow[];
-  top_sellers: BrokerRow[];
-}
-
-export interface CompanyBehaviorOverview {
-  company_id: number;
-  symbol: string;
-  company_name: string;
-  sector: string;
-  latest_close: number | null;
-  latest_vwap: number | null;
-  pressure: Pressure;
-  volume_anomaly: boolean;
-  anomaly_count_30d: number;
-  total_news: number;
-}
+// These types are re-exported from api/analysis.ts which is the
+// single source of truth for analysis-related shapes.
+// Kept here only for backwards-compatibility with existing imports.
+export type { PressureLabel as Pressure } from '../api/analysis';
+export type {
+  DailyAnalysis,
+  BehaviorSummary,
+  NewsPriceCorrelation,
+  CompanyStat as CompanyBehaviorOverview,
+  BrokerActivity as BrokerRow,
+  CrossCompanyAnalysis,
+} from '../api/analysis';
 
 // ── Crawler ───────────────────────────────────────────────────────────
-
-export type CrawlStatus = 'running' | 'success' | 'failed' | 'pending' | 'cancelled';
-
-export interface CrawlRun {
-  id: number;
-  status: CrawlStatus;
-  sources: string[];
-  started_at: string;
-  completed_at: string | null;
-  duration_seconds: number | null;
-  articles_found: number;
-  articles_created: number;
-  articles_updated: number;
-  errors: string | null;
-}
+// CrawlStatus, CrawlType, and CrawlRun are defined in ./crawl.ts —
+// re-exported here for backwards compatibility.
+export type { CrawlStatus, CrawlType, CrawlRun } from './crawl';
 
 // ── Auth ──────────────────────────────────────────────────────────────
 

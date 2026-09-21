@@ -86,6 +86,81 @@ VALID_PERMISSION_KEYS = {
 
 
 # ============================================================
+# PERMISSION DEPENDENCY RULES
+# ============================================================
+# Derived directly from ROLE_PERMISSIONS so the single source
+# of truth is always the group definition above.
+#
+# Within every group, permission[i] requires ALL permissions
+# at positions 0…i-1.  Topics are independent of each other.
+#
+# Structure: { "permission_key": ["required_key_1", ...], ... }
+
+def _build_dependencies() -> dict:
+    deps: dict = {}
+    for group in ROLE_PERMISSIONS.values():
+        keys = [p["key"] for p in group]
+        for idx, key in enumerate(keys):
+            # permissions[0] has no prerequisites
+            deps[key] = keys[:idx]   # empty list for idx == 0
+    return deps
+
+
+PERMISSION_DEPENDENCIES: dict = _build_dependencies()
+
+
+def validate_permission_dependencies(
+    permissions: list,
+) -> list:
+    """
+    Validate that every permission in *permissions* has all of its
+    required prerequisites also present in *permissions*.
+
+    Returns a list of human-readable error messages.
+    An empty list means the combination is valid.
+
+    The dependency chain is derived from the position of each
+    permission inside its group in ROLE_PERMISSIONS:
+
+        group.permissions[i] requires group.permissions[0..i-1]
+
+    Topics are independent — a permission in "users" has NO
+    dependency on any permission in "companies", etc.
+
+    Examples (users group):
+        ["view_users"]                         → valid
+        ["view_users", "create_users"]         → valid
+        ["edit_users"]                         → INVALID (needs view + create)
+        ["view_users", "edit_users"]           → INVALID (needs create)
+        ["view_users", "create_users",
+         "delete_users"]                       → INVALID (needs edit)
+    """
+    perm_set = set(permissions)
+    errors = []
+
+    # Build a reverse map: key → human-readable name
+    key_to_name: dict = {
+        p["key"]: p["name"]
+        for group in ROLE_PERMISSIONS.values()
+        for p in group
+    }
+
+    for perm_key in permissions:
+        required = PERMISSION_DEPENDENCIES.get(perm_key, [])
+        missing = [r for r in required if r not in perm_set]
+        if missing:
+            perm_name = key_to_name.get(perm_key, perm_key)
+            missing_names = ", ".join(
+                key_to_name.get(m, m) for m in missing
+            )
+            errors.append(
+                f"{perm_name} requires: {missing_names}."
+            )
+
+    return errors
+
+
+# ============================================================
 # JWT
 # ============================================================
 
@@ -117,9 +192,101 @@ class CustomTokenObtainPairSerializer(
 # REGISTRATION
 # ============================================================
 
-class UserRegistrationSerializer(
-    serializers.ModelSerializer
-):
+# class UserRegistrationSerializer(
+#     serializers.ModelSerializer
+# ):
+#     password = serializers.CharField(
+#         write_only=True,
+#         min_length=6,
+#     )
+
+#     password_confirm = serializers.CharField(
+#         write_only=True,
+#     )
+
+#     role = serializers.ChoiceField(
+#         choices=User.Role.choices,
+#         default=User.Role.VIEWER,
+#         required=False,
+#     )
+
+#     class Meta:
+#         model = User
+
+#         fields = [
+#             "id",
+#             "username",
+#             "email",
+#             "password",
+#             "password_confirm",
+#             "first_name",
+#             "last_name",
+#             "role",
+#         ]
+
+#         read_only_fields = ["id"]
+
+#     def validate_email(self, value):
+#         return value.lower().strip()
+
+#     def validate(self, attrs):
+#         if attrs["password"] != attrs["password_confirm"]:
+#             raise serializers.ValidationError(
+#                 {
+#                     "password_confirm":
+#                     "Passwords do not match."
+#                 }
+#             )
+
+#         return attrs
+
+#     def create(self, validated_data):
+#         validated_data.pop(
+#             "password_confirm"
+#         )
+
+#         password = validated_data.pop(
+#             "password"
+#         )
+
+#         user = User(
+#             **validated_data,
+#         )
+
+#         user.set_password(password)
+#         user.save()
+
+#         return user
+
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6)
+    password_confirm = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "password", "password_confirm",
+                  "first_name", "last_name"]          # no "role": self-registration is always Viewer
+        read_only_fields = ["id"]
+
+    def validate_email(self, value):
+        return value.lower().strip()
+
+    def validate(self, attrs):
+        if attrs["password"] != attrs["password_confirm"]:
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+        return attrs
+
+    def create(self, validated_data):
+        validated_data.pop("password_confirm")
+        password = validated_data.pop("password")
+        user = User(**validated_data, role=User.Role.VIEWER)
+        user.set_password(password)
+        user.save()
+        return user
+# ============================================================
+# ADMIN USER CREATE
+# ============================================================
+class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(
         write_only=True,
         min_length=6,
@@ -129,15 +296,8 @@ class UserRegistrationSerializer(
         write_only=True,
     )
 
-    role = serializers.ChoiceField(
-        choices=User.Role.choices,
-        default=User.Role.VIEWER,
-        required=False,
-    )
-
     class Meta:
         model = User
-
         fields = [
             "id",
             "username",
@@ -146,9 +306,7 @@ class UserRegistrationSerializer(
             "password_confirm",
             "first_name",
             "last_name",
-            "role",
         ]
-
         read_only_fields = ["id"]
 
     def validate_email(self, value):
@@ -156,38 +314,26 @@ class UserRegistrationSerializer(
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError(
-                {
-                    "password_confirm":
-                    "Passwords do not match."
-                }
-            )
+            raise serializers.ValidationError({
+                "password_confirm": "Passwords do not match."
+            })
 
         return attrs
 
     def create(self, validated_data):
-        validated_data.pop(
-            "password_confirm"
-        )
+        validated_data.pop("password_confirm")
 
-        password = validated_data.pop(
-            "password"
-        )
+        password = validated_data.pop("password")
 
         user = User(
             **validated_data,
+            role=User.Role.VIEWER,
         )
 
         user.set_password(password)
         user.save()
 
         return user
-
-
-# ============================================================
-# ADMIN USER CREATE
-# ============================================================
-
 class AdminUserCreateSerializer(
     serializers.ModelSerializer
 ):
@@ -519,6 +665,11 @@ class CustomRoleSerializer(
                 }
             )
 
+        # Dependency validation — prerequisites must also be present
+        dep_errors = validate_permission_dependencies(value)
+        if dep_errors:
+            raise serializers.ValidationError(dep_errors)
+
         return list(dict.fromkeys(value))
 
 
@@ -569,6 +720,11 @@ class RolePermissionConfigSerializer(
                     "invalid_permissions": invalid
                 }
             )
+
+        # Dependency validation — prerequisites must also be present
+        dep_errors = validate_permission_dependencies(value)
+        if dep_errors:
+            raise serializers.ValidationError(dep_errors)
 
         return list(dict.fromkeys(value))
 

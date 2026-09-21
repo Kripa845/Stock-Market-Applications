@@ -1,23 +1,32 @@
+// src/App.tsx
+
+import React from 'react';
 import {
   Routes,
   Route,
   Navigate,
   useLocation,
 } from 'react-router-dom';
+
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+
 import PermissionRefreshOnRouteChange from './components/PermissionRefreshOnRouteChange';
 
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegistrationPage';
+
 import Layout from './components/layout/Layout';
 
 import Dashboard from './pages/Dashboard';
 import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
+
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
+import WatchlistComparison from './pages/WatchlistComparison';
 import WatchlistPage from './pages/admin/WatchlistPage';
 import RolesPermissionsPage from './pages/admin/RolesPermissionPage';
+
 import CrawlerStatusPage from './pages/CrawlerStatus';
 import MarketPage from './pages/Market';
 import StockDetail from './pages/StockDetail';
@@ -25,45 +34,77 @@ import NewsPage from './pages/News';
 import NewsDetail from './pages/NewsDetail';
 import TradingPage from './pages/Trading';
 import ReportsComingSoon from './pages/ReportsComingSoon';
+
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFound from './pages/NotFound';
 
+import type { RouteRule } from './config/routePermissions';
+import { ROUTE_RULES } from './config/routePermissions';
 
-// ============================================================
-// PRIVATE ROUTE — must be authenticated (token present)
-// ============================================================
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+
+/* =========================================================
+   PRIVATE ROUTE
+========================================================= */
+
+function PrivateRoute({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const token = localStorage.getItem('access_token');
   const location = useLocation();
 
   if (!token) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return (
+      <Navigate
+        to="/login"
+        state={{ from: location }}
+        replace
+      />
+    );
   }
 
   return <>{children}</>;
 }
 
 
-// ============================================================
-// PERMISSION ROUTE — authenticated + must hold permission(s)
-// Shows 403 page on denial instead of silently redirecting.
-// ============================================================
-interface PermissionRouteProps {
-  requiredPermissions?: string[];
-  /** Require ALL listed permissions (default: ANY one suffices) */
-  mode?: 'any' | 'all';
-  children: React.ReactNode;
+/* =========================================================
+   ROLE REDIRECT
+========================================================= */
+
+function RoleRedirect() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
 }
 
-function PermissionRoute({
-  requiredPermissions,
-  mode = 'any',
-  children,
-}: PermissionRouteProps) {
-  const { user, loading, hasAnyPermission, hasAllPermissions } =
-    useAuth();
 
-  // Show nothing while auth is initialising to avoid flash of unauthorised UI
+/* =========================================================
+   PERMISSION ROUTE
+========================================================= */
+
+function PermissionRoute({
+  rule,
+  children,
+}: {
+  rule?: RouteRule;
+  children: React.ReactNode;
+}) {
+  const {
+    user,
+    loading,
+    hasAnyPermission,
+    hasAllPermissions,
+  } = useAuth();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -76,25 +117,26 @@ function PermissionRoute({
     return <Navigate to="/login" replace />;
   }
 
-  // No restrictions declared — any authenticated user may pass
-  if (!requiredPermissions || requiredPermissions.length === 0) {
+  /*
+   * No rule means the route does not require
+   * an application permission.
+   */
+  if (!rule || rule.permissions.length === 0) {
     return <>{children}</>;
   }
 
   const allowed =
-    mode === 'all'
-      ? hasAllPermissions(requiredPermissions)
-      : hasAnyPermission(requiredPermissions);
+    rule.mode === 'all'
+      ? hasAllPermissions(rule.permissions)
+      : hasAnyPermission(rule.permissions);
 
   if (!allowed) {
-    const desc =
-      requiredPermissions.length === 1
-        ? requiredPermissions[0]
-        : requiredPermissions.join(', ');
+    const description = rule.permissions.join(', ');
+
     return (
       <ForbiddenPage
-        requiredPermission={desc}
-        message={`You do not have the required permission(s): ${desc}`}
+        requiredPermission={description}
+        message={`You do not have the required permission(s): ${description}`}
       />
     );
   }
@@ -103,39 +145,51 @@ function PermissionRoute({
 }
 
 
-// ============================================================
-// ROLE REDIRECT — after login, send users to /dashboard
-// ============================================================
-function RoleRedirect() {
-  const { user, loading } = useAuth();
+/* =========================================================
+   APPLICATION
+========================================================= */
 
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
-
-  // All roles now share a single /dashboard route
-  return <Navigate to="/dashboard" replace />;
-}
-
-
-// ============================================================
-// APPLICATION
-// ============================================================
-export default function App() {
+function AppRoutes() {
   return (
-    <AuthProvider>
+    <>
       <PermissionRefreshOnRouteChange />
+
       <Routes>
 
-        {/* ================================================
-            PUBLIC
-            ================================================ */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* =================================================
+            PUBLIC ROUTES
+        ================================================= */}
 
-        {/* ================================================
-            AUTHENTICATED — all roles inside a shared Layout
-            ================================================ */}
+        <Route
+          path="/"
+          element={<LandingPage />}
+        />
+
+        <Route
+          path="/login"
+          element={<LoginPage />}
+        />
+
+        <Route
+          path="/register"
+          element={<RegisterPage />}
+        />
+
+
+        {/* =================================================
+            ROLE / AUTH REDIRECT
+        ================================================= */}
+
+        <Route
+          path="/role-redirect"
+          element={<RoleRedirect />}
+        />
+
+
+        {/* =================================================
+            PROTECTED APPLICATION ROUTES
+        ================================================= */}
+
         <Route
           element={
             <PrivateRoute>
@@ -143,182 +197,325 @@ export default function App() {
             </PrivateRoute>
           }
         >
-          {/* Dashboard — single unified permission-driven page */}
-          <Route path="/dashboard" element={<Dashboard />} />
 
-          {/* Legacy role-prefixed dashboard redirects */}
-          <Route path="/admin"    element={<RoleRedirect />} />
-          <Route path="/analyst"  element={<RoleRedirect />} />
-          <Route path="/viewer"   element={<RoleRedirect />} />
+          {/* -----------------------------------------------
+              DASHBOARD
+          ----------------------------------------------- */}
 
-          {/* ---- Market Data ---- */}
+          <Route
+            path="/dashboard"
+            element={<Dashboard />}
+          />
+
+
+          {/* -----------------------------------------------
+              MARKET
+          ----------------------------------------------- */}
+
           <Route
             path="/market"
             element={
-              <PermissionRoute requiredPermissions={['view_market_data']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/market']}
+              >
                 <MarketPage />
               </PermissionRoute>
             }
           />
-          <Route
-            path="/trading"
-            element={
-              <PermissionRoute requiredPermissions={['view_market_data', 'view_trading_volume']}>
-                <TradingPage />
-              </PermissionRoute>
-            }
-          />
 
-          {/* ---- Companies / Stocks ---- */}
+
+          {/* -----------------------------------------------
+              COMPANIES
+          ----------------------------------------------- */}
+
           <Route
             path="/companies"
             element={
-              <PermissionRoute requiredPermissions={['view_companies']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/companies']}
+              >
                 <CompaniesPage />
               </PermissionRoute>
             }
           />
+
           <Route
             path="/companies/:symbol"
             element={
-              <PermissionRoute requiredPermissions={['view_companies']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/companies/:symbol']}
+              >
                 <StockDetail />
               </PermissionRoute>
             }
           />
 
-          {/* ---- Watchlist ---- */}
-          <Route
-            path="/watchlist"
-            element={
-              <PermissionRoute requiredPermissions={['view_watchlist']}>
-                <WatchlistPage />
-              </PermissionRoute>
-            }
-          />
 
-          {/* ---- News ---- */}
-          <Route
-            path="/news"
-            element={
-              <PermissionRoute requiredPermissions={['view_news']}>
-                <NewsPage />
-              </PermissionRoute>
-            }
-          />
-          <Route
-            path="/news/:id"
-            element={
-              <PermissionRoute requiredPermissions={['view_news']}>
-                <NewsDetail />
-              </PermissionRoute>
-            }
-          />
+          {/* -----------------------------------------------
+              TRADING
+          ----------------------------------------------- */}
 
-          {/* ---- Crawlers ---- */}
           <Route
-            path="/crawl"
+            path="/trading"
             element={
-              <PermissionRoute requiredPermissions={['view_crawl_runs']}>
-                <CrawlerStatusPage />
-              </PermissionRoute>
-            }
-          />
-
-          {/* ---- Analysis / Analytics ---- */}
-          <Route
-            path="/analytics"
-            element={
-              <PermissionRoute requiredPermissions={['view_analysis']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/trading']}
+              >
                 <TradingPage />
               </PermissionRoute>
             }
           />
 
-          {/* ---- Company Behavior Analysis Dashboard ---- */}
+
+          {/* -----------------------------------------------
+              ANALYTICS
+          ----------------------------------------------- */}
+
+          <Route
+            path="/analytics"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/analytics']}
+              >
+                <TradingPage />
+              </PermissionRoute>
+            }
+          />
+
+
+          {/* -----------------------------------------------
+              COMPANY ANALYSIS
+          ----------------------------------------------- */}
+
           <Route
             path="/company-analysis"
             element={
-              <PermissionRoute requiredPermissions={['view_analysis', 'view_market_data']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/company-analysis']}
+              >
                 <CompanyAnalysisDashboard />
               </PermissionRoute>
             }
           />
 
-          {/* ---- Reports ---- */}
+
+          {/* -----------------------------------------------
+              WATCHLIST COMPARISON
+          ----------------------------------------------- */}
+
+          <Route
+            path="/watchlist-comparison"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/watchlist-comparison']}
+              >
+                <WatchlistComparison />
+              </PermissionRoute>
+            }
+          />
+
+
+          {/* -----------------------------------------------
+              WATCHLIST
+          ----------------------------------------------- */}
+
+          <Route
+            path="/watchlist"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/watchlist']}
+              >
+                <WatchlistPage />
+              </PermissionRoute>
+            }
+          />
+
+
+          {/* -----------------------------------------------
+              NEWS
+          ----------------------------------------------- */}
+
+          <Route
+            path="/news"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/news']}
+              >
+                <NewsPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/news/:id"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/news']}
+              >
+                <NewsDetail />
+              </PermissionRoute>
+            }
+          />
+
+
+          {/* -----------------------------------------------
+              CRAWL MANAGEMENT
+          ----------------------------------------------- */}
+
+          <Route
+            path="/crawl"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/crawl']}
+              >
+                <CrawlerStatusPage />
+              </PermissionRoute>
+            }
+          />
+
+
+          {/* -----------------------------------------------
+              REPORTS
+          ----------------------------------------------- */}
+
           <Route
             path="/reports"
             element={
-              <PermissionRoute requiredPermissions={['view_reports']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/reports']}
+              >
                 <ReportsComingSoon />
               </PermissionRoute>
             }
           />
 
-          {/* ---- User Management ---- */}
+
+          {/* -----------------------------------------------
+              USER MANAGEMENT
+          ----------------------------------------------- */}
+
           <Route
             path="/users"
             element={
-              <PermissionRoute requiredPermissions={['view_users']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/users']}
+              >
                 <UserManagementPage />
               </PermissionRoute>
             }
           />
 
-          {/* ---- Roles & Permissions ---- */}
+
+          {/* -----------------------------------------------
+              ROLES & PERMISSIONS
+          ----------------------------------------------- */}
+
           <Route
             path="/roles-permissions"
             element={
-              <PermissionRoute requiredPermissions={['view_roles']}>
+              <PermissionRoute
+                rule={ROUTE_RULES['/roles-permissions']}
+              >
                 <RolesPermissionsPage />
               </PermissionRoute>
             }
           />
 
-          {/* ---- Legacy role-namespaced paths — redirect to unified paths ---- */}
-          <Route path="/admin/companies"        element={<Navigate to="/companies" replace />} />
-          <Route path="/admin/watchlist"         element={<Navigate to="/watchlist" replace />} />
-          <Route path="/admin/users"             element={<Navigate to="/users" replace />} />
-          <Route path="/admin/roles-permissions" element={<Navigate to="/roles-permissions" replace />} />
-          <Route path="/admin/news"              element={<Navigate to="/news" replace />} />
-          <Route path="/admin/news/:id"          element={<Navigate to="/news/:id" replace />} />
-          <Route path="/admin/crawl"             element={<Navigate to="/crawl" replace />} />
-          <Route path="/admin/crawl-runs"        element={<Navigate to="/crawl" replace />} />
-          <Route path="/admin/reports"           element={<Navigate to="/reports" replace />} />
-          <Route path="/admin/analysts"          element={<Navigate to="/users" replace />} />
 
-          <Route path="/analyst/market"          element={<Navigate to="/market" replace />} />
-          <Route path="/analyst/companies"       element={<Navigate to="/companies" replace />} />
-          <Route path="/analyst/stocks"          element={<Navigate to="/companies" replace />} />
-          <Route path="/analyst/stocks/:symbol"  element={<Navigate to="/companies/:symbol" replace />} />
-          <Route path="/analyst/news"            element={<Navigate to="/news" replace />} />
-          <Route path="/analyst/news/:id"        element={<Navigate to="/news/:id" replace />} />
-          <Route path="/analyst/trading"         element={<Navigate to="/trading" replace />} />
-          <Route path="/analyst/watchlist"       element={<Navigate to="/watchlist" replace />} />
-          <Route path="/analyst/analytics"       element={<Navigate to="/analytics" replace />} />
-          <Route path="/analyst/reports"         element={<Navigate to="/reports" replace />} />
+          {/* =================================================
+              LEGACY ROUTES / REDIRECTS
+          ================================================= */}
 
-          <Route path="/viewer/market"           element={<Navigate to="/market" replace />} />
-          <Route path="/viewer/companies"        element={<Navigate to="/companies" replace />} />
-          <Route path="/viewer/stocks"           element={<Navigate to="/companies" replace />} />
-          <Route path="/viewer/stocks/:symbol"   element={<Navigate to="/companies/:symbol" replace />} />
-          <Route path="/viewer/news"             element={<Navigate to="/news" replace />} />
-          <Route path="/viewer/news/:id"         element={<Navigate to="/news/:id" replace />} />
-          <Route path="/viewer/trading"          element={<Navigate to="/trading" replace />} />
-          <Route path="/viewer/watchlist"        element={<Navigate to="/watchlist" replace />} />
-          <Route path="/viewer/analytics"        element={<Navigate to="/analytics" replace />} />
-          <Route path="/viewer/reports"          element={<Navigate to="/reports" replace />} />
+          <Route
+            path="/admin"
+            element={<Navigate to="/dashboard" replace />}
+          />
 
-          <Route path="/stocks/:symbol"          element={<Navigate to="/companies/:symbol" replace />} />
+          <Route
+            path="/admin/dashboard"
+            element={<Navigate to="/dashboard" replace />}
+          />
 
-          {/* ---- 403 Forbidden ---- */}
-          <Route path="/forbidden" element={<ForbiddenPage />} />
+          <Route
+            path="/admin/users"
+            element={<Navigate to="/users" replace />}
+          />
+
+          <Route
+            path="/admin/companies"
+            element={<Navigate to="/companies" replace />}
+          />
+
+          <Route
+            path="/admin/watchlist"
+            element={<Navigate to="/watchlist" replace />}
+          />
+
+          <Route
+            path="/admin/news"
+            element={<Navigate to="/news" replace />}
+          />
+
+          <Route
+            path="/admin/crawl"
+            element={<Navigate to="/crawl" replace />}
+          />
+
+          <Route
+            path="/admin/reports"
+            element={<Navigate to="/reports" replace />}
+          />
+
+          <Route
+            path="/admin/roles-permissions"
+            element={
+              <Navigate
+                to="/roles-permissions"
+                replace
+              />
+            }
+          />
+
+          <Route
+            path="/analyst/stocks"
+            element={<Navigate to="/companies" replace />}
+          />
+
+          <Route
+            path="/analyst/trading"
+            element={<Navigate to="/trading" replace />}
+          />
+
+          <Route
+            path="/analyst/news"
+            element={<Navigate to="/news" replace />}
+          />
+
+
+          {/* =================================================
+              FALLBACK
+          ================================================= */}
+
+          <Route
+            path="*"
+            element={<NotFound />}
+          />
+
         </Route>
-
-        {/* 404 */}
-        <Route path="*" element={<NotFound />} />
-
       </Routes>
+    </>
+  );
+}
+
+
+/* =========================================================
+   APP PROVIDER
+========================================================= */
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
     </AuthProvider>
   );
 }

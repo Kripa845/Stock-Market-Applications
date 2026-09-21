@@ -1,5 +1,5 @@
-
 import axios from 'axios';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
@@ -8,72 +8,61 @@ const BASE_URL =
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT access token
+const AUTH_PATHS = ['/users/login/', '/users/token/refresh/', '/users/register/'];
+const isAuthPath = (url?: string) => !!url && AUTH_PATHS.some((p) => url.includes(p));
+
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Automatically refresh expired access token
+let refreshPromise: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  if (!refreshPromise) {
+    const refresh = localStorage.getItem('refresh_token');
+    if (!refresh) return Promise.reject(new Error('No refresh token'));
+    refreshPromise = axios
+      .post(`${BASE_URL}/users/token/refresh/`, { refresh })
+      .then((res) => {
+        localStorage.setItem('access_token', res.data.access);
+        // ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION: the old refresh token is now dead.
+        if (res.data.refresh) localStorage.setItem('refresh_token', res.data.refresh);
+        return res.data.access as string;
+      })
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
+  async (error: AxiosError) => {
+    const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
+    const status = error.response?.status;
 
-  async (error) => {
-    const originalRequest = error.config;
-
-    if (
-      error.response?.status === 401 &&
-      !originalRequest?._retry
-    ) {
-      originalRequest._retry = true;
-
-      const refreshToken =
-        localStorage.getItem('refresh_token');
-
-      if (!refreshToken) {
+    if (status === 401 && original && !original._retry && !isAuthPath(original.url)) {
+      original._retry = true;
+      try {
+        const token = await refreshAccessToken();
+        original.headers.Authorization = `Bearer ${token}`;
+        return apiClient(original);
+      } catch {
         localStorage.clear();
         window.location.href = '/login';
         return Promise.reject(error);
       }
-
-      try {
-        const response = await axios.post(
-          `${BASE_URL}/users/token/refresh/`,
-          {
-            refresh: refreshToken,
-          }
-        );
-
-        const newAccessToken = response.data.access;
-
-        localStorage.setItem(
-          'access_token',
-          newAccessToken
-        );
-
-        originalRequest.headers.Authorization =
-          `Bearer ${newAccessToken}`;
-
-        return apiClient(originalRequest);
-      } catch {
-        localStorage.clear();
-        window.location.href = '/login';
-      }
     }
 
+    if (status === 403 && !isAuthPath(original?.url)) {
+      window.dispatchEvent(new CustomEvent('auth:forbidden')); // AuthContext re-fetches permissions
+    }
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;
-

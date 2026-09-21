@@ -14,7 +14,6 @@ const RegisterPage: React.FC = () => {
     email: string;
     password: string;
     password_confirm: string;
-    role: 'viewer' | 'analyst' | 'admin';
   }>({
     first_name: '',
     last_name: '',
@@ -22,7 +21,6 @@ const RegisterPage: React.FC = () => {
     email: '',
     password: '',
     password_confirm: '',
-    role: 'viewer',
   });
 
   const [showPassword, setShowPassword] = useState(false);
@@ -269,28 +267,6 @@ const RegisterPage: React.FC = () => {
                 className="input text-black bg-white placeholder:text-gray-400"
                 placeholder="you@example.com"
               />
-            </div>
-
-            {/* Role */}
-            <div>
-              <label className="label">
-                Role
-              </label>
-
-              <select
-                name="role"
-                value={form.role}
-                onChange={handleChange}
-                className="input text-black bg-white"
-              >
-                <option value="viewer">
-                  Viewer
-                </option>
-
-                <option value="analyst">
-                  Analyst
-                </option>
-              </select>
             </div>
 
             {/* Password */}

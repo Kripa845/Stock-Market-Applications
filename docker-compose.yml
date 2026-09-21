@@ -1,0 +1,160 @@
+version: "3.9"
+
+# ── StockScope — docker-compose.yml ──────────────────────────────────────────
+#
+#  Services
+#  ─────────
+#  db          PostgreSQL 16
+#  redis       Redis 7 (Celery broker + result backend)
+#  backend     Django (gunicorn in prod, runserver in dev)
+#  worker      Celery worker  --pool=solo (Windows-safe)
+#  beat        Celery Beat scheduler
+#  frontend    Vite → nginx static bundle
+#
+#  Quick start
+#  ────────────
+#  1.  cp .env.example .env          # fill in real values
+#  2.  docker compose up --build
+#
+#  First run only (runs migrations + seeds companies):
+#  3.  docker compose exec backend python manage.py migrate
+#  4.  docker compose exec backend python manage.py seed_companies
+#
+#  To create a superuser:
+#  5.  docker compose exec backend python manage.py createsuperuser
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_DB:       ${DB_NAME}
+      POSTGRES_USER:     ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # ── Django backend ─────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override localhost defaults from settings.py
+      DB_HOST:              db
+      CELERY_BROKER_URL:    redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL:            redis://redis:6379/0
+    volumes:
+      # Mount source for live reload in development; remove in production
+      - ./Backend:/app
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+        python manage.py migrate --noinput &&
+        python manage.py runserver 0.0.0.0:8000
+      "
+
+  # ── Celery worker ──────────────────────────────────────────────────────────
+  # --pool=solo is required on Windows and works on Linux too.
+  # Switch to --pool=prefork on Linux if you want higher concurrency.
+  worker:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST:               db
+      CELERY_BROKER_URL:     redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL:             redis://redis:6379/0
+    volumes:
+      - ./Backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: >
+      celery -A config worker
+        --pool=solo
+        --queues=crawling
+        --loglevel=info
+        --concurrency=1
+
+  # ── Celery Beat ────────────────────────────────────────────────────────────
+  beat:
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST:               db
+      CELERY_BROKER_URL:     redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      REDIS_URL:             redis://redis:6379/0
+    volumes:
+      - ./Backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    command: >
+      celery -A config beat
+        --loglevel=info
+        --scheduler django_celery_beat.schedulers:DatabaseScheduler
+
+  # ── React / Vite frontend ──────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Must match BACKEND_PORT + hostname accessible from the browser.
+        # In a local Docker setup the browser hits localhost, not the container name.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+
+# ── Named volumes ──────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:

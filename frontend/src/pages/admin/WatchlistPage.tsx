@@ -38,9 +38,11 @@ export default function WatchlistPage() {
     try {
       const response = await getCompanies({ tracked_only: true });
       const trackedCompanies = response.results;
+      const canPrices = hasPermission('view_price_history');
+      const canFloor = hasPermission('view_market_data');
       const loaded = await Promise.all(trackedCompanies.map(async (company) => {
-        const priceData = await stocksApi.getPrices(company.id, '30d');
-        const floorData = await stocksApi.getFloorsheet(company.id);
+        const priceData = canPrices ? await stocksApi.getPrices(company.id, '30d'): { prices: [] as DailyPrice[] };
+        const floorData = canFloor ?await stocksApi.getFloorsheet(company.id): { transactions: [] as FloorsheetTransaction[], date: null };
         return {
           company,
           prices: priceData.prices,

@@ -49,16 +49,15 @@ export default function NewsDetail() {
   const [reasonInput, setReasonInput] = useState<string>('');
   const [modalError, setModalError] = useState<string>('');
 
-  // Check if user can categorize news (admin, analyst, or has permission)
-  const canCategorize = canCategorizeNews || canCorrectCategories;
-
   const loadData = () => {
     if (!id) return;
     setLoading(true);
     Promise.all([
-      newsApi.getNewsById(Number(id)),
-      newsApi.getCorrections({ article_id: Number(id) }).catch(() => ({ results: [] })),
-      getCompanies({ status: 'active' }).catch(() => ({ results: [] })),
+newsApi.getNewsById(Number(id)),
+          canCorrectCategories
+            ? newsApi.getCorrections({ article_id: Number(id) })
+            : Promise.resolve({ results: [] }),
+          getCompanies({ status: 'active' }).catch(() => ({ results: [] })),
     ])
       .then(([artData, corrData, compData]) => {
         setArticle(artData);
@@ -192,25 +191,25 @@ export default function NewsDetail() {
           <ArrowLeft size={14} /> Back to News
         </button>
 
-        {canCategorize && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleTriggerCategorize}
-              disabled={actionLoading}
-              className="flex items-center gap-1.5 text-xs bg-bg-elevated hover:bg-bg-border text-text-secondary hover:text-text-primary px-3 py-1.5 rounded-lg border border-bg-border transition-colors disabled:opacity-50"
-              title="Run background ML categorization on this article"
-            >
-              <RefreshCw size={12} className={actionLoading ? 'animate-spin' : ''} />
-              Re-run ML Auto-Categorization
-            </button>
-            <button
-              onClick={handleOpenAddModal}
-              className="flex items-center gap-1.5 text-xs bg-accent hover:bg-accent/90 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition-colors"
-            >
-              <PlusCircle size={13} />
-              Add Company Tag
-            </button>
-          </div>
+        {canCategorizeNews && (
+          <button
+            onClick={handleTriggerCategorize}
+            disabled={actionLoading}
+            className="flex items-center gap-1.5 text-xs bg-bg-elevated hover:bg-bg-border text-text-secondary hover:text-text-primary px-3 py-1.5 rounded-lg border border-bg-border transition-colors disabled:opacity-50"
+            title="Run background ML categorization on this article"
+          >
+            <RefreshCw size={12} className={actionLoading ? 'animate-spin' : ''} />
+            Re-run ML Auto-Categorization
+          </button>
+        )}
+        {canCorrectCategories && (
+          <button
+            onClick={handleOpenAddModal}
+            className="flex items-center gap-1.5 text-xs bg-accent hover:bg-accent/90 text-white px-3 py-1.5 rounded-lg font-medium shadow-sm transition-colors"
+          >
+            <PlusCircle size={13} />
+            Add Company Tag
+          </button>
         )}
       </div>
 
@@ -262,7 +261,7 @@ export default function NewsDetail() {
           {article.company_tags.length === 0 ? (
             <div className="p-4 rounded-lg bg-bg-elevated/40 border border-dashed border-bg-border text-center text-xs text-text-muted">
               <p>No company tags matched above the confidence threshold (Needs Review).</p>
-              {canCategorize && (
+              {canCorrectCategories && (
                 <button onClick={handleOpenAddModal} className="text-accent-light hover:underline font-medium mt-1">
                   Assign a company tag manually
                 </button>
@@ -316,7 +315,7 @@ export default function NewsDetail() {
                       </div>
 
                       {/* Analyst Actions */}
-{canCategorize && (
+                      {canCorrectCategories && (
                         <div className="flex items-center gap-1 border-l border-bg-border pl-3">
                           <button
                             onClick={() => handleOpenUpdateModal(tag)}
