@@ -60,11 +60,6 @@ const NAV_ITEMS: NavItem[] = [
     to: '/trading',
   },
   {
-    label: 'Analytics',
-    icon: BarChart3,
-    to: '/analytics',
-  },
-  {
     label: 'Company Analysis',
     icon: Activity,
     to: '/company-analysis',
@@ -104,6 +99,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Reports',
     icon: Database,
     to: '/reports',
+    requiredPermissions: ['export_reports'],
   },
 
   { type: 'divider', label: 'Administration' },

@@ -215,13 +215,17 @@ class ViewerDashboardAPIView(APIView):
         summary = {}
 
         if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
-            summary["tracked_companies"] = Company.objects.filter(
+            tracked_count = Company.objects.filter(
                 is_active=True,
                 tracking__is_tracked=True,
             ).count()
+            summary["tracked_companies"] = tracked_count
+            result["tracked_companies"] = tracked_count
 
         if user.has_app_permission("view_news"):
-            summary["total_news"] = NewsArticle.objects.count()
+            total_news = NewsArticle.objects.count()
+            summary["total_news"] = total_news
+            result["total_news"] = total_news
 
         result["summary"] = summary
 

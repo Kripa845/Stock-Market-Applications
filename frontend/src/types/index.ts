@@ -2,6 +2,7 @@
 // Company is defined in ./company.ts — re-exported here for backwards
 // compatibility with files that import from '../types'.
 export type { Company } from './company';
+import type { Company } from './company';
 
 export interface DailyPrice {
   id: number;
@@ -135,5 +136,5 @@ export interface AdminDashboard {
              { id: number; status: string; started_at: string; completed_at: string | null; } | null; }
 
 
-export interface AnalystDashboard { role: 'analyst'; tracked_companies: number; total_news: number; corrections_count: number; } export interface ViewerDashboard { role: 'viewer'; tracked_companies: number; total_news: number; } export interface DashboardSummary { tracked_companies: number; total_news: number; total_trading_days: number; total_floorsheet_transactions: number; market_volume: number; market_turnover: number; positive_news: number; negative_news: number;
+export interface AnalystDashboard { role: 'analyst'; tracked_companies: number; total_news: number; corrections_count: number; } export interface ViewerDashboard { role: 'viewer'; tracked_companies: number; total_news: number; companies?: Company[]; } export interface DashboardSummary { tracked_companies: number; total_news: number; total_trading_days: number; total_floorsheet_transactions: number; market_volume: number; market_turnover: number; positive_news: number; negative_news: number;
      neutral_news: number; }

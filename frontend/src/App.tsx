@@ -24,7 +24,8 @@ import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import WatchlistComparison from './pages/WatchlistComparison';
-import WatchlistPage from './pages/admin/WatchlistPage';
+import AdminWatchlistPage from './pages/admin/WatchlistPage';
+import WatchlistPage from './pages/WatchlistPage';
 import RolesPermissionsPage from './pages/admin/RolesPermissionPage';
 
 import CrawlerStatusPage from './pages/CrawlerStatus';
@@ -33,7 +34,7 @@ import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
 import NewsDetail from './pages/NewsDetail';
 import TradingPage from './pages/Trading';
-import ReportsComingSoon from './pages/ReportsComingSoon';
+import ExportPage from './pages/ExportPage';
 
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFound from './pages/NotFound';
@@ -145,8 +146,14 @@ function PermissionRoute({
 }
 
 
+function WatchlistPageWrapper() {
+  const { user } = useAuth();
+  return user?.role === 'admin' ? <AdminWatchlistPage /> : <WatchlistPage />;
+}
+
+
 /* =========================================================
-   APPLICATION
+    APPLICATION
 ========================================================= */
 
 function AppRoutes() {
@@ -268,22 +275,6 @@ function AppRoutes() {
 
 
           {/* -----------------------------------------------
-              ANALYTICS
-          ----------------------------------------------- */}
-
-          <Route
-            path="/analytics"
-            element={
-              <PermissionRoute
-                rule={ROUTE_RULES['/analytics']}
-              >
-                <TradingPage />
-              </PermissionRoute>
-            }
-          />
-
-
-          {/* -----------------------------------------------
               COMPANY ANALYSIS
           ----------------------------------------------- */}
 
@@ -325,7 +316,7 @@ function AppRoutes() {
               <PermissionRoute
                 rule={ROUTE_RULES['/watchlist']}
               >
-                <WatchlistPage />
+                <WatchlistPageWrapper />
               </PermissionRoute>
             }
           />
@@ -384,7 +375,7 @@ function AppRoutes() {
               <PermissionRoute
                 rule={ROUTE_RULES['/reports']}
               >
-                <ReportsComingSoon />
+                <ExportPage />
               </PermissionRoute>
             }
           />

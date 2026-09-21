@@ -1330,5 +1330,8 @@ class DashboardSummaryAPIView(APIView):
                 "companies_with_data": companies_with_data,
                 "news_analyzed_count": total_news,
                 "volume_anomaly_count": volume_anomaly_count,
+                "market_change": avg_change_pct,
+                "total_articles": total_news,
+                "active_analysis": companies_with_data,
             }
         )

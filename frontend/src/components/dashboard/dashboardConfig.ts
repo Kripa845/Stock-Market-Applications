@@ -172,60 +172,7 @@ export const universalDashboardConfig: DashboardConfig = {
     },
 
     // -----------------------------------------------------------------------
-    // Section 3 — Analysis
-    // -----------------------------------------------------------------------
-    {
-      id: 'analysis',
-      title: 'Analysis',
-      description: 'Buyer/seller behaviour, VWAP, and pressure indicators.',
-      requiredAnyPermission: ['view_analysis', 'view_price_trends', 'view_vwap_analysis'],
-      cards: [
-        {
-          id: 'analysis-overview',
-          title: 'Analysis Overview',
-          description: 'Cross-company analytics',
-          route: '/analytics',
-          icon: BarChart3,
-          type: 'stat',
-          dataPath: 'analysisCount',
-          iconColor: 'text-accent-light',
-          requiredPermission: 'view_analysis',
-        },
-        {
-          id: 'price-trends',
-          title: 'Price Trends',
-          description: 'Historical price movement',
-          route: '/analytics',
-          icon: LineChart,
-          type: 'stat',
-          iconColor: 'text-up',
-          requiredPermission: 'view_price_trends',
-        },
-        {
-          id: 'vwap-analysis',
-          title: 'VWAP Analysis',
-          description: 'Volume-weighted average price',
-          route: '/analytics',
-          icon: BarChart3,
-          type: 'stat',
-          iconColor: 'text-yellow-400',
-          requiredPermission: 'view_vwap_analysis',
-        },
-        {
-          id: 'buy-sell-pressure',
-          title: 'Buy / Sell Pressure',
-          description: 'Buyer vs seller analysis',
-          route: '/analytics',
-          icon: Activity,
-          type: 'stat',
-          iconColor: 'text-blue-400',
-          requiredPermission: 'view_pressure_analysis',
-        },
-      ],
-    },
-
-    // -----------------------------------------------------------------------
-    // Section 4 — News
+    // Section 3 — News
     // -----------------------------------------------------------------------
     {
       id: 'news',

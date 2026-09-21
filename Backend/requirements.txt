@@ -114,3 +114,7 @@ zope.interface==8.6
 sentence-transformers>=3.0.0
 scikit-learn>=1.4.0
 torch>=2.2.0
+
+# Export Data / Reports — added for CSV/XLSX/PDF generation
+openpyxl==3.1.5
+reportlab==4.2.5

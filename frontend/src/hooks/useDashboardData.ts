@@ -80,12 +80,14 @@ export function useDashboardData(_role: string | null) {
     const canViewAdminDash = isAdmin || hasPermission('view_users') || hasPermission('view_crawl_runs');
 
     try {
-      const [adminData, analystData, companiesRes, newsRes, crawlsRes, tradingRes] =
+      const [adminData, analystData, viewerData, companiesRes, newsRes, crawlsRes, tradingRes] =
         await Promise.allSettled([
           // Admin dashboard — only if user can see admin-level data
           canViewAdminDash ? dashboardApi.admin() : Promise.resolve(null),
           // Analyst dashboard — provides correction counts etc.
           canViewNews ? dashboardApi.analyst() : Promise.resolve(null),
+          // Viewer dashboard — provides tracked companies and news for non-admin users
+          !isAdmin && (canViewCompanies || canViewNews) ? dashboardApi.viewer() : Promise.resolve(null),
           // Companies list — for market change calculation
           canViewCompanies
             ? getCompanies({ status: 'active', tracked_only: false })
@@ -140,6 +142,18 @@ export function useDashboardData(_role: string | null) {
         trackedCompanies = (d.tracked_companies as number) ?? trackedCompanies;
         totalNews = (d.total_news as number) ?? totalNews;
         correctionsCount = (d.corrections_count as number) ?? correctionsCount;
+      }
+
+      if (viewerData.status === 'fulfilled' && viewerData.value) {
+        const d = viewerData.value as unknown as Record<string, unknown>;
+        const vTracked = d.tracked_companies as number | undefined;
+        if (vTracked !== undefined) trackedCompanies = vTracked;
+        const vNews = d.total_news as number | undefined;
+        if (vNews !== undefined) totalNews = vNews;
+        const vCompanies = d.companies as Company[] | undefined;
+        if (vCompanies && Array.isArray(vCompanies)) {
+          activeCompanies = vCompanies.filter(isCompany);
+        }
       }
 
       if (companiesRes.status === 'fulfilled' && companiesRes.value) {
