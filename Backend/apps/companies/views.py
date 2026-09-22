@@ -250,3 +250,26 @@ class CompanySectorsAPIView(APIView):
         return Response(
             list(sectors)
         )
+from apps.users.company_access import (
+    get_accessible_company_ids,
+)
+
+
+def get_queryset(self):
+
+    user = self.request.user
+
+    queryset = Company.objects.filter(
+        is_active=True
+    )
+
+    if user.is_admin():
+        return queryset
+
+    company_ids = get_accessible_company_ids(
+        user
+    )
+
+    return queryset.filter(
+        id__in=company_ids
+    )

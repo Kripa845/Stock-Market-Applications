@@ -233,18 +233,7 @@ class User(AbstractUser):
 # ============================================================
 
 class UserCompanyAccess(models.Model):
-    """
-    Separate access layer on top of the existing Role/Permission system.
-
-    Role + Permission answers:  WHAT can the user do?
-    UserCompanyAccess answers:  FOR WHICH COMPANY can they do it?
-
-        status = 1  →  access granted
-        status = 0  →  access denied
-
-    Admin users bypass this check entirely (see company_access.py).
-    UniqueConstraint on (user, company) prevents duplicate rows.
-    """
+    
 
     user = models.ForeignKey(
         "users.User",

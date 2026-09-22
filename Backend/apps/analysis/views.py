@@ -1335,3 +1335,24 @@ class DashboardSummaryAPIView(APIView):
                 "active_analysis": companies_with_data,
             }
         )
+from apps.users.company_access import (
+    get_accessible_company_ids,
+)
+
+
+def get_queryset(self):
+
+    user = self.request.user
+
+    queryset = DailyAnalysis.objects.all()
+
+    if user.is_admin():
+        return queryset
+
+    company_ids = get_accessible_company_ids(
+        user
+    )
+
+    return queryset.filter(
+        company_id__in=company_ids
+    )
