@@ -160,15 +160,16 @@ export const exportsApi = {
 // ---------------------------------------------------------------------------
 
 /** Strip empty/undefined values so they don't appear as blank query params. */
-function _cleanParams(
-  params: ExportParams,
-): Record<string, string | number | (string | number)[]> {
-  const out: Record<string, string | number | (string | number)[]> = {
-    format: params.format,
-  };
-  if (params.company_ids?.length) out.company_id = params.company_ids;
-  if (params.date_from) out.date_from = params.date_from;
-  if (params.date_to) out.date_to = params.date_to;
-  if (params.sentiment) out.sentiment = params.sentiment;
-  return out;
+export function _cleanParams(params: ExportParams): URLSearchParams {
+  const usp = new URLSearchParams();
+  usp.set("format", params.format);
+  if (params.company_ids?.length) {
+    for (const cid of params.company_ids) {
+      usp.append("company_id", String(cid));
+    }
+  }
+  if (params.date_from) usp.set("date_from", params.date_from);
+  if (params.date_to) usp.set("date_to", params.date_to);
+  if (params.sentiment) usp.set("sentiment", params.sentiment);
+  return usp;
 }

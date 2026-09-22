@@ -3,7 +3,9 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer,
 )
+from rest_framework import serializers
 
+from .models import UserCompanyAccess
 from .models import CustomRole, RolePermissionConfig
 
 
@@ -745,4 +747,17 @@ class RoleDefinitionSerializer(
     description = serializers.CharField()
     permissions = RolePermissionSerializer(
         many=True
+    )
+    
+    
+
+class UserCompanyAccessItemSerializer(serializers.Serializer):
+    company_id = serializers.IntegerField(min_value=1)
+    status = serializers.IntegerField(min_value=0, max_value=1)
+
+
+class UserCompanyAccessListSerializer(serializers.Serializer):
+    company_access = UserCompanyAccessItemSerializer(
+        many=True,
+        allow_empty=True,
     )

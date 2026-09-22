@@ -18,7 +18,7 @@ from rest_framework_simplejwt.views import (
 from .permissions import (HasAppPermission, HasViewMethodPermissions, IsAdminUserRole,
                           is_admin_account, missing_grants)
 
-from .models import CustomRole, RolePermissionConfig
+from .models import CustomRole, RolePermissionConfig, UserCompanyAccess
 
 from .serializers import (
     AdminUserCreateSerializer,
@@ -27,6 +27,7 @@ from .serializers import (
     MeSerializer,
     UserRegistrationSerializer,
     UserSerializer,
+    UserCompanyAccessListSerializer,
 )
 from .serializers import (
     CustomRoleSerializer,
@@ -34,6 +35,7 @@ from .serializers import (
     VALID_PERMISSION_KEYS,
     validate_permission_dependencies,
 )
+# from apps.users.serializers import UserCompanyAccessListSerializer
 User = get_user_model()
 
 def assignment_escalation(request, instance=None):
@@ -452,7 +454,6 @@ class AdminUserListCreateAPIView(
             status=status.HTTP_201_CREATED,
         )
 
-
 # ======================================================
 # ADMIN USER DETAIL
 # ======================================================
@@ -740,6 +741,15 @@ class RolePermissionDetailAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        actor = request.user
+        if not actor.is_admin():
+            if not actor.custom_role_id and actor.role == role_key:
+                return Response({"detail": "You cannot edit your own role."}, status=status.HTTP_403_FORBIDDEN)
+            missing = missing_grants(actor, set(permissions) - set(config.permissions or []))
+            if missing:
+                return Response({"detail": "You cannot grant permissions you do not hold.",
+                                 "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
+
         invalid = [
             permission
             for permission in permissions
@@ -762,14 +772,6 @@ class RolePermissionDetailAPIView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        actor = request.user
-        if not actor.is_admin():
-            if not actor.custom_role_id and actor.role == role_key:
-                return Response({"detail": "You cannot edit your own role."}, status=status.HTTP_403_FORBIDDEN)
-            missing = missing_grants(actor, set(permissions) - set(config.permissions or []))
-            if missing:
-                return Response({"detail": "You cannot grant permissions you do not hold.",
-                                 "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
         config.permissions = list(
             dict.fromkeys(permissions)
         )
@@ -899,3 +901,173 @@ class RoleStatisticsAPIView(APIView):
 
 
 # ======================================================
+
+
+# ======================================================
+# USER COMPANY ACCESS
+# ======================================================
+
+# from users.serializers import UserCompanyAccessListSerializer  # noqa: E402
+
+# ======================================================
+# USER COMPANY ACCESS
+# ======================================================
+
+class UserCompanyAccessAPIView(APIView):
+    """
+    GET:
+        Return ALL active companies for the selected user.
+
+        Existing UserCompanyAccess rows are returned with their
+        actual status.
+
+        If a company has no UserCompanyAccess row, it is returned
+        with status=0 (OFF).
+
+    POST:
+        Full replacement of company access.
+
+        Body:
+        {
+            "company_access": [
+                {"company_id": 1, "status": 1},
+                {"company_id": 2, "status": 0}
+            ]
+        }
+
+        Requires:
+            edit_users permission
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "edit_users"
+
+    def _get_target_user(self, pk):
+        return get_object_or_404(User, pk=pk)
+
+    def get(self, request, pk):
+        target = self._get_target_user(pk)
+
+        # Non-admin users cannot inspect admin accounts.
+        if is_admin_account(target) and not request.user.is_admin():
+            return Response(
+                {
+                    "detail": "Only admins can view admin accounts."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # --------------------------------------------------
+        # Get existing access records for this user.
+        # --------------------------------------------------
+
+        access_map = {
+            access.company_id: access.status
+            for access in UserCompanyAccess.objects.filter(
+                user=target
+            )
+        }
+
+        # --------------------------------------------------
+        # Get ALL active companies.
+        #
+        # If a company does not have a UserCompanyAccess row,
+        # it will still appear in the response with status=0.
+        # --------------------------------------------------
+        from apps.companies.models import Company
+
+        companies = (
+            Company.objects
+            .filter(is_active=True)
+            .order_by("name")
+        )
+
+        company_access = [
+            {
+                "company_id": company.id,
+                "company_symbol": company.symbol,
+                "company_name": company.name,
+                "status": access_map.get(company.id, 0),
+            }
+            for company in companies
+        ]
+
+        return Response(
+            {
+                "company_access": company_access
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request, pk):
+        target = self._get_target_user(pk)
+
+        # Non-admin users cannot modify admin accounts.
+        if is_admin_account(target) and not request.user.is_admin():
+            return Response(
+                {
+                    "detail": "Only admins can modify admin accounts."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # --------------------------------------------------
+        # Validate submitted company access.
+        # --------------------------------------------------
+
+        serializer = UserCompanyAccessListSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        # --------------------------------------------------
+        # Replace the user's company access.
+        # --------------------------------------------------
+
+        from .company_access import set_company_access
+
+        set_company_access(
+            target,
+            serializer.validated_data["company_access"]
+        )
+
+        # --------------------------------------------------
+        # Return the complete saved state.
+        #
+        # This is important because the frontend expects
+        # ALL active companies, including OFF companies.
+        # --------------------------------------------------
+        from apps.companies.models import Company
+
+        access_map = {
+            access.company_id: access.status
+            for access in UserCompanyAccess.objects.filter(
+                user=target
+            )
+        }
+
+        companies = (
+            Company.objects
+            .filter(is_active=True)
+            .order_by("name")
+        )
+
+        company_access = [
+            {
+                "company_id": company.id,
+                "company_symbol": company.symbol,
+                "company_name": company.name,
+                "status": access_map.get(company.id, 0),
+            }
+            for company in companies
+        ]
+
+        return Response(
+            {
+                "company_access": company_access
+            },
+            status=status.HTTP_200_OK,
+        )

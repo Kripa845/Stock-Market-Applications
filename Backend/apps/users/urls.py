@@ -17,6 +17,7 @@ from .views import (
     RolePermissionDefinitionsAPIView,
     RolePermissionsAPIView,
     RoleStatisticsAPIView,
+    UserCompanyAccessAPIView,
 )
 
 
@@ -63,6 +64,13 @@ urlpatterns = [
         "admin/users/<int:pk>/",
         AdminUserDetailAPIView.as_view(),
         name="admin-user-detail",
+    ),
+
+    # Company access for a specific user (GET = read, POST = full replace)
+    path(
+        "admin/users/<int:pk>/company-access/",
+        UserCompanyAccessAPIView.as_view(),
+        name="admin-user-company-access",
     ),
 
     path(

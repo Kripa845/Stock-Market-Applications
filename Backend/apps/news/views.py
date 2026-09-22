@@ -393,6 +393,24 @@ class NewsRecategorizeAPIView(APIView):
         action = data["action"]
         reason = data.get("reason", "")
 
+        # ── Company Access check ────────────────────────────────────────
+        # News VIEWING is unrestricted by company access.
+        # News CATEGORIZATION (modifying tags) requires status = 1 for the
+        # specific company being categorized.
+        # Admins bypass this check.
+        from apps.users.company_access import has_company_access
+        if not has_company_access(request.user, company.pk):
+            return Response(
+                {
+                    "detail": (
+                        f"You do not have company access to {company.symbol}. "
+                        "News categorization requires Company Access status = 1 "
+                        "for the target company."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         # All persistence goes through the corrections service so the API
         # and the Celery/management paths cannot drift apart.
         try:

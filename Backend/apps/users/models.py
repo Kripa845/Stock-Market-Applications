@@ -226,3 +226,64 @@ class User(AbstractUser):
             return f"{self.username} - {self.custom_role.name}"
 
         return f"{self.username} - {self.role}"
+
+
+# ============================================================
+# USER ↔ COMPANY ACCESS
+# ============================================================
+
+class UserCompanyAccess(models.Model):
+    """
+    Separate access layer on top of the existing Role/Permission system.
+
+    Role + Permission answers:  WHAT can the user do?
+    UserCompanyAccess answers:  FOR WHICH COMPANY can they do it?
+
+        status = 1  →  access granted
+        status = 0  →  access denied
+
+    Admin users bypass this check entirely (see company_access.py).
+    UniqueConstraint on (user, company) prevents duplicate rows.
+    """
+
+    user = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="company_accesses",
+    )
+
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="user_accesses",
+    )
+
+    status = models.IntegerField(
+        default=0,
+        help_text="1 = access granted, 0 = access denied",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "company"],
+                name="unique_user_company_access",
+            )
+        ]
+        ordering = ["company__name"]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.status not in (0, 1):
+            raise ValidationError({"status": "Status must be 0 or 1."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        state = "granted" if self.status == 1 else "denied"
+        return f"{self.user.username} → {self.company.symbol} ({state})"

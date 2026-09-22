@@ -12,7 +12,7 @@
  * server-side by the existing HasAppPermission("export_reports") class.
  * Hiding the UI is NOT the security mechanism.
  *
- * The company dropdown is populated from /api/reports/export/companies/,
+ * The company list is populated from /api/reports/export/companies/,
  * which also requires export_reports, so a non-permitted user would see
  * neither the UI nor get any data from the backend.
  */
@@ -30,6 +30,7 @@ import PageHeader from '../components/common/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import {
   exportsApi,
+  _cleanParams,
   type ExportCompany,
   type ExportDataType,
   type ExportFormat,
@@ -110,7 +111,7 @@ export default function ExportPage() {
       .getCompanies()
       .then(setCompanies)
       .catch(() => {
-        // Non-fatal — dropdown will just be empty; user can still export all
+        // Non-fatal — list will just be empty; user can still export all
       })
       .finally(() => setLoadingCompanies(false));
   }, [canExport]);
@@ -180,17 +181,17 @@ export default function ExportPage() {
       }
       setSuccessMsg('Export complete — your file has been downloaded.');
     } catch (err: unknown) {
-      // The backend returns 204 when filters match no data; axios treats it
-      // as a resolved response (no error), so we only land here on real errors.
-      const axiosErr = err as { response?: { status?: number; data?: Blob } };
+      const axiosErr = err as {
+        response?: { status?: number; data?: Blob };
+      };
       const httpStatus = axiosErr?.response?.status;
+      const url = `/reports/export/${form.dataType}/?` + _cleanParams(params).toString();
 
       if (httpStatus === 204) {
         setErrorMsg('No data found for the selected filters. Try a wider date range or different company.');
       } else if (httpStatus === 403) {
         setErrorMsg('You do not have permission to export data.');
       } else if (httpStatus === 400) {
-        // Parse the blob error body for the backend's message
         const blob = axiosErr?.response?.data;
         if (blob instanceof Blob) {
           const text = await blob.text();
@@ -203,8 +204,12 @@ export default function ExportPage() {
         } else {
           setErrorMsg('Invalid export parameters.');
         }
+      } else if (httpStatus && httpStatus >= 500) {
+        setErrorMsg(`Server error (${httpStatus}). Please try again later or contact support.`);
+      } else if (!axiosErr?.response) {
+        setErrorMsg('Network error. Check your connection and try again.');
       } else {
-        setErrorMsg('Export failed. Please try again or contact support.');
+        setErrorMsg(`Export failed (HTTP ${httpStatus}). URL: ${url}. Please try again or contact support.`);
       }
     } finally {
       setSubmitting(false);
