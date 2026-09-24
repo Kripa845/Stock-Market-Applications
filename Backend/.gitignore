@@ -78,3 +78,34 @@ data/local/
 
 # Temporary archives
 *.zip
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Django
+db.sqlite3
+db.sqlite3-*
+*.sqlite3
+*.sqlite3.backup
+
+# Scrapy generated output
+Backend/crawlers/*.json
+
+# Environment
+.env
+.venv/
+venv/
+
+# Celery
+celerybeat-schedule*
+celerybeat.pid
+
+# Logs
+*.log
+
+# Node
+node_modules/
+dist/
