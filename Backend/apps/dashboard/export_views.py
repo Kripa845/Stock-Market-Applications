@@ -35,7 +35,7 @@ import io
 import logging
 from datetime import date, datetime
 
-from django.db.models import Avg, Count, Max, Min, Q, Sum
+from django.db.models import Avg, Count, Max, Min, Q, Sum, Prefetch
 from django.http import HttpResponse
 from django.utils import timezone
 
@@ -48,6 +48,7 @@ from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle
 from apps.analysis.models import DailyAnalysis
 from apps.users.permissions import HasAppPermission
+from apps.users.company_access import get_accessible_company_ids
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ def _forbidden(msg: str):
     return Response({"detail": msg}, status=status.HTTP_403_FORBIDDEN)
 
 
-def _resolve_companies(company_id_strs):
+def _resolve_companies(company_id_strs, user):
     """
     Validate and return a list of Company instances.
     Returns (companies_list, error_response_or_None).
@@ -102,7 +103,11 @@ def _resolve_companies(company_id_strs):
     If all valid                          → (companies, None)
     """
     if not company_id_strs:
-        return [], None
+        accessible_ids = get_accessible_company_ids(user)
+        qs = Company.objects.filter(is_active=True)
+        if accessible_ids is not None:
+            qs = qs.filter(pk__in=accessible_ids)
+        return list(qs.order_by("symbol")), None
     company_ids = []
     for s in company_id_strs:
         if not s:
@@ -118,6 +123,11 @@ def _resolve_companies(company_id_strs):
     except Exception:
         return None, _bad_request("Invalid company IDs.")
     found_ids = {c.id for c in companies}
+    accessible_ids = get_accessible_company_ids(user)
+    if accessible_ids is not None:
+        denied = [cid for cid in company_ids if cid not in set(accessible_ids)]
+        if denied:
+            return None, _forbidden("You do not have access to one or more requested companies.")
     for cid in company_ids:
         if cid not in found_ids:
             return None, _bad_request(
@@ -303,6 +313,9 @@ class ExportCompanyListAPIView(APIView):
             .order_by("symbol")
             .values("id", "symbol", "name", "sector")
         )
+        accessible_ids = get_accessible_company_ids(request.user)
+        if accessible_ids is not None:
+            companies = companies.filter(pk__in=accessible_ids)
         return Response(list(companies))
 
 
@@ -339,7 +352,7 @@ class ExportNewsAPIView(APIView):
         sentiment_filter = request.query_params.get("sentiment", "").lower()
 
         # ── validate ──────────────────────────────────────────────────
-        companies, err = _resolve_companies(company_id_strs)
+        companies, err = _resolve_companies(company_id_strs, request.user)
         if err:
             return err
 
@@ -359,12 +372,16 @@ class ExportNewsAPIView(APIView):
         # ── build queryset ────────────────────────────────────────────
         qs = (
             NewsArticle.objects
-            .prefetch_related("company_tags__company")
+            .prefetch_related(Prefetch(
+                "company_tags",
+                queryset=ArticleCompanyTag.objects.filter(
+                    company__in=companies
+                ).select_related("company"),
+            ))
             .order_by("-published_at")
         )
 
-        if companies:
-            qs = qs.filter(company_tags__company__in=companies).distinct()
+        qs = qs.filter(company_tags__company__in=companies).distinct()
 
         if date_from:
             qs = qs.filter(published_at__date__gte=date_from)
@@ -510,7 +527,7 @@ class ExportTradingAPIView(APIView):
         date_from_str = request.query_params.get("date_from", "")
         date_to_str = request.query_params.get("date_to", "")
 
-        companies, err = _resolve_companies(company_id_strs)
+        companies, err = _resolve_companies(company_id_strs, request.user)
         if err:
             return err
 
@@ -529,8 +546,7 @@ class ExportTradingAPIView(APIView):
 
         qs = DailyPrice.objects.select_related("company").order_by("-date", "company__symbol")
 
-        if companies:
-            qs = qs.filter(company__in=companies)
+        qs = qs.filter(company__in=companies)
         if date_from:
             qs = qs.filter(date__gte=date_from)
         if date_to:
@@ -655,7 +671,7 @@ class ExportFloorsheetAPIView(APIView):
         date_from_str = request.query_params.get("date_from", "")
         date_to_str = request.query_params.get("date_to", "")
 
-        companies, err = _resolve_companies(company_id_strs)
+        companies, err = _resolve_companies(company_id_strs, request.user)
         if err:
             return err
 
@@ -678,8 +694,7 @@ class ExportFloorsheetAPIView(APIView):
             .order_by("-date", "-id")
         )
 
-        if companies:
-            qs = qs.filter(company__in=companies)
+        qs = qs.filter(company__in=companies)
         if date_from:
             qs = qs.filter(date__gte=date_from)
         if date_to:
@@ -769,7 +784,7 @@ class ExportReportAPIView(APIView):
         date_from_str = request.query_params.get("date_from", "")
         date_to_str = request.query_params.get("date_to", "")
 
-        companies, err = _resolve_companies(company_id_strs)
+        companies, err = _resolve_companies(company_id_strs, request.user)
         if err:
             return err
 
@@ -817,8 +832,7 @@ class ExportReportAPIView(APIView):
 
         # ── Trading summary ───────────────────────────────────────────
         price_qs = DailyPrice.objects.select_related("company")
-        if companies:
-            price_qs = price_qs.filter(company__in=companies)
+        price_qs = price_qs.filter(company__in=companies)
         if date_from:
             price_qs = price_qs.filter(date__gte=date_from)
         if date_to:
@@ -852,8 +866,7 @@ class ExportReportAPIView(APIView):
 
         # ── News summary ──────────────────────────────────────────────
         news_qs = NewsArticle.objects.all()
-        if companies:
-            news_qs = news_qs.filter(company_tags__company__in=companies).distinct()
+        news_qs = news_qs.filter(company_tags__company__in=companies).distinct()
         if date_from:
             news_qs = news_qs.filter(published_at__date__gte=date_from)
         if date_to:
@@ -873,8 +886,7 @@ class ExportReportAPIView(APIView):
 
         # ── Floorsheet summary ────────────────────────────────────────
         fs_qs = FloorsheetTransaction.objects.all()
-        if companies:
-            fs_qs = fs_qs.filter(company__in=companies)
+        fs_qs = fs_qs.filter(company__in=companies)
         if date_from:
             fs_qs = fs_qs.filter(date__gte=date_from)
         if date_to:
@@ -899,8 +911,7 @@ class ExportReportAPIView(APIView):
 
         # ── Analysis metrics (from DailyAnalysis) ────────────────────
         analysis_qs = DailyAnalysis.objects.all()
-        if companies:
-            analysis_qs = analysis_qs.filter(company__in=companies)
+        analysis_qs = analysis_qs.filter(company__in=companies)
         if date_from:
             analysis_qs = analysis_qs.filter(date__gte=date_from)
         if date_to:

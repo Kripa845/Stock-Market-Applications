@@ -1227,6 +1227,11 @@ import {
   type UserCompanyAccess,
 } from "../../api/users";
 
+import {
+  rolesApi,
+  type CustomRoleSummary,
+} from "../../api/roles";
+
 import { useAuth } from "../../contexts/AuthContext";
 
 
@@ -1304,8 +1309,13 @@ export default function UserManagementPage() {
     last_name: "",
     password: "",
     role: "viewer",
+    custom_role_id: null,
     is_active: true,
   });
+
+  const [customRoles, setCustomRoles] = useState<
+    CustomRoleSummary[]
+  >([]);
 
 
   /*
@@ -1368,10 +1378,27 @@ export default function UserManagementPage() {
     }
   }, [canViewUsers]);
 
+  const loadRoles = useCallback(async () => {
+    try {
+      const response = await rolesApi.getRoles();
+
+      setCustomRoles(
+        response.custom_roles.filter(
+          (role) => role.is_active
+        )
+      );
+    } catch (err: any) {
+      console.error("Failed to load roles:", err);
+
+      setCustomRoles([]);
+    }
+  }, []);
+
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    void loadUsers();
+    void loadRoles();
+  }, [loadUsers, loadRoles]);
 
 
   /*
@@ -1415,6 +1442,33 @@ export default function UserManagementPage() {
     return target.role === "admin" && !actorIsAdmin;
   };
 
+  const roleValue = form.custom_role_id
+    ? `custom:${form.custom_role_id}`
+    : form.role;
+
+  const selectRole = (value: string) => {
+    if (value.startsWith("custom:")) {
+      const customRoleId = Number(value.slice("custom:".length));
+
+      if (Number.isNaN(customRoleId)) {
+        return;
+      }
+
+      setForm((current) => ({
+        ...current,
+        role: "viewer",
+        custom_role_id: customRoleId,
+      }));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      role: value as Role,
+      custom_role_id: null,
+    }));
+  };
+
 
   /*
    * ---------------------------------------------------------
@@ -1436,8 +1490,13 @@ export default function UserManagementPage() {
       last_name: "",
       password: "",
       role: "viewer",
+      custom_role_id: null,
       is_active: true,
     });
+
+    void loadRoles();
+
+
 
     setError("");
     setShowForm(true);
@@ -1469,6 +1528,7 @@ export default function UserManagementPage() {
       last_name: target.last_name || "",
       password: "",
       role: target.role,
+      custom_role_id: target.custom_role_id ?? null,
       is_active: target.is_active,
     });
 
@@ -2482,32 +2542,45 @@ export default function UserManagementPage() {
                 </label>
 
                 <select
-                  value={form.role}
+                  value={roleValue}
                   disabled={
                     !canChangeRoles
                   }
                   onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      role: event.target
-                        .value as Role,
-                    }))
+                    selectRole(
+                      event.target.value
+                    )
                   }
                   className="w-full rounded-lg border border-bg-border bg-bg-secondary px-3 py-2.5 text-sm text-text-primary outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
                 >
+                  <optgroup label="System Roles">
+                    <option value="viewer">
+                      Viewer
+                    </option>
 
-                  <option value="viewer">
-                    Viewer
-                  </option>
+                    <option value="analyst">
+                      Analyst
+                    </option>
 
-                  <option value="analyst">
-                    Analyst
-                  </option>
+                    {actorIsAdmin && (
+                      <option value="admin">
+                        Admin
+                      </option>
+                    )}
+                  </optgroup>
 
-                  <option value="admin">
-                    Admin
-                  </option>
-
+                  {customRoles.length > 0 && (
+                    <optgroup label="Custom Roles">
+                      {customRoles.map((role) => (
+                        <option
+                          key={role.id}
+                          value={`custom:${role.id}`}
+                        >
+                          {role.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
 
               </div>

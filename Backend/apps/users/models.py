@@ -244,12 +244,12 @@ class UserCompanyAccess(models.Model):
     company = models.ForeignKey(
         "companies.Company",
         on_delete=models.CASCADE,
-        related_name="user_accesses",
+        related_name="user_company_accesses",
     )
 
     status = models.IntegerField(
         default=0,
-        help_text="1 = access granted, 0 = access denied",
+        help_text="1 = active, 0 = inactive",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -262,7 +262,6 @@ class UserCompanyAccess(models.Model):
                 name="unique_user_company_access",
             )
         ]
-        ordering = ["company__name"]
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -276,3 +275,28 @@ class UserCompanyAccess(models.Model):
     def __str__(self):
         state = "granted" if self.status == 1 else "denied"
         return f"{self.user.username} → {self.company.symbol} ({state})"
+
+
+class WatchlistItem(models.Model):
+    """A user's saved company, as created by the existing migration."""
+
+    user = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="watchlist_items",
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        on_delete=models.CASCADE,
+        related_name="watchlist_items",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "company"],
+                name="unique_user_watchlist_company",
+            )
+        ]

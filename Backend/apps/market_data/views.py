@@ -2,6 +2,7 @@ from django.shortcuts import render
 from rest_framework import generics
 from rest_framework.views import APIView
 from apps.users.permissions import HasAppPermission
+from apps.users.company_access import filter_company_queryset, require_company_access
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
@@ -38,8 +39,11 @@ class CompanyPriceList(APIView):
             company__is_active=True
         ).select_related("company")
 
+        prices = filter_company_queryset(prices, request.user)
+
         company_id = request.query_params.get("company_id")
         if company_id:
+            require_company_access(request.user, company_id)
             prices = prices.filter(company_id=company_id)
 
         serializer = DailyPriceSerializers(prices[:500], many=True)
@@ -73,3 +77,11 @@ class FloorsheetListAPIView(generics.ListAPIView):
         "id",
     ]
     ordering = ["-date", "-id"]
+
+    def get_queryset(self):
+        company_id = self.request.query_params.get("company_id")
+        if company_id:
+            require_company_access(self.request.user, company_id)
+        return filter_company_queryset(
+            super().get_queryset(), self.request.user
+        )

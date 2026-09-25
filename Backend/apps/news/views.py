@@ -264,7 +264,7 @@
 #             qs = qs.filter(company_id=company_id)
 
 #         return qs
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Q, Prefetch
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -281,6 +281,7 @@ from .serializers import (
     RecategorizeRequestSerializer,
 )
 from .tasks import categorize_article_task
+from apps.users.company_access import get_accessible_company_ids, require_company_access
 
 
 class NewsArticleListAPIView(generics.ListAPIView):
@@ -299,8 +300,26 @@ class NewsArticleListAPIView(generics.ListAPIView):
             F("id").desc(),
         )
 
+        accessible_ids = get_accessible_company_ids(self.request.user)
+        if accessible_ids is not None:
+            qs = qs.filter(company_tags__company_id__in=accessible_ids).prefetch_related(
+                Prefetch(
+                    "company_tags",
+                    queryset=ArticleCompanyTag.objects.filter(
+                        company_id__in=accessible_ids
+                    ).select_related("company"),
+                ),
+                Prefetch(
+                    "corrections",
+                    queryset=CategorizationCorrection.objects.filter(
+                        company_id__in=accessible_ids
+                    ).select_related("corrected_by", "company"),
+                ),
+            )
+
         company_id = self.request.query_params.get("company_id")
         if company_id:
+            require_company_access(self.request.user, company_id)
             qs = qs.filter(company_tags__company_id=company_id)
 
         sentiment = self.request.query_params.get("sentiment")
@@ -320,22 +339,31 @@ class NewsArticleListAPIView(generics.ListAPIView):
         confidence_min = self.request.query_params.get("confidence_min")
         if confidence_min:
             try:
-                qs = qs.filter(company_tags__confidence__gte=float(confidence_min))
+                confidence_filter = {"company_tags__confidence__gte": float(confidence_min)}
+                if accessible_ids is not None:
+                    confidence_filter["company_tags__company_id__in"] = accessible_ids
+                qs = qs.filter(**confidence_filter)
             except ValueError:
                 pass
 
         confidence_max = self.request.query_params.get("confidence_max")
         if confidence_max:
             try:
-                qs = qs.filter(company_tags__confidence__lte=float(confidence_max))
+                confidence_filter = {"company_tags__confidence__lte": float(confidence_max)}
+                if accessible_ids is not None:
+                    confidence_filter["company_tags__company_id__in"] = accessible_ids
+                qs = qs.filter(**confidence_filter)
             except ValueError:
                 pass
 
         needs_review = self.request.query_params.get("needs_review")
         if needs_review and needs_review.lower() == "true":
             # Filter articles with low confidence (< 0.65) or no company tags
+            low_confidence = Q(company_tags__confidence__lt=0.65)
+            if accessible_ids is not None:
+                low_confidence &= Q(company_tags__company_id__in=accessible_ids)
             qs = qs.filter(
-                Q(company_tags__confidence__lt=0.65) | Q(company_tags__isnull=True)
+                low_confidence | Q(company_tags__isnull=True)
             )
 
         return qs.distinct()
@@ -351,6 +379,26 @@ class NewsArticleDetailAPIView(generics.RetrieveAPIView):
     queryset = NewsArticle.objects.prefetch_related(
         "company_tags__company", "corrections__corrected_by"
     ).all()
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        accessible_ids = get_accessible_company_ids(self.request.user)
+        if accessible_ids is not None:
+            qs = qs.filter(company_tags__company_id__in=accessible_ids).distinct().prefetch_related(
+                Prefetch(
+                    "company_tags",
+                    queryset=ArticleCompanyTag.objects.filter(
+                        company_id__in=accessible_ids
+                    ).select_related("company"),
+                ),
+                Prefetch(
+                    "corrections",
+                    queryset=CategorizationCorrection.objects.filter(
+                        company_id__in=accessible_ids
+                    ).select_related("corrected_by", "company"),
+                ),
+            )
+        return qs
 
 
 class NewsRecategorizeAPIView(APIView):
@@ -512,26 +560,36 @@ class NewsStatsAPIView(APIView):
     permission_key = "view_news"
 
     def get(self, request):
-        total_articles = NewsArticle.objects.count()
-        categorized = NewsArticle.objects.filter(company_tags__isnull=False).distinct().count()
+        accessible_ids = get_accessible_company_ids(request.user)
+        articles = NewsArticle.objects.all()
+        tags = ArticleCompanyTag.objects.all()
+        if accessible_ids is not None:
+            articles = articles.filter(company_tags__company_id__in=accessible_ids).distinct()
+            tags = tags.filter(company_id__in=accessible_ids)
+        total_articles = articles.count()
+        categorized = articles.filter(company_tags__isnull=False).distinct().count()
         uncategorized = total_articles - categorized
 
         multi_company_articles = (
-            NewsArticle.objects
-            .annotate(tag_count=Count("company_tags"))
+            articles
+            .annotate(tag_count=Count(
+                "company_tags",
+                filter=(Q(company_tags__company_id__in=accessible_ids)
+                        if accessible_ids is not None else Q()),
+            ))
             .filter(tag_count__gt=1)
             .count()
         )
 
         by_source = list(
-            NewsArticle.objects
+            articles
             .values("source")
             .annotate(count=Count("id"))
             .order_by("-count")
         )
 
         by_company = list(
-            ArticleCompanyTag.objects
+            tags
             .values("company__symbol", "company__name")
             .annotate(count=Count("id"))
             .order_by("-count")
@@ -567,6 +625,11 @@ class CategorizationCorrectionListAPIView(generics.ListAPIView):
 
         company_id = self.request.query_params.get("company_id")
         if company_id:
+            require_company_access(self.request.user, company_id)
             qs = qs.filter(company_id=company_id)
+        else:
+            accessible_ids = get_accessible_company_ids(self.request.user)
+            if accessible_ids is not None:
+                qs = qs.filter(company_id__in=accessible_ids)
 
         return qs

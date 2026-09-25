@@ -12,6 +12,7 @@ from apps.crawler_runs.serializers import CrawlRunSerializer
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.news.models import NewsArticle
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
+from apps.users.company_access import filter_company_queryset, get_accessible_company_ids
 
 
 User = get_user_model()
@@ -34,6 +35,7 @@ class DashboardSummaryAPIView(APIView):
                 is_active=True,
                 tracking__is_tracked=True,
             )
+            companies = filter_company_queryset(companies, user, "id")
             tracked_companies = companies.count()
 
             latest_prices = DailyPrice.objects.filter(
@@ -67,10 +69,14 @@ class DashboardSummaryAPIView(APIView):
                 )
 
         if user.has_app_permission("view_news"):
-            result["total_news"] = NewsArticle.objects.count()
-            result["positive_news"] = NewsArticle.objects.filter(sentiment_label__iexact="positive").count()
-            result["negative_news"] = NewsArticle.objects.filter(sentiment_label__iexact="negative").count()
-            result["neutral_news"] = NewsArticle.objects.filter(sentiment_label__iexact="neutral").count()
+            news = NewsArticle.objects.all()
+            accessible_ids = get_accessible_company_ids(user)
+            if accessible_ids is not None:
+                news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
+            result["total_news"] = news.count()
+            result["positive_news"] = news.filter(sentiment_label__iexact="positive").count()
+            result["negative_news"] = news.filter(sentiment_label__iexact="negative").count()
+            result["neutral_news"] = news.filter(sentiment_label__iexact="neutral").count()
 
         return Response(result)
 
@@ -101,13 +107,19 @@ class AdminDashboardAPIView(APIView):
         summary = {}
 
         if user.has_app_permission("view_companies") or user.is_admin():
-            summary["total_companies"] = Company.objects.count()
+            summary["total_companies"] = filter_company_queryset(
+                Company.objects.all(), user, "id"
+            ).count()
 
         if user.has_app_permission("view_users") or user.is_admin():
             summary["total_users"] = User.objects.count()
 
         if user.has_app_permission("view_news") or user.is_admin():
-            summary["total_news"] = NewsArticle.objects.count()
+            news = NewsArticle.objects.all()
+            accessible_ids = get_accessible_company_ids(user)
+            if accessible_ids is not None:
+                news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
+            summary["total_news"] = news.count()
 
         if user.has_app_permission("view_crawl_runs") or user.is_admin():
             summary["active_crawl_runs"] = CrawlRun.objects.filter(
@@ -132,7 +144,7 @@ class AdminDashboardAPIView(APIView):
         tracked_companies_data = []
         if user.has_app_permission("view_companies") or user.is_admin():
             companies = (
-                Company.objects
+                filter_company_queryset(Company.objects.all(), user, "id")
                 .select_related("tracking")
                 .order_by("symbol")[:8]
             )
@@ -177,16 +189,27 @@ class AnalystDashboardAPIView(APIView):
         result = {"role": "analyst"}
 
         if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
-            result["tracked_companies"] = Company.objects.filter(
+            companies = Company.objects.filter(
                 is_active=True,
                 tracking__is_tracked=True,
+            )
+            result["tracked_companies"] = filter_company_queryset(
+                companies, user, "id"
             ).count()
 
         if user.has_app_permission("view_news"):
-            result["total_news"] = NewsArticle.objects.count()
+            news = NewsArticle.objects.all()
+            accessible_ids = get_accessible_company_ids(user)
+            if accessible_ids is not None:
+                news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
+            result["total_news"] = news.count()
 
         if user.has_app_permission("correct_categories"):
-            result["corrections_count"] = CategorizationCorrection.objects.count()
+            corrections = CategorizationCorrection.objects.all()
+            accessible_ids = get_accessible_company_ids(user)
+            if accessible_ids is not None:
+                corrections = corrections.filter(company_id__in=accessible_ids)
+            result["corrections_count"] = corrections.count()
 
         return Response(result)
 
@@ -215,15 +238,19 @@ class ViewerDashboardAPIView(APIView):
         summary = {}
 
         if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
-            tracked_count = Company.objects.filter(
+            tracked_count = filter_company_queryset(Company.objects.filter(
                 is_active=True,
                 tracking__is_tracked=True,
-            ).count()
+            ), user, "id").count()
             summary["tracked_companies"] = tracked_count
             result["tracked_companies"] = tracked_count
 
         if user.has_app_permission("view_news"):
-            total_news = NewsArticle.objects.count()
+            news = NewsArticle.objects.all()
+            accessible_ids = get_accessible_company_ids(user)
+            if accessible_ids is not None:
+                news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
+            total_news = news.count()
             summary["total_news"] = total_news
             result["total_news"] = total_news
 
@@ -231,7 +258,7 @@ class ViewerDashboardAPIView(APIView):
 
         if user.has_app_permission("view_companies"):
             tracked = (
-                Company.objects
+                filter_company_queryset(Company.objects, user, "id")
                 .filter(is_active=True, tracking__is_tracked=True)
                 .select_related("tracking")
                 .order_by("symbol")[:10]

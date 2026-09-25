@@ -233,8 +233,7 @@ class UserCompanyAccessAPITests(TestCase):
 
 class NewsCategorizationCompanyAccessTests(TestCase):
     """
-    News viewing is unrestricted by company access.
-    News categorization (POST /api/news/:id/recategorize/) requires status=1.
+    News visibility and manual correction both respect company access.
     """
 
     def setUp(self):
@@ -303,32 +302,95 @@ class NewsCategorizationCompanyAccessTests(TestCase):
         )
         self.assertEqual(resp.status_code, 403)
 
+
     def test_categorize_denied_when_no_access_row(self):
-        # No row at all → default deny
         self.client.force_authenticate(self.analyst)
         resp = self.client.post(
             f"/api/news/{self.article.pk}/recategorize/",
-            {
-                "company_id": self.abc.pk,
-                "action": "add",
-                "confidence": 0.9,
-                "reason": "No row",
-            },
+            {"company_id": self.abc.pk, "action": "add", "confidence": 0.9, "reason": "No access"},
             format="json",
         )
         self.assertEqual(resp.status_code, 403)
 
     def test_admin_can_always_categorize(self):
-        # Admin bypasses company access — no row needed
         self.client.force_authenticate(self.admin)
         resp = self.client.post(
             f"/api/news/{self.article.pk}/recategorize/",
-            {
-                "company_id": self.abc.pk,
-                "action": "add",
-                "confidence": 0.9,
-                "reason": "Admin override",
-            },
+            {"company_id": self.abc.pk, "action": "add", "confidence": 0.9, "reason": "Admin action"},
             format="json",
         )
         self.assertNotEqual(resp.status_code, 403)
+
+
+class CompanyScopedEndpointTests(TestCase):
+    def setUp(self):
+        from apps.market_data.models import DailyPrice
+        from apps.users.models import CustomRole
+        from datetime import date
+
+        self.role = CustomRole.objects.create(
+            name="Scoped Researcher",
+            permissions=["view_price_history", "view_analysis", "export_reports"],
+        )
+        self.user_a = User.objects.create_user(
+            username="scoped_a", email="scoped_a@example.com", password="pw",
+            custom_role=self.role,
+        )
+        self.user_b = User.objects.create_user(
+            username="scoped_b", email="scoped_b@example.com", password="pw",
+            custom_role=self.role,
+        )
+        self.allowed = _make_company("SCOPEA", "Scoped A")
+        self.denied = _make_company("SCOPEB", "Scoped B")
+        _give_access(self.user_a, self.allowed)
+        _give_access(self.user_b, self.denied)
+        for company, close in ((self.allowed, 10), (self.denied, 20)):
+            DailyPrice.objects.create(
+                company=company, date=date(2025, 1, 2), open=close, high=close,
+                low=close, close=close, volume=100, turnover=1000,
+            )
+        self.client = APIClient()
+
+    def test_same_dynamic_role_has_independent_company_access(self):
+        from apps.users.company_access import require_permission_and_company
+        from rest_framework.exceptions import PermissionDenied
+
+        require_permission_and_company(self.user_a, "view_price_history", self.allowed)
+        with self.assertRaises(PermissionDenied):
+            require_permission_and_company(self.user_a, "view_price_history", self.denied)
+        self.assertNotEqual(
+            get_accessible_company_ids(self.user_a),
+            get_accessible_company_ids(self.user_b),
+        )
+
+    def test_market_price_list_filters_and_rejects_direct_company_id(self):
+        self.client.force_authenticate(self.user_a)
+        response = self.client.get("/api/market-data/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({row["company"] for row in response.data}, {self.allowed.pk})
+
+        response = self.client.get(
+            "/api/market-data/", {"company_id": self.denied.pk}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_export_company_list_and_explicit_export_respect_access(self):
+        self.client.force_authenticate(self.user_a)
+        response = self.client.get("/api/reports/export/companies/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual({row["id"] for row in response.data}, {self.allowed.pk})
+
+        response = self.client.get(
+            "/api/reports/export/trading/", {"company_id": self.denied.pk}
+        )
+        self.assertEqual(response.status_code, 403)
+
+        no_access = User.objects.create_user(
+            username="scoped_none", email="scoped_none@example.com", password="pw",
+            custom_role=self.role,
+        )
+        self.client.force_authenticate(no_access)
+        response = self.client.get("/api/reports/export/companies/")
+        self.assertEqual(response.data, [])
+        response = self.client.get("/api/reports/export/trading/")
+        self.assertEqual(response.status_code, 204)

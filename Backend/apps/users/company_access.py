@@ -1,50 +1,48 @@
-# Backend/apps/users/company_access.py
-
 from __future__ import annotations
 
 from typing import Iterable
 
+from django.db import transaction
 from django.db.models import QuerySet
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import ValidationError as APIValidationError
+
+from .models import UserCompanyAccess
 
 
 def is_unrestricted_user(user) -> bool:
     """
-    Returns True when the user is supposed to have global company access.
+    Determine whether the user has global company access.
 
-    IMPORTANT:
-    Do not replace this with:
-        user.role == "admin"
-
-    Your project has dynamic roles. This check should follow the
-    existing project's admin/superuser behavior.
+    In this project, admin users are unrestricted at the
+    company-access layer. They are still subject to the
+    existing role/application permissions where applicable.
     """
 
     if not user or not user.is_authenticated:
         return False
 
-    # Preserve the common existing admin/superuser behavior.
-    if getattr(user, "is_superuser", False):
-        return True
-
-    # Your existing User model already has is_admin() according
-    # to the inspected project architecture.
     is_admin_method = getattr(user, "is_admin", None)
 
     if callable(is_admin_method):
         return bool(is_admin_method())
 
-    return False
+    return bool(getattr(user, "is_superuser", False))
 
 
 def get_accessible_company_ids(user) -> list[int] | None:
     """
-    Return IDs of companies that the user can access.
+    Return the company IDs the user is allowed to access.
 
     Returns:
-        None -> unrestricted/global access
-        []   -> authenticated user has no company access
-        [1,2] -> explicitly accessible companies
+        None
+            User has unrestricted/global company access.
+
+        []
+            Authenticated user has no company access.
+
+        [1, 2, 3]
+            User has access to these companies.
     """
 
     if not user or not user.is_authenticated:
@@ -54,26 +52,24 @@ def get_accessible_company_ids(user) -> list[int] | None:
         return None
 
     return list(
-        user.company_accesses
-        .filter(
+        UserCompanyAccess.objects.filter(
+            user=user,
             status=1,
             company__is_active=True,
-        )
-        .values_list(
+        ).values_list(
             "company_id",
             flat=True,
         )
     )
 
 
-def user_can_access_company(user, company_or_id) -> bool:
+def has_company_access(user, company_or_id) -> bool:
     """
-    Check whether a user can access a particular company.
+    Backwards-compatible helper used by existing code.
 
-    company_or_id may be:
+    Accepts either:
         - Company instance
-        - integer ID
-        - string ID
+        - company ID
     """
 
     if not user or not user.is_authenticated:
@@ -91,25 +87,51 @@ def user_can_access_company(user, company_or_id) -> bool:
     if company_id is None:
         return False
 
-    return user.company_accesses.filter(
+    return UserCompanyAccess.objects.filter(
+        user=user,
         company_id=company_id,
         status=1,
         company__is_active=True,
     ).exists()
 
 
-def require_company_access(user, company_or_id) -> None:
+def user_can_access_company(user, company_or_id) -> bool:
     """
-    Raise HTTP 403 when the user cannot access the company.
+    Preferred descriptive alias for has_company_access().
     """
 
-    if not user_can_access_company(
+    return has_company_access(
+        user,
+        company_or_id,
+    )
+
+
+def require_company_access(user, company_or_id) -> None:
+    """
+    Raise HTTP 403 if the user cannot access the company.
+    """
+
+    if not has_company_access(
         user,
         company_or_id,
     ):
         raise PermissionDenied(
-            detail="You do not have access to this company."
+            "You do not have access to this company."
         )
+
+
+def require_company_id_access(
+    user,
+    company_id,
+) -> None:
+    """
+    Validate access using a company ID.
+    """
+
+    require_company_access(
+        user,
+        company_id,
+    )
 
 
 def filter_company_queryset(
@@ -118,16 +140,17 @@ def filter_company_queryset(
     company_field: str = "company_id",
 ) -> QuerySet:
     """
-    Restrict a queryset to companies accessible by the user.
+    Restrict a queryset to companies accessible
+    by the authenticated user.
 
-    Examples:
+    Example:
 
         filter_company_queryset(
             DailyPrice.objects.all(),
             request.user,
         )
 
-    or:
+    For Company.objects querysets use:
 
         filter_company_queryset(
             Company.objects.all(),
@@ -138,80 +161,15 @@ def filter_company_queryset(
 
     company_ids = get_accessible_company_ids(user)
 
-    # None means unrestricted.
+    # None means unrestricted/global access.
     if company_ids is None:
         return queryset
 
     # Empty list intentionally returns no records.
     return queryset.filter(
         **{
-            f"{company_field}__in": company_ids
+            f"{company_field}__in": company_ids,
         }
-    )
-
-
-def require_permission(
-    user,
-    permission_code: str,
-) -> None:
-    """
-    Use the EXISTING dynamic permission architecture.
-
-    Adapt the method name only if your User model uses a different
-    permission-checking method.
-    """
-
-    checker = getattr(
-        user,
-        "has_app_permission",
-        None,
-    )
-
-    if callable(checker):
-        allowed = checker(permission_code)
-    else:
-        checker = getattr(
-            user,
-            "has_permission",
-            None,
-        )
-
-        if not callable(checker):
-            raise PermissionDenied(
-                "Permission checking is not configured."
-            )
-
-        allowed = checker(permission_code)
-
-    if not allowed:
-        raise PermissionDenied(
-            "You do not have the required permission."
-        )
-
-
-def require_permission_and_company(
-    user,
-    permission_code: str,
-    company_or_id,
-) -> None:
-    """
-    Central authorization function.
-
-    BOTH conditions are required:
-
-        dynamic permission
-        +
-        company access
-    """
-
-    require_permission(
-        user,
-        permission_code,
-    )
-
-    require_company_access(
-        user,
-        company_or_id,
     )
 
 
@@ -221,9 +179,7 @@ def filter_queryset_by_user_companies(
     company_field: str = "company_id",
 ) -> QuerySet:
     """
-    Alias with a more descriptive name.
-
-    Useful when reading views.
+    Descriptive alias for filter_company_queryset().
     """
 
     return filter_company_queryset(
@@ -238,17 +194,65 @@ def accessible_company_queryset(
     user,
 ) -> QuerySet:
     """
-    Specifically for Company.objects queryset.
+    Restrict a Company queryset to companies accessible
+    by the authenticated user.
     """
 
     company_ids = get_accessible_company_ids(user)
 
     if company_ids is None:
-        return company_queryset
+        return company_queryset.filter(
+            is_active=True
+        )
 
     return company_queryset.filter(
         pk__in=company_ids,
         is_active=True,
+    )
+
+
+def require_permission(
+    user,
+    permission_code: str,
+) -> None:
+    """
+    Reuse the project's existing RBAC permission system.
+    """
+
+    if not user or not user.is_authenticated:
+        raise PermissionDenied(
+            "Authentication required."
+        )
+
+    if not user.has_app_permission(
+        permission_code
+    ):
+        raise PermissionDenied(
+            "You do not have the required permission."
+        )
+
+
+def require_permission_and_company(
+    user,
+    permission_code: str,
+    company_or_id,
+) -> None:
+    """
+    Central authorization rule:
+
+        ROLE PERMISSION
+        AND
+        COMPANY ACCESS
+    """
+
+    require_permission(
+        user,
+        permission_code,
+    )
+
+    require_company_access(
+        user,
+        company_or_id,
     )
 
 
@@ -257,14 +261,14 @@ def validate_company_ids(
     company_ids: Iterable[int],
 ) -> list[int]:
     """
-    Validate a collection of company IDs against the user's access.
+    Validate multiple company IDs against the user's
+    company access.
 
-    Useful for:
-        - bulk operations
-        - comparison
+    Used by:
         - exports
+        - comparisons
+        - bulk operations
         - reports
-        - watchlist
     """
 
     normalized_ids = []
@@ -282,15 +286,17 @@ def validate_company_ids(
                 "Invalid company ID."
             )
 
-    # Remove duplicates while preserving order.
     normalized_ids = list(
-        dict.fromkeys(normalized_ids)
+        dict.fromkeys(
+            normalized_ids
+        )
     )
 
     accessible_ids = get_accessible_company_ids(
         user
     )
 
+    # Admin/global user.
     if accessible_ids is None:
         return normalized_ids
 
@@ -312,225 +318,65 @@ def validate_company_ids(
     return normalized_ids
 
 
-from django.db import transaction
-
-from .models import UserCompanyAccess
-
-
 @transaction.atomic
-def set_company_access(user, company_access):
-    """
-    Replace all company access records for a user.
-
-    company_access should contain items like:
-        [
-            {"company_id": 2, "status": 1},
-            {"company_id": 7, "status": 1},
-            {"company_id": 9, "status": 0},
-        ]
-
-    Existing records are updated or created.
-    Companies not included in the submitted list are removed.
-    """
-
-    submitted_company_ids = set()
-
-    for item in company_access:
-        company_id = int(item["company_id"])
-        status = int(item["status"])
-
-        submitted_company_ids.add(company_id)
-
-        UserCompanyAccess.objects.update_or_create(
-            user=user,
-            company_id=company_id,
-            defaults={
-                "status": status,
-            },
-        )
-
-    # Remove old company-access records that were
-    # not included in the new submission.
-    UserCompanyAccess.objects.filter(
-        user=user
-    ).exclude(
-        company_id__in=submitted_company_ids
-    ).delete()
-    
-    
-from django.core.exceptions import PermissionDenied
-from rest_framework.exceptions import NotFound
-
-
-def is_unrestricted_user(user):
-    """
-    Preserve the existing project's global-access behavior.
-
-    IMPORTANT:
-    Do not automatically assume every admin is unrestricted.
-    Adjust this only if your existing RBAC implementation already
-    treats a particular user as having global access.
-    """
-    return getattr(user, "is_superuser", False)
-
-
-def get_accessible_company_ids(user):
-    """
-    Return IDs of companies the authenticated user can access.
-    """
-
-    if not user or not user.is_authenticated:
-        return []
-
-    if is_unrestricted_user(user):
-        from apps.companies.models import Company
-
-        return Company.objects.values_list("id", flat=True)
-
-    return (
-        user.company_access
-        .filter(is_active=True)
-        .values_list("company_id", flat=True)
-    )
-
-
-def user_can_access_company(user, company):
-    """
-    Check whether a user has active access to a company.
-    """
-
-    if not user or not user.is_authenticated:
-        return False
-
-    if is_unrestricted_user(user):
-        return True
-
-    return user.company_access.filter(
-        company_id=company.id,
-        is_active=True,
-    ).exists()
-
-
-def require_company_access(user, company):
-    """
-    Raise 403 when the user cannot access the company.
-    """
-
-    if not user_can_access_company(user, company):
-        raise PermissionDenied(
-            "You do not have access to this company."
-        )
-
-    return True
-
-
-def require_company_id_access(user, company_id):
-    """
-    Check access directly from a company ID.
-    """
-
-    if is_unrestricted_user(user):
-        return True
-
-    if not user.company_access.filter(
-        company_id=company_id,
-        is_active=True,
-    ).exists():
-        raise PermissionDenied(
-            "You do not have access to this company."
-        )
-
-    return True
-
-
-def filter_company_queryset(queryset, user, field_name="company_id"):
-    """
-    Restrict an existing queryset to companies accessible
-    to the authenticated user.
-    """
-
-    allowed_ids = get_accessible_company_ids(user)
-
-    return queryset.filter(
-        **{
-            f"{field_name}__in": allowed_ids,
-        }
-    )
-
-
-def require_permission(user, permission_code):
-    """
-    Reuse your EXISTING dynamic permission implementation here.
-
-    Replace the body with the exact permission helper already used
-    by your project.
-    """
-
-    if not user.is_authenticated:
-        raise PermissionDenied(
-            "Authentication required."
-        )
-
-    if not user.has_app_permission(permission_code):
-        raise PermissionDenied(
-            f"Missing permission: {permission_code}"
-        )
-
-    return True
-
-
-def require_permission_and_company(
+def set_company_access(
     user,
-    permission_code,
-    company_id,
+    company_access,
 ):
     """
-    Every company-scoped operation should use this pattern.
-    """
+    Replace the complete company-access configuration
+    for one user.
 
-    require_permission(
-        user,
-        permission_code,
-    )
+    Example:
 
-    require_company_id_access(
-        user,
-        company_id,
-    )
-
-    return True
-
-
-
-from django.db import transaction
-
-from .models import UserCompanyAccess
-
-
-@transaction.atomic
-def set_company_access(user, company_access):
-    """
-    Replace all company access records for a user.
-
-    company_access should contain items like:
         [
-            {"company_id": 2, "status": 1},
-            {"company_id": 7, "status": 1},
-            {"company_id": 9, "status": 0},
+            {
+                "company_id": 1,
+                "status": 1,
+            },
+            {
+                "company_id": 2,
+                "status": 0,
+            },
         ]
-
-    Existing records are updated or created.
-    Companies not included in the submitted list are removed.
     """
 
     submitted_company_ids = set()
+    normalized_access = []
 
     for item in company_access:
-        company_id = int(item["company_id"])
-        status = int(item["status"])
+        company_id = int(
+            item["company_id"]
+        )
 
-        submitted_company_ids.add(company_id)
+        status = int(
+            item["status"]
+        )
 
+        if status not in (0, 1):
+            raise PermissionDenied(
+                "Company access status must be 0 or 1."
+            )
+
+        submitted_company_ids.add(
+            company_id
+        )
+
+        normalized_access.append((company_id, status))
+
+    from apps.companies.models import Company
+    existing_company_ids = set(
+        Company.objects.filter(
+            pk__in=submitted_company_ids,
+            is_active=True,
+        ).values_list("pk", flat=True)
+    )
+    if existing_company_ids != submitted_company_ids:
+        raise APIValidationError(
+            {"company_access": "Every company must exist and be active."}
+        )
+
+    for company_id, status in normalized_access:
         UserCompanyAccess.objects.update_or_create(
             user=user,
             company_id=company_id,
@@ -539,8 +385,6 @@ def set_company_access(user, company_access):
             },
         )
 
-    # Remove old company-access records that were
-    # not included in the new submission.
     UserCompanyAccess.objects.filter(
         user=user
     ).exclude(

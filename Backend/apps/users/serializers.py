@@ -336,6 +336,16 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.save()
 
         return user
+class UserCompanyAccessItemSerializer(serializers.Serializer):
+    company_id = serializers.IntegerField(min_value=1)
+    status = serializers.IntegerField(min_value=0, max_value=1)
+
+
+class UserCompanyAccessListSerializer(serializers.Serializer):
+    company_access = UserCompanyAccessItemSerializer(
+        many=True,
+        allow_empty=True,
+    )
 class AdminUserCreateSerializer(
     serializers.ModelSerializer
 ):
@@ -362,6 +372,12 @@ class AdminUserCreateSerializer(
         allow_null=True,
     )
 
+    company_access = UserCompanyAccessItemSerializer(
+        many=True,
+        required=False,
+        allow_empty=True,
+    )
+
     class Meta:
         model = User
 
@@ -376,6 +392,7 @@ class AdminUserCreateSerializer(
             "role",
             "custom_role_id",
             "is_active",
+            "company_access",
         ]
 
         read_only_fields = ["id"]
@@ -398,6 +415,11 @@ class AdminUserCreateSerializer(
         return attrs
 
     def create(self, validated_data):
+        company_access = validated_data.pop(
+            "company_access",
+            []
+        )
+
         validated_data.pop(
             "password_confirm"
         )
@@ -410,6 +432,14 @@ class AdminUserCreateSerializer(
 
         user.set_password(password)
         user.save()
+
+        if company_access:
+            from .company_access import set_company_access
+
+            set_company_access(
+                user,
+                company_access
+            )
 
         return user
 
@@ -751,13 +781,3 @@ class RoleDefinitionSerializer(
     
     
 
-class UserCompanyAccessItemSerializer(serializers.Serializer):
-    company_id = serializers.IntegerField(min_value=1)
-    status = serializers.IntegerField(min_value=0, max_value=1)
-
-
-class UserCompanyAccessListSerializer(serializers.Serializer):
-    company_access = UserCompanyAccessItemSerializer(
-        many=True,
-        allow_empty=True,
-    )

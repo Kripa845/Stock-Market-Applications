@@ -10,6 +10,10 @@ from django.db.models import Q
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.market_data.serializers import DailyPriceSerializers, FloorsheetSerializer
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
+from apps.users.company_access import (
+    filter_company_queryset,
+    require_company_access,
+)
 from .models import Company, TrackedCompany
 from .serializers import CompanySerializer
 
@@ -79,6 +83,12 @@ class CompanyListCreateAPIView(generics.ListCreateAPIView):
         if tracked_only and tracked_only.lower() == "true":
             queryset = queryset.filter(tracking__is_tracked=True)
 
+        queryset = filter_company_queryset(
+            queryset,
+            self.request.user,
+            "id",
+        )
+
         return queryset.order_by("symbol")
 
 
@@ -93,6 +103,17 @@ class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return _company_list_queryset()
+
+    def get_object(self):
+        company = super().get_object()
+
+        if self.request.method == "GET":
+            require_company_access(
+                self.request.user,
+                company.pk,
+            )
+
+        return company
 
     def get_required_permissions(self, request):
         return {
@@ -113,6 +134,7 @@ class CompanyToggleTrackAPIView(APIView):
 
     def post(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
+        require_company_access(request.user, company.pk)
         tracked_obj, _ = TrackedCompany.objects.get_or_create(
             company=company,
             defaults={"is_tracked": True},
@@ -169,6 +191,7 @@ class CompanyPricesAPIView(APIView):
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
+        require_company_access(request.user, company.pk)
         range_param = request.query_params.get("range", "31d").lower()
 
         prices_qs = DailyPrice.objects.filter(company=company).order_by("date")
@@ -205,6 +228,7 @@ class CompanyFloorsheetAPIView(APIView):
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
+        require_company_access(request.user, company.pk)
         date_param = request.query_params.get("date")
 
         qs = FloorsheetTransaction.objects.filter(company=company)
@@ -237,8 +261,11 @@ class CompanySectorsAPIView(APIView):
     permission_key = "view_companies"
 
     def get(self, request):
+        companies = filter_company_queryset(
+            Company.objects.filter(is_active=True), request.user, "id"
+        )
         sectors = (
-            Company.objects
+            companies
             .values_list(
                 "sector",
                 flat=True,

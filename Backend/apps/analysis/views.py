@@ -664,6 +664,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
+from apps.users.company_access import filter_company_queryset, require_company_access
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.market_data.services.trading_calendar import rolling_window_bounds
 from apps.news.models import ArticleCompanyTag, NewsArticle
@@ -682,8 +683,10 @@ class DailyAnalysisListAPIView(generics.ListAPIView):
 
     def get_queryset(self):
         qs = DailyAnalysis.objects.select_related("company").all()
+        qs = filter_company_queryset(qs, self.request.user)
         company_id = self.request.query_params.get("company_id")
         if company_id:
+            require_company_access(self.request.user, company_id)
             qs = qs.filter(company_id=company_id)
         return qs.order_by("-date")
 
@@ -711,6 +714,7 @@ class CompanyBehaviorSummaryAPIView(APIView):
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
+        require_company_access(request.user, company.pk)
 
         window_start, window_end = rolling_window_bounds(
             window_days=self.WINDOW_DAYS,
@@ -920,6 +924,7 @@ class CompanyBrokerActivityAPIView(APIView):
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
+        require_company_access(request.user, company.pk)
 
         activity = build_broker_activity(
             company=company,
@@ -985,6 +990,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
+        require_company_access(request.user, company.pk)
 
         window_start = timezone.localdate() - timedelta(days=self.WINDOW_DAYS)
 
@@ -1127,7 +1133,9 @@ class CrossCompanyAnalysisAPIView(APIView):
     def get(self, request):
         window_start = timezone.localdate() - timedelta(days=self.WINDOW_DAYS)
 
-        companies = Company.objects.filter(is_active=True).prefetch_related(
+        companies = filter_company_queryset(
+            Company.objects.filter(is_active=True), request.user, "id"
+        ).prefetch_related(
             "article_tags__article"
         )
 
@@ -1280,7 +1288,9 @@ class DashboardSummaryAPIView(APIView):
         from django.utils import timezone
         from datetime import timedelta
 
-        companies = Company.objects.filter(is_active=True).prefetch_related("dailyprice_set")
+        companies = filter_company_queryset(
+            Company.objects.filter(is_active=True), request.user, "id"
+        ).prefetch_related("dailyprice_set")
         total_market_turnover = 0.0
         total_market_volume = 0
         avg_change_sum = 0.0
