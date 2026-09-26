@@ -20,6 +20,7 @@ import Layout from './components/layout/Layout';
 
 import Dashboard from './pages/Dashboard';
 import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
+import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage';
 
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
@@ -33,7 +34,6 @@ import MarketPage from './pages/Market';
 import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
 import NewsDetail from './pages/NewsDetail';
-import TradingPage from './pages/Trading';
 import ExportPage from './pages/ExportPage';
 
 import ForbiddenPage from './pages/ForbiddenPage';
@@ -259,22 +259,6 @@ function AppRoutes() {
 
 
           {/* -----------------------------------------------
-              TRADING
-          ----------------------------------------------- */}
-
-          <Route
-            path="/trading"
-            element={
-              <PermissionRoute
-                rule={ROUTE_RULES['/trading']}
-              >
-                <TradingPage />
-              </PermissionRoute>
-            }
-          />
-
-
-          {/* -----------------------------------------------
               COMPANY ANALYSIS
           ----------------------------------------------- */}
 
@@ -287,6 +271,15 @@ function AppRoutes() {
                 <CompanyAnalysisDashboard />
               </PermissionRoute>
             }
+          />
+
+          <Route
+            path="/broker-analysis"
+            element={<PermissionRoute rule={ROUTE_RULES['/broker-analysis']}><BrokerAnalysisPage /></PermissionRoute>}
+          />
+          <Route
+            path="/broker-analysis/:brokerId"
+            element={<PermissionRoute rule={ROUTE_RULES['/broker-analysis']}><BrokerDetailPage /></PermissionRoute>}
           />
 
 
@@ -474,7 +467,7 @@ function AppRoutes() {
 
           <Route
             path="/analyst/trading"
-            element={<Navigate to="/trading" replace />}
+            element={<Navigate to="/company-analysis" replace />}
           />
 
           <Route

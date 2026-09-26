@@ -107,11 +107,6 @@ export default function LandingPage() {
               text: 'Analyze crawled news and company sentiment.',
             },
             {
-              icon: Activity,
-              title: 'Trading Behaviour',
-              text: 'Study VWAP, pressure and volume anomalies.',
-            },
-            {
               icon: Database,
               title: 'Crawling',
               text: 'Monitor market and news data collection.',
@@ -147,4 +142,3 @@ export default function LandingPage() {
     </div>
   );
 }
-

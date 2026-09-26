@@ -76,6 +76,7 @@ class BrokerCoverageTests(BrokerTestBase):
     def test_broker_on_both_sides_is_one_combined_row(self):
         self.tx(buyer="58", seller="49", quantity=300, rate=100)
         self.tx(buyer="11", seller="58", quantity=100, rate=100)
+        self.tx(buyer=" 58 ", seller="58", quantity=100, rate=100)
 
         result = build_broker_activity(company=self.company)
         rows = [r for r in result["brokers"] if r["broker"] == "58"]
@@ -84,11 +85,12 @@ class BrokerCoverageTests(BrokerTestBase):
         self.assertEqual(len(rows), 1)
 
         row = rows[0]
-        self.assertEqual(row["buy_quantity"], 300)
-        self.assertEqual(row["sell_quantity"], 100)
+        self.assertEqual(row["buy_quantity"], 400)
+        self.assertEqual(row["sell_quantity"], 200)
         self.assertEqual(row["net_quantity"], 200)
         self.assertEqual(row["net_value"], Decimal("20000"))
-        self.assertEqual(row["total_quantity"], 400)
+        self.assertEqual(row["total_quantity"], 600)
+        self.assertEqual(row["trades"], 3)
 
     def test_equal_buy_and_sell_quantity_nets_to_zero(self):
         self.tx(buyer="58", seller="49", quantity=200, rate=100)

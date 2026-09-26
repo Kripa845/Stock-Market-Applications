@@ -42,11 +42,13 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.negotiation import DefaultContentNegotiation
 
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle
 from apps.analysis.models import DailyAnalysis
+from apps.analysis.services.brokers import build_broker_activity, sampled_floorsheet_dates
 from apps.users.permissions import HasAppPermission
 from apps.users.company_access import get_accessible_company_ids
 
@@ -294,6 +296,23 @@ def _pdf_response(buf, filename: str) -> HttpResponse:
 # COMPANIES LIST (for frontend dropdown)
 # ============================================================
 
+class ExportContentNegotiation(DefaultContentNegotiation):
+    """Treat the export ``format`` query parameter as file format, not renderer."""
+
+    def select_renderer(self, request, renderers, format_suffix=None):
+        django_request = request._request
+        original_query = django_request.GET
+        if "format" not in original_query:
+            return super().select_renderer(request, renderers, format_suffix)
+
+        django_request.GET = original_query.copy()
+        django_request.GET.pop("format", None)
+        try:
+            return super().select_renderer(request, renderers, format_suffix)
+        finally:
+            django_request.GET = original_query
+
+
 class ExportCompanyListAPIView(APIView):
     """
     GET /api/reports/export/companies/
@@ -339,6 +358,7 @@ class ExportNewsAPIView(APIView):
     """
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
+    content_negotiation_class = ExportContentNegotiation
 
     # Maximum rows streamed to prevent memory issues on large datasets.
     MAX_ROWS = 5_000
@@ -518,6 +538,7 @@ class ExportTradingAPIView(APIView):
     """
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
+    content_negotiation_class = ExportContentNegotiation
 
     MAX_ROWS = 10_000
 
@@ -647,6 +668,85 @@ class ExportTradingAPIView(APIView):
 # FLOORSHEET EXPORT
 # ============================================================
 
+class ExportBrokerActivityAPIView(APIView):
+    """Export aggregated broker activity from sampled floorsheet rows."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "export_reports"
+    content_negotiation_class = ExportContentNegotiation
+
+    def get(self, request):
+        fmt = request.query_params.get("format", "csv").lower()
+        company_ids = request.query_params.getlist("company_id")
+        companies, err = _resolve_companies(company_ids, request.user)
+        if err:
+            return err
+        date_from, err = _parse_date(request.query_params.get("date_from", ""), "date_from")
+        if err:
+            return err
+        date_to, err = _parse_date(request.query_params.get("date_to", ""), "date_to")
+        if err:
+            return err
+        range_err = _validate_date_range(date_from, date_to)
+        if range_err:
+            return range_err
+        if fmt not in ("csv", "xlsx"):
+            return _bad_request("Broker activity export supports csv and xlsx only.")
+
+        company_scope = [company.pk for company in companies]
+        activity = build_broker_activity(
+            company_ids=company_scope,
+            start_date=date_from,
+            end_date=date_to,
+        )
+        sampled_dates = sampled_floorsheet_dates(
+            company_ids=company_scope,
+            start_date=date_from,
+            end_date=date_to,
+        )
+        if not activity["brokers"]:
+            return Response(
+                {"message": "No floorsheet activity found for the selected filters."},
+                status=status.HTTP_204_NO_CONTENT,
+            )
+
+        period_start = date_from or (min(sampled_dates) if sampled_dates else "")
+        period_end = date_to or (max(sampled_dates) if sampled_dates else "")
+        sampled_text = ", ".join(str(day) for day in sampled_dates)
+        headers = [
+            "Sampled Period Start", "Sampled Period End", "Sampled Trading Sessions",
+            "Broker", "Broker-side Buy Qty", "Broker-side Sell Qty",
+            "Net Buy/Sell Qty", "Total Activity", "Trades",
+        ]
+        rows = [[
+            str(period_start), str(period_end), sampled_text, row["broker"],
+            row["buy_quantity"], row["sell_quantity"], row["net_quantity"],
+            row["total_quantity"], row["trades"],
+        ] for row in activity["brokers"]]
+        fname = _filename("broker_activity_export", companies, date_from, date_to, fmt)
+
+        if fmt == "csv":
+            response = HttpResponse(content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = f'attachment; filename="{fname}"'
+            response.write("\ufeff")
+            writer = csv.writer(response)
+            writer.writerow(headers)
+            writer.writerows(rows)
+            return response
+
+        if not OPENPYXL_AVAILABLE:
+            return _bad_request("XLSX export requires openpyxl.")
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Broker Activity"
+        _apply_xlsx_header(ws, headers)
+        for row in rows:
+            ws.append(row)
+        _autofit_xlsx(ws)
+        ws.freeze_panes = "A2"
+        return _xlsx_response(wb, fname)
+
+
 class ExportFloorsheetAPIView(APIView):
     """
     GET /api/reports/export/floorsheet/
@@ -662,6 +762,7 @@ class ExportFloorsheetAPIView(APIView):
     """
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
+    content_negotiation_class = ExportContentNegotiation
 
     MAX_ROWS = 20_000
 
@@ -777,6 +878,7 @@ class ExportReportAPIView(APIView):
     """
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
+    content_negotiation_class = ExportContentNegotiation
 
     def get(self, request):
         fmt = request.query_params.get("format", "pdf").lower()

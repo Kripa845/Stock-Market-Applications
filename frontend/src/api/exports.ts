@@ -22,7 +22,7 @@ export interface ExportCompany {
   sector: string;
 }
 
-export type ExportDataType = 'news' | 'trading' | 'floorsheet' | 'report';
+export type ExportDataType = 'news' | 'trading' | 'floorsheet' | 'broker_analysis' | 'report';
 export type ExportFormat = 'csv' | 'xlsx' | 'pdf';
 export type SentimentFilter = '' | 'positive' | 'neutral' | 'negative';
 
@@ -136,6 +136,17 @@ export const exportsApi = {
     _downloadBlob(
       new Blob([response.data], { type: MIME[params.format] }),
       _buildFilename('floorsheet_export', params, companies),
+    );
+  },
+
+  async exportBrokerAnalysis(params: ExportParams, companies: ExportCompany[]): Promise<void> {
+    const response = await apiClient.get('/reports/export/brokers/', {
+      params: _cleanParams(params),
+      responseType: 'blob',
+    });
+    _downloadBlob(
+      new Blob([response.data], { type: MIME[params.format] }),
+      _buildFilename('broker_activity_export', params, companies),
     );
   },
 

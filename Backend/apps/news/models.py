@@ -142,11 +142,13 @@ class RawArticle(models.Model):
 
 
 class NewsArticle(models.Model):
+    SOURCE_CHOICES = [("crawled", "Crawled"), ("seeded", "Seeded"), ("manual", "Manual"), ("unverified", "Unverified")]
     raw_article = models.OneToOneField(
         RawArticle,
         on_delete=models.CASCADE,
         related_name="article",
     )
+    data_provenance = models.CharField(max_length=16, choices=SOURCE_CHOICES, default="unverified", db_index=True)
     source = models.CharField(max_length=100)
     url = models.URLField(max_length=1000, unique=True)
     headline = models.TextField()

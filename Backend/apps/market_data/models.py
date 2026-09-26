@@ -2,7 +2,9 @@ from django.db import models
 from apps.companies.models import Company
 # Create your models here.
 class DailyPrice(models.Model):
+    SOURCE_CHOICES = [("crawled", "Crawled"), ("seeded", "Seeded"), ("manual", "Manual"), ("unverified", "Unverified")]
     company=models.ForeignKey(Company,on_delete=models.CASCADE)
+    source = models.CharField(max_length=16, choices=SOURCE_CHOICES, default="unverified", db_index=True)
     date=models.DateField()
     open=models.DecimalField(max_digits=15,decimal_places=2)
     high=models.DecimalField(max_digits=15,decimal_places=2)

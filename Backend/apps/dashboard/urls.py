@@ -7,6 +7,7 @@ from .views import (
     ViewerDashboardAPIView,
 )
 from .export_views import (
+    ExportBrokerActivityAPIView,
     ExportCompanyListAPIView,
     ExportFloorsheetAPIView,
     ExportNewsAPIView,
@@ -70,6 +71,11 @@ urlpatterns = [
     ),
 
     # Floorsheet export  (CSV | XLSX)
+    path(
+        "export/brokers/",
+        ExportBrokerActivityAPIView.as_view(),
+        name="export-broker-activity",
+    ),
     path(
         "export/floorsheet/",
         ExportFloorsheetAPIView.as_view(),

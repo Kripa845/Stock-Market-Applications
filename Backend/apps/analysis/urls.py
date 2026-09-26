@@ -2,6 +2,9 @@ from django.urls import path
 from .views import (
     CompanyBehaviorSummaryAPIView,
     CompanyBrokerActivityAPIView,
+    BrokerAnalysisAPIView,
+    BrokerDetailAPIView,
+    CompanyCategorizedNewsAPIView,
     CompanyNewsPriceCorrelationAPIView,
     CrossCompanyAnalysisAPIView,
     DailyAnalysisListAPIView,
@@ -9,6 +12,9 @@ from .views import (
 )
 
 urlpatterns = [
+    path("brokers/", BrokerAnalysisAPIView.as_view(), name="broker-analysis"),
+    path("brokers/<str:broker_id>/", BrokerDetailAPIView.as_view(), name="broker-detail"),
+    path("companies/<int:pk>/categorized-news/", CompanyCategorizedNewsAPIView.as_view(), name="company-categorized-news"),
     path(
         "daily/",
         DailyAnalysisListAPIView.as_view(),

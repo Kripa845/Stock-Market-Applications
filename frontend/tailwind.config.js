@@ -8,22 +8,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        "bg-card": "#111527",
-        "bg-elevated": "#171B2E",
-        "bg-border": "#1E2538",
-        "bg-primary": "#0B0E1A",
-        "bg-secondary": "#161B2E",
+        "bg-card": "#161a25",
+        "bg-elevated": "#1b1f2a",
+        "bg-border": "#242832",
+        "bg-primary": "#0d0e14",
+        "bg-secondary": "#11141c",
 
         "accent": "#7C3AED",
-        "accent-light": "#8B5CF6",
-        "accent-glow": "#7C3AED33",
+        "accent-light": "#A78BFA",
+        "accent-glow": "#7C3AED24",
 
-        "text-primary": "#E2E8F0",
-        "text-secondary": "#94A3B8",
-        "text-muted": "#64748B",
+        "text-primary": "#d1d4dc",
+        "text-secondary": "#787b86",
+        "text-muted": "#787b86",
 
-        "up": "#22C55E",
-        "down": "#EF4444",
+        "up": "#26a69a",
+        "down": "#ef5350",
+      },
+      fontFamily: {
+        sans: ["Inter", "system-ui", "sans-serif"],
+        mono: ["IBM Plex Mono", "SFMono-Regular", "Consolas", "monospace"],
       },
     },
   },

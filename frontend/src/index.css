@@ -3,6 +3,18 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --trading-grid: #2a2e39;
+  --trading-muted: #787b86;
+  --trading-text-secondary: #787b86;
+  --trading-text-primary: #d1d4dc;
+  --trading-panel: #161a25;
+  --trading-divider: #242832;
+  --trading-up: #26a69a;
+  --trading-down: #ef5350;
+  --trading-accent: #7c3aed;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -30,11 +42,16 @@
 
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-mono {
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
   body {
-    background-color: #0B0E1A;
-    color: #E2E8F0;
+    background-color: #0d0e14;
+    color: #d1d4dc;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -49,16 +66,16 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #111527;
+    background: #0d0e14;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #1E2538;
+    background: #242832;
     border-radius: 2px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: #7C3AED;
+    background: #7c3aed;
   }
 
   html[data-theme="light"] ::-webkit-scrollbar-track {
@@ -75,6 +92,27 @@
 }
 
 @layer components {
+
+  .trading-terminal-page .card,
+  .trading-terminal-page .card-elevated {
+    border-color: var(--trading-divider);
+    border-radius: 3px;
+    box-shadow: none;
+  }
+
+  .trading-terminal-page .font-medium {
+    font-weight: 400;
+  }
+
+  .trading-terminal-page .font-semibold,
+  .trading-terminal-page .font-bold {
+    font-weight: 600;
+  }
+
+  .trading-terminal-page .card.flex.flex-wrap.items-center {
+    column-gap: 1rem;
+    row-gap: 0.75rem;
+  }
 
   html[data-theme="light"] .sidebar-wrap {
     background-color: #FFFFFF !important;
@@ -138,7 +176,7 @@
    ========================= */
 
   .card {
-    @apply bg-bg-card border border-bg-border rounded-xl p-4;
+    @apply bg-bg-card border border-bg-border rounded-md p-4;
   }
 
   html[data-theme="light"] .card {
@@ -163,7 +201,7 @@
   .btn-primary {
     @apply bg-accent hover:bg-accent-light
            text-white text-sm font-medium
-           px-4 py-2 rounded-lg
+           px-3 py-1.5 rounded
            transition-colors;
   }
 
@@ -172,7 +210,7 @@
            hover:text-text-primary
            hover:bg-bg-elevated
            text-sm font-medium
-           px-3 py-2 rounded-lg
+           px-3 py-1.5 rounded
            transition-colors;
   }
 
@@ -211,7 +249,7 @@
     @apply w-full
            px-4
            py-3
-           rounded-lg
+           rounded
            bg-white
            border
            border-bg-border
@@ -262,7 +300,7 @@
            gap-3
            px-3
            py-2
-           rounded-lg
+           rounded
            text-sm
            text-text-secondary
            hover:text-text-primary
@@ -347,29 +385,29 @@
 /* Keep the legacy company manager aligned with the dark application shell. */
 .admin-companies .bg-slate-50,
 .admin-companies .bg-white {
-  background-color: #161B2E !important;
+  background-color: #161a25 !important;
 }
 
 .admin-companies .text-slate-900,
 .admin-companies .text-slate-700 {
-  color: #E2E8F0 !important;
+  color: #d1d4dc !important;
 }
 
 .admin-companies .text-slate-500,
 .admin-companies .text-slate-400 {
-  color: #94A3B8 !important;
+  color: #aeb2bd !important;
 }
 
 .admin-companies .border-slate-200,
 .admin-companies .border-slate-100 {
-  border-color: #1E2538 !important;
+  border-color: #242832 !important;
 }
 
 .admin-companies input,
 .admin-companies select {
-  background-color: #111527 !important;
-  color: #E2E8F0 !important;
-  border-color: #1E2538 !important;
+  background-color: #0d0e14 !important;
+  color: #d1d4dc !important;
+  border-color: #242832 !important;
 }
 
 /* =========================
@@ -573,4 +611,3 @@ html[data-theme="light"] .hover\:text-down:hover {
 html[data-theme="light"] .stroke-down {
   stroke: #EF4444 !important;
 }
-

@@ -1,47 +1,44 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Area, BarChart, Bar, ComposedChart, Line,
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, Cell, Legend,
+  BarChart, Bar, ComposedChart, Line,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceLine, Cell, Customized, useXAxisScale, useYAxisScale,
 } from 'recharts';
 import {
-  Activity, AlertTriangle, ArrowDown, ArrowUp,
-  BarChart3, Building2, Loader2, Minus, Newspaper,
-  RefreshCw, TrendingDown, TrendingUp, Zap,
+  Activity, AlertTriangle,
+  BarChart3, Loader2, Newspaper,
+  RefreshCw, TrendingUp, Zap,
 } from 'lucide-react';
 import clsx from 'clsx';
 
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import NewsMarketReaction from '../components/analysis/NewsMarketReaction';
 import { getCompanies } from '../api/companies';
 import {
   analysisApi,
   type BehaviorSummary,
+  type CategorizedCompanyNews,
   type NewsPriceCorrelation,
   type PricePoint,
-  type FloorsheetTx,
 } from '../api/analysis';
 import type { Company } from '../types/company';
 
 // ─── Shared chart style ───────────────────────────────────────────────────────
 const TT_STYLE = {
-  background: '#161B2E',
-  border: '1px solid #1E2538',
-  borderRadius: 10,
+  background: 'var(--trading-panel)',
+  border: '1px solid var(--trading-divider)',
+  borderRadius: 3,
   fontSize: 12,
-  color: '#CBD5E1',
+  color: 'var(--trading-text-primary)',
 };
 
 const COLORS = {
-  price:   '#22C55E',
-  volume:  '#7C3AED',
-  vwap:    '#F59E0B',
-  anomaly: '#EF4444',
-  buy:     '#22C55E',
-  sell:    '#EF4444',
-  neutral: '#64748B',
-  news:    '#38BDF8',
-  sentiment: '#F472B6',
+  volume:  'var(--trading-up)',
+  anomaly: 'var(--trading-down)',
+  buy:     'var(--trading-up)',
+  sell:    'var(--trading-down)',
+  neutral: 'var(--trading-muted)',
 };
 
 function fmt(n: number) {
@@ -74,135 +71,6 @@ function SectionTitle({ icon: Icon, children }: { icon: React.ElementType; child
 }
 
 // ─── Pressure gauge (numeric arc visual) ─────────────────────────────────────
-function PressureGauge({ score, pressure }: { score: number; pressure: string }) {
-  const pct  = Math.max(0, Math.min(100, score));
-  const color = pressure === 'buying' ? COLORS.buy : pressure === 'selling' ? COLORS.sell : COLORS.neutral;
-  const label = pressure === 'buying' ? 'Buying' : pressure === 'selling' ? 'Selling' : 'Neutral';
-  const Icon  = pressure === 'buying' ? TrendingUp : pressure === 'selling' ? TrendingDown : Minus;
-
-  return (
-    <div className="flex flex-col items-center gap-2 py-2">
-      {/* Arc bar */}
-      <div className="relative w-32 h-16 overflow-hidden">
-        <div className="absolute inset-0 bottom-0 rounded-t-full border-[10px] border-bg-elevated" />
-        <div
-          className="absolute inset-0 bottom-0 rounded-t-full border-[10px] transition-all duration-700"
-          style={{
-            borderColor: color,
-            clipPath: `inset(0 ${100 - pct}% 0 0)`,
-          }}
-        />
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-center">
-          <p className="text-xl font-bold font-mono" style={{ color }}>{Math.round(pct)}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <Icon size={14} style={{ color }} />
-        <span className="text-sm font-semibold" style={{ color }}>{label} Pressure</span>
-      </div>
-    </div>
-  );
-}
-
-// ─── Net broker bar chart ─────────────────────────────────────────────────────
-function NetBrokerChart({ txs }: { txs: FloorsheetTx[] }) {
-  const net = useMemo(() => {
-    const bought = new Map<string, number>();
-    const sold   = new Map<string, number>();
-    txs.forEach(t => {
-      bought.set(t.buyer_broker,  (bought.get(t.buyer_broker)  ?? 0) + t.quantity);
-      sold.set(  t.seller_broker, (sold.get(  t.seller_broker) ?? 0) + t.quantity);
-    });
-    const brokers = new Set([...bought.keys(), ...sold.keys()]);
-    const rows = [...brokers].map(b => ({
-      broker: b,
-      net: (bought.get(b) ?? 0) - (sold.get(b) ?? 0),
-    }));
-    rows.sort((a, b) => Math.abs(b.net) - Math.abs(a.net));
-    return rows.slice(0, 10);
-  }, [txs]);
-
-  if (!net.length) {
-    return <p className="text-xs text-text-muted py-4 text-center">No floorsheet data for this date.</p>;
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={220}>
-      <BarChart
-        data={net}
-        layout="vertical"
-        margin={{ top: 4, right: 16, left: 48, bottom: 4 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke="#1E2538" horizontal={false} />
-        <XAxis
-          type="number"
-          tick={{ fontSize: 10, fill: '#475569' }}
-          tickLine={false}
-          axisLine={false}
-          tickFormatter={fmt}
-        />
-        <YAxis
-          type="category"
-          dataKey="broker"
-          tick={{ fontSize: 10, fill: '#94A3B8' }}
-          tickLine={false}
-          axisLine={false}
-          width={44}
-        />
-        <Tooltip
-          contentStyle={TT_STYLE}
-          formatter={(v: unknown) => {
-            const n = Number(v ?? 0);
-            return [`${n > 0 ? '+' : ''}${fmt(Math.abs(n))}`, 'Net qty'];
-          }}
-          labelFormatter={(l) => `Broker ${l}`}
-        />
-        <ReferenceLine x={0} stroke="#1E2538" />
-        <Bar dataKey="net" radius={[0, 3, 3, 0]} maxBarSize={18}>
-          {net.map((row, i) => (
-            <Cell key={i} fill={row.net >= 0 ? COLORS.buy : COLORS.sell} />
-          ))}
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-
-// ─── Top broker tables (buy / sell) ──────────────────────────────────────────
-function BrokerTable({
-  rows, title, color,
-}: {
-  rows: { broker: string; qty: number; trades: number }[];
-  title: string;
-  color: string;
-}) {
-  return (
-    <div>
-      <p className={clsx('text-xs font-semibold mb-2', color)}>{title}</p>
-      <table className="w-full text-xs">
-        <thead>
-          <tr className="border-b border-bg-border text-text-muted">
-            <th className="text-left py-1 font-medium">Broker</th>
-            <th className="text-right py-1 font-medium">Qty</th>
-            <th className="text-right py-1 font-medium">Txns</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="table-row">
-              <td className="py-1.5 text-text-secondary">{r.broker}</td>
-              <td className={clsx('py-1.5 text-right font-mono font-medium', color)}>
-                {fmt(r.qty)}
-              </td>
-              <td className="py-1.5 text-right text-text-muted">{r.trades}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 // ─── Volume chart with anomaly highlighting ───────────────────────────────────
 function VolumeChart({
   data, avgVol, threshold,
@@ -214,16 +82,16 @@ function VolumeChart({
   return (
     <ResponsiveContainer width="100%" height={130}>
       <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1E2538" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--trading-grid)" strokeOpacity={0.65} vertical={false} />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 9, fill: '#475569' }}
+          tick={{ fontSize: 9, fill: 'var(--trading-muted)' }}
           tickLine={false}
           axisLine={false}
           interval="preserveStartEnd"
         />
         <YAxis
-          tick={{ fontSize: 9, fill: '#475569' }}
+          tick={{ fontSize: 9, fill: 'var(--trading-muted)' }}
           tickLine={false}
           axisLine={false}
           tickFormatter={fmt}
@@ -231,13 +99,14 @@ function VolumeChart({
         />
         <Tooltip
           contentStyle={TT_STYLE}
+          cursor={{ stroke: 'var(--trading-grid)', strokeDasharray: '2 4' }}
           formatter={(v: unknown) => [fmt(Number(v ?? 0)), 'Volume']}
         />
         <ReferenceLine
           y={avgVol}
-          stroke="#475569"
+          stroke="var(--trading-muted)"
           strokeDasharray="4 2"
-          label={{ value: 'avg', position: 'right', fill: '#475569', fontSize: 9 }}
+          label={{ value: 'avg', position: 'right', fill: 'var(--trading-muted)', fontSize: 9 }}
         />
         <ReferenceLine
           y={threshold}
@@ -245,7 +114,7 @@ function VolumeChart({
           strokeDasharray="4 2"
           label={{ value: '×1.5σ', position: 'right', fill: COLORS.anomaly, fontSize: 9 }}
         />
-        <Bar dataKey="volume" radius={[2, 2, 0, 0]} maxBarSize={14}>
+        <Bar dataKey="volume" radius={[2, 2, 0, 0]} maxBarSize={8}>
           {data.map((d, i) => (
             <Cell key={i} fill={d.volume >= threshold ? COLORS.anomaly : COLORS.volume} opacity={0.75} />
           ))}
@@ -256,142 +125,118 @@ function VolumeChart({
 }
 
 // ─── Price + VWAP combined chart ──────────────────────────────────────────────
-function PriceChart({
-  data, vwap30, positive,
-}: {
-  data: { date: string; price: number }[];
-  vwap30: number;
-  positive: boolean;
-}) {
-  return (
-    <ResponsiveContainer width="100%" height={200}>
+function CandleLayer({ data }: { data: PricePoint[] }) {
+  const xScale = useXAxisScale('date');
+  const yScale = useYAxisScale('price');
+  if (!xScale || !yScale || data.length === 0) return null;
+  const centers = data.map(d => xScale(d.date, { position: 'middle' }));
+  const pitches = centers.slice(1).flatMap((x, i) => x !== undefined && centers[i] !== undefined ? [Math.abs(x - centers[i])] : []);
+  const bodyWidth = Math.max(2, Math.min(12, (pitches.length ? Math.min(...pitches) : 10) * 0.62));
+  const vwapPoints = data.flatMap((point, i) => {
+    const x = centers[i];
+    const value = point.volume > 0 ? Number(point.turnover) / point.volume : Number(point.close);
+    const y = yScale(value);
+    return x !== undefined && y !== undefined ? [`${x},${y}`] : [];
+  }).join(' ');
+  return <g aria-hidden="true"><polyline points={vwapPoints} fill="none" stroke="var(--trading-accent)" strokeWidth={1.7} strokeLinejoin="round" strokeLinecap="round" />{data.map((point, i) => {
+    const x = centers[i];
+    const open = yScale(Number(point.open));
+    const close = yScale(Number(point.close));
+    const high = yScale(Number(point.high));
+    const low = yScale(Number(point.low));
+    if (x === undefined || open === undefined || close === undefined || high === undefined || low === undefined) return null;
+    const up = Number(point.close) >= Number(point.open);
+    const color = up ? COLORS.buy : COLORS.sell;
+    return <g key={point.id}><line x1={x} x2={x} y1={high} y2={low} stroke={color} strokeWidth={1} /><rect x={x - bodyWidth / 2} y={Math.min(open, close)} width={bodyWidth} height={Math.max(1, Math.abs(close - open))} fill={color} /></g>;
+  })}</g>;
+}
+
+function OhlcTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: PricePoint }>; label?: string }) {
+  const point = payload?.[0]?.payload;
+  if (!active || !point) return null;
+  const up = Number(point.close) >= Number(point.open);
+  return <div className="rounded-sm border border-bg-border bg-bg-elevated px-3 py-2 text-xs shadow-lg">
+    <p className="mb-1 text-text-muted">{label}</p>
+    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 font-mono tabular-nums">
+      <span className="text-text-muted">O</span><span>{Number(point.open).toFixed(2)}</span>
+      <span className="text-text-muted">H</span><span>{Number(point.high).toFixed(2)}</span>
+      <span className="text-text-muted">L</span><span>{Number(point.low).toFixed(2)}</span>
+      <span className="text-text-muted">C</span><span style={{ color: up ? COLORS.buy : COLORS.sell }}>{Number(point.close).toFixed(2)}</span>
+      <span className="text-text-muted">VWAP</span><span className="text-accent-light">{(point.volume > 0 ? Number(point.turnover) / point.volume : Number(point.close)).toFixed(2)}</span>
+      <span className="text-text-muted">Vol</span><span>{fmt(point.volume)}</span>
+    </div>
+  </div>;
+}
+
+function buildIndicatorData(data: PricePoint[]) {
+  const raw = data.map(point => {
+    const high = Number(point.high);
+    const low = Number(point.low);
+    const close = Number(point.close);
+    const range = high - low;
+    return {
+      date: point.date,
+      close,
+      vwap: point.volume > 0 ? Number(point.turnover) / point.volume : close,
+      volume: point.volume,
+      buyShare: range > 0 ? Math.max(0, Math.min(1, (close - low) / range)) : 0.5,
+    };
+  });
+  return raw.map((point, index) => {
+    const window = raw.slice(Math.max(0, index - 13), index + 1);
+    const totalVolume = window.reduce((sum, row) => sum + row.volume, 0);
+    const buyingVolume = window.reduce((sum, row) => sum + row.volume * row.buyShare, 0);
+    const buyPressure = totalVolume > 0 ? buyingVolume / totalVolume : 0.5;
+    return { ...point, buyPressure, sellPressure: 1 - buyPressure };
+  });
+}
+
+function TradingViewChart({ data }: { data: PricePoint[] }) {
+  const indicators = buildIndicatorData(data);
+  const latestIndicator = indicators[indicators.length - 1];
+  const lowest = data.length ? Math.min(...data.map(p => Number(p.low))) : 0;
+  const highest = data.length ? Math.max(...data.map(p => Number(p.high))) : 1;
+  const pad = (highest - lowest) * 0.04 || 1;
+  return <div className="space-y-0.5">
+    <div className="flex items-center gap-2 px-1 pb-1 text-[11px]"><span className="text-text-muted">O H L C</span>{data.length > 0 && <span className="font-mono tabular-nums text-text-primary">{Number(data[data.length - 1].close).toFixed(2)}</span>}<span className="ml-auto text-text-muted">VWAP <span className="font-mono tabular-nums text-accent-light">{latestIndicator?.vwap.toFixed(2) ?? '?'}</span></span></div>
+    <ResponsiveContainer width="100%" height={300}>
       <ComposedChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="priceGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor={positive ? COLORS.price : COLORS.sell} stopOpacity={0.25} />
-            <stop offset="95%" stopColor={positive ? COLORS.price : COLORS.sell} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1E2538" vertical={false} />
-        <XAxis
-          dataKey="date"
-          tick={{ fontSize: 9, fill: '#475569' }}
-          tickLine={false}
-          axisLine={false}
-          interval="preserveStartEnd"
-        />
-        <YAxis
-          domain={['auto', 'auto']}
-          tick={{ fontSize: 9, fill: '#475569' }}
-          tickLine={false}
-          axisLine={false}
-          width={50}
-        />
-        <Tooltip
-          contentStyle={TT_STYLE}
-          formatter={(v: unknown, name: unknown) => [
-            `Rs. ${Number(v ?? 0).toFixed(2)}`,
-            name === 'price' ? 'Close' : 'VWAP',
-          ]}
-        />
-        <ReferenceLine
-          y={vwap30}
-          stroke={COLORS.vwap}
-          strokeDasharray="5 3"
-          label={{
-            value: `VWAP ${vwap30.toFixed(0)}`,
-            position: 'insideTopRight',
-            fill: COLORS.vwap,
-            fontSize: 9,
-          }}
-        />
-        <Area
-          type="monotone"
-          dataKey="price"
-          stroke={positive ? COLORS.price : COLORS.sell}
-          strokeWidth={1.5}
-          fill="url(#priceGrad)"
-          dot={false}
-        />
-        <Legend
-          wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
-          formatter={(v) => (v === 'price' ? 'Close Price' : 'VWAP (30d)')}
-        />
+        <CartesianGrid stroke="var(--trading-grid)" strokeOpacity={0.65} vertical />
+        <XAxis xAxisId="date" dataKey="date" hide />
+        <YAxis yAxisId="price" domain={[lowest - pad, highest + pad]} orientation="right" tick={{ fontSize: 10, fill: 'var(--trading-muted)' }} tickLine={false} axisLine={false} width={52} tickFormatter={v => Number(v).toFixed(2)} />
+        <Tooltip content={<OhlcTooltip />} cursor={{ stroke: 'var(--trading-muted)', strokeDasharray: '2 4', strokeWidth: 1 }} />
+        <Bar xAxisId="date" yAxisId="price" dataKey="close" fill="transparent" stroke="transparent" isAnimationActive={false} />
+        <Customized component={<CandleLayer data={data} />} />
       </ComposedChart>
     </ResponsiveContainer>
-  );
-}
-
-// ─── News sentiment vs price change scatter ───────────────────────────────────
-function NewsPriceScatter({ points }: { points: { sentiment_score: number; price_change_pct: number; date: string; news_count: number }[] }) {
-  const withNews = points.filter(p => p.news_count > 0);
-  if (!withNews.length) {
-    return <p className="text-xs text-text-muted py-4 text-center">No news-tagged trading days in this window.</p>;
-  }
-  return (
-    <ResponsiveContainer width="100%" height={160}>
-      <ScatterChart margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1E2538" />
-        <XAxis
-          type="number"
-          dataKey="sentiment_score"
-          name="Sentiment"
-          domain={[-1, 1]}
-          tick={{ fontSize: 9, fill: '#475569' }}
-          tickLine={false}
-          axisLine={false}
-          label={{ value: 'Sentiment (prev day)', position: 'insideBottom', offset: -2, fill: '#475569', fontSize: 9 }}
-        />
-        <YAxis
-          type="number"
-          dataKey="price_change_pct"
-          name="Next-day Δ%"
-          tick={{ fontSize: 9, fill: '#475569' }}
-          tickLine={false}
-          axisLine={false}
-          width={40}
-          tickFormatter={(v) => `${v.toFixed(1)}%`}
-        />
-        <ReferenceLine x={0} stroke="#1E2538" />
-        <ReferenceLine y={0} stroke="#1E2538" />
-        <Tooltip
-          contentStyle={TT_STYLE}
-          cursor={{ strokeDasharray: '3 3' }}
-          formatter={(v: unknown, name: unknown) => [
-            name === 'Next-day Δ%'
-              ? `${Number(v ?? 0).toFixed(2)}%`
-              : Number(v ?? 0).toFixed(3),
-            String(name),
-          ]}
-          labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ''}
-        />
-        <Scatter
-          data={withNews}
-          fill={COLORS.news}
-          fillOpacity={0.8}
-        />
-      </ScatterChart>
+    <div className="flex items-center gap-2 px-1 pt-1 text-[11px]"><span className="text-text-muted">Volume</span>{data.length > 0 && <span className="font-mono tabular-nums text-up">{fmt(data[data.length - 1].volume)}</span>}</div>
+    <ResponsiveContainer width="100%" height={90}>
+      <BarChart data={data} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke="var(--trading-grid)" strokeOpacity={0.5} vertical={false} />
+        <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--trading-muted)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+        <YAxis orientation="right" tick={{ fontSize: 9, fill: 'var(--trading-muted)' }} tickLine={false} axisLine={false} width={52} tickFormatter={fmt} />
+        <Tooltip contentStyle={TT_STYLE} cursor={{ stroke: 'var(--trading-muted)', strokeDasharray: '2 4' }} formatter={(v: unknown) => [fmt(Number(v ?? 0)), 'Volume']} />
+        <Bar dataKey="volume" maxBarSize={10} isAnimationActive={false}>{data.map(point => <Cell key={point.id} fill={Number(point.close) >= Number(point.open) ? COLORS.buy : COLORS.sell} opacity={0.8} />)}</Bar>
+      </BarChart>
     </ResponsiveContainer>
-  );
-}
 
-// ─── News volume vs price change bar chart ────────────────────────────────────
-function NewsVolumeChart({ points }: { points: { date: string; news_count: number; price_change_pct: number }[] }) {
-  const withNews = points.filter(p => p.news_count > 0);
-  if (!withNews.length) return null;
-  return (
-    <ResponsiveContainer width="100%" height={140}>
-      <ComposedChart data={withNews} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1E2538" vertical={false} />
-        <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} axisLine={false} />
-        <YAxis yAxisId="left"  tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} axisLine={false} width={28} />
-        <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 9, fill: '#475569' }} tickLine={false} axisLine={false} width={36} tickFormatter={(v) => `${v.toFixed(1)}%`} />
-        <Tooltip contentStyle={TT_STYLE} />
-        <Bar     yAxisId="left"  dataKey="news_count"     fill={COLORS.news}    opacity={0.5} name="Articles" radius={[2,2,0,0]} maxBarSize={20} />
-        <Line   yAxisId="right" dataKey="price_change_pct" stroke={COLORS.sentiment} strokeWidth={1.5} dot={{ r: 3 }} name="Next-day Δ%" />
+    <div className="flex items-center gap-3 border-t border-bg-border px-1 pt-2 text-[11px]">
+      <span className="text-text-muted">Buy / Sell Pressure</span>
+      <span className="font-mono tabular-nums text-up">Buy {latestIndicator ? (latestIndicator.buyPressure * 100).toFixed(0) : '—'}%</span>
+      <span className="font-mono tabular-nums text-down">Sell {latestIndicator ? (latestIndicator.sellPressure * 100).toFixed(0) : '—'}%</span>
+      <span className="ml-auto text-[10px] text-text-muted">14-bar OHLCV estimate</span>
+    </div>
+    <ResponsiveContainer width="100%" height={120}>
+      <ComposedChart data={indicators} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <CartesianGrid stroke="var(--trading-grid)" strokeOpacity={0.55} vertical={false} />
+        <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--trading-muted)' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+        <YAxis orientation="right" domain={[0, 1]} ticks={[0, 0.5, 1]} tick={{ fontSize: 9, fill: 'var(--trading-muted)' }} tickLine={false} axisLine={false} width={52} tickFormatter={v => `${Math.round(Number(v) * 100)}%`} />
+        <Tooltip contentStyle={TT_STYLE} cursor={{ stroke: 'var(--trading-muted)', strokeDasharray: '2 4' }} formatter={(v: unknown, name: unknown) => [`${(Number(v ?? 0) * 100).toFixed(1)}%`, String(name)]} />
+        <Line type="monotone" dataKey="buyPressure" name="Buy pressure" stroke="var(--trading-up)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+        <Line type="monotone" dataKey="sellPressure" name="Sell pressure" stroke="var(--trading-down)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
-  );
+  </div>;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -410,32 +255,6 @@ function computeVwap(prices: PricePoint[]) {
   return totalVolume ? totalTurnover / totalVolume : 0;
 }
 
-function computePressureRatio(prices: PricePoint[]) {
-  let risingConfirmed = 0, risingWeak = 0;
-  for (let i = 1; i < prices.length; i++) {
-    const priceUp  = parseFloat(prices[i].close) > parseFloat(prices[i - 1].close);
-    const volumeUp = prices[i].volume > prices[i - 1].volume;
-    if (priceUp && volumeUp)  risingConfirmed++;
-    if (priceUp && !volumeUp) risingWeak++;
-  }
-  return { risingConfirmed, risingWeak };
-}
-
-function aggregateFloorsheet(txs: FloorsheetTx[], side: 'buyer_broker' | 'seller_broker') {
-  const m = new Map<string, { qty: number; trades: number }>();
-  txs.forEach(t => {
-    const key = t[side];
-    const cur = m.get(key) ?? { qty: 0, trades: 0 };
-    cur.qty    += t.quantity;
-    cur.trades += 1;
-    m.set(key, cur);
-  });
-  return [...m.entries()]
-    .map(([broker, v]) => ({ broker, ...v }))
-    .sort((a, b) => b.qty - a.qty)
-    .slice(0, 7);
-}
-
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CompanyAnalysisDashboard() {
@@ -444,7 +263,7 @@ export default function CompanyAnalysisDashboard() {
   const [prices,      setPrices]      = useState<PricePoint[]>([]);
   const [behavior,    setBehavior]    = useState<BehaviorSummary | null>(null);
   const [correlation, setCorrelation] = useState<NewsPriceCorrelation | null>(null);
-  const [floorsheet,  setFloorsheet]  = useState<FloorsheetTx[]>([]);
+  const [categorizedNews, setCategorizedNews] = useState<CategorizedCompanyNews[] | null>(null);
   const [priceRange,  setPriceRange]  = useState<'7d' | '30d' | '90d'>('30d');
   const [loading,     setLoading]     = useState(true);
   const [loadingData, setLoadingData] = useState(false);
@@ -466,18 +285,19 @@ export default function CompanyAnalysisDashboard() {
     if (!selectedId) return;
     setLoadingData(true);
     setError('');
+    setCategorizedNews(null);
     Promise.allSettled([
       analysisApi.getPrices(selectedId, priceRange),
       analysisApi.getBehavior(selectedId),
       analysisApi.getNewsCorrelation(selectedId),
-      analysisApi.getFloorsheet(selectedId),
-    ]).then(([prRes, bhRes, corrRes, flRes]) => {
+      analysisApi.getCategorizedCompanyNews(selectedId),
+    ]).then(([prRes, bhRes, corrRes, newsRes]) => {
       if (prRes.status   === 'fulfilled') setPrices(prRes.value.prices);
       if (bhRes.status   === 'fulfilled') setBehavior(bhRes.value);
       if (corrRes.status === 'fulfilled') setCorrelation(corrRes.value);
-      if (flRes.status   === 'fulfilled') setFloorsheet(flRes.value.transactions);
+      if (newsRes.status === 'fulfilled') setCategorizedNews(newsRes.value.results);
       // surface any hard errors
-      const failed = [prRes, bhRes, corrRes, flRes].filter(r => r.status === 'rejected');
+      const failed = [prRes, bhRes, corrRes, newsRes].filter(r => r.status === 'rejected');
       if (failed.length === 4) setError('Unable to load company data. Check your permissions.');
     }).finally(() => setLoadingData(false));
   }, [selectedId, priceRange]);
@@ -488,16 +308,10 @@ export default function CompanyAnalysisDashboard() {
   const company  = companies.find(c => c.id === selectedId);
   const { avg: avgVol, threshold } = useMemo(() => computeVolumeStats(prices), [prices]);
   const vwap30   = useMemo(() => computeVwap(prices), [prices]);
-  const { risingConfirmed, risingWeak } = useMemo(() => computePressureRatio(prices), [prices]);
 
   const anomalyDays = useMemo(
     () => prices.filter(p => p.volume >= threshold),
     [prices, threshold],
-  );
-
-  const priceChartData = useMemo(
-    () => prices.map(p => ({ date: p.date.slice(5), price: parseFloat(p.close) })),
-    [prices],
   );
 
   const volumeChartData = useMemo(
@@ -510,20 +324,6 @@ export default function CompanyAnalysisDashboard() {
   const positive    = latestClose >= firstClose;
   const spreadPct   = vwap30 ? ((latestClose - vwap30) / vwap30 * 100) : 0;
 
-  const buyers  = useMemo(() => aggregateFloorsheet(floorsheet, 'buyer_broker'),  [floorsheet]);
-  const sellers = useMemo(() => aggregateFloorsheet(floorsheet, 'seller_broker'), [floorsheet]);
-
-  const corrPoints = useMemo(
-    () => (correlation?.data_points ?? []).map(d => ({
-      date:            d.date,
-      sentiment_score: d.sentiment_score,
-      price_change_pct:d.price_change_pct,
-      news_count:      d.news_count,
-      volume:          d.volume,
-    })),
-    [correlation],
-  );
-
   // ── Render ──────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -534,12 +334,12 @@ export default function CompanyAnalysisDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="trading-terminal-page space-y-6">
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <PageHeader
         title="Company Behavior Analysis"
-        subtitle="Price / volume trends, VWAP, buy-sell pressure, broker activity, and news-price correlation."
+        subtitle="Price / volume trends, VWAP, broker activity, and categorized news market reaction."
         actions={
           <button
             onClick={loadData}
@@ -653,78 +453,10 @@ export default function CompanyAnalysisDashboard() {
         </div>
       ) : (
         <>
-          {/* ── Row 1: Price chart + Pressure card ─────────────────────── */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-4">
-
-            {/* Price chart */}
-            <div className="card space-y-3">
-              <SectionTitle icon={TrendingUp}>Daily Close Price vs VWAP</SectionTitle>
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                  <span className="inline-block w-3 h-0.5" style={{ background: positive ? COLORS.price : COLORS.sell }} />
-                  Close price
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-text-muted">
-                  <span className="inline-block w-3 h-0.5 border-t-2 border-dashed" style={{ borderColor: COLORS.vwap }} />
-                  30-day VWAP
-                </div>
-              </div>
-              <PriceChart data={priceChartData} vwap30={vwap30} positive={positive} />
-            </div>
-
-            {/* Pressure card */}
-            <div className="card flex flex-col gap-4">
-              <SectionTitle icon={Activity}>Buy / Sell Pressure</SectionTitle>
-
-              {behavior ? (
-                <>
-                  <PressureGauge
-                    score={behavior.pressure_score !== null ? Number(behavior.pressure_score) : 50}
-                    pressure={behavior.pressure}
-                  />
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-bg-elevated rounded-lg p-2 text-center">
-                      <p className="text-text-muted text-[10px] mb-0.5">Price above VWAP</p>
-                      <p className={clsx('font-semibold', spreadPct >= 0 ? 'text-up' : 'text-down')}>
-                        {spreadPct >= 0 ? '+' : ''}{spreadPct.toFixed(2)}%
-                      </p>
-                    </div>
-                    <div className="bg-bg-elevated rounded-lg p-2 text-center">
-                      <p className="text-text-muted text-[10px] mb-0.5">Vol anomaly ratio</p>
-                      <p className={clsx('font-semibold', behavior.volume_anomaly ? 'text-down' : 'text-text-primary')}>
-                        {behavior.volume_ratio !== null ? `${Number(behavior.volume_ratio).toFixed(2)}×` : '—'}
-                      </p>
-                    </div>
-                    <div className="bg-bg-elevated rounded-lg p-2 text-center col-span-2">
-                      <p className="text-text-muted text-[10px] mb-0.5">Rising price + rising volume</p>
-                      <p className="font-semibold text-text-primary">{risingConfirmed} days</p>
-                    </div>
-                    <div className="bg-bg-elevated rounded-lg p-2 text-center col-span-2">
-                      <p className="text-text-muted text-[10px] mb-0.5">Rising price + falling volume</p>
-                      <p className="font-semibold text-yellow-400">{risingWeak} days</p>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-3">
-                  {/* Computed from price data only */}
-                  <PressureGauge
-                    score={50 + (spreadPct * 2)}
-                    pressure={spreadPct > 1 ? 'buying' : spreadPct < -1 ? 'selling' : 'neutral'}
-                  />
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="bg-bg-elevated rounded-lg p-2 text-center col-span-2">
-                      <p className="text-text-muted text-[10px] mb-0.5">Rising price + rising volume</p>
-                      <p className="font-semibold text-text-primary">{risingConfirmed} days</p>
-                    </div>
-                    <div className="bg-bg-elevated rounded-lg p-2 text-center col-span-2">
-                      <p className="text-text-muted text-[10px] mb-0.5">Rising price + falling volume</p>
-                      <p className="font-semibold text-yellow-400">{risingWeak} days</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+          {/* TradingView-style price and volume chart */}
+          <div className="card space-y-2">
+            <SectionTitle icon={TrendingUp}>Price Action</SectionTitle>
+            <TradingViewChart data={prices} />
           </div>
 
           {/* ── Row 2: Volume chart with anomalies ─────────────────────── */}
@@ -815,148 +547,45 @@ export default function CompanyAnalysisDashboard() {
             </div>
           )}
 
-          {/* ── Row 4: Floorsheet broker analysis ───────────────────────── */}
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
+          <NewsMarketReaction data={correlation?.market_reaction} />
 
-            {/* Net buy/sell chart */}
-            <div className="card">
-              <SectionTitle icon={Building2}>Broker Net Buy / Sell (Latest Floorsheet)</SectionTitle>
-              {floorsheet.length === 0 ? (
-                <p className="text-xs text-text-muted py-4 text-center">No floorsheet data available.</p>
-              ) : (
-                <>
-                  <p className="text-xs text-text-muted mb-3">
-                    Net position per broker (bought − sold).{' '}
-                    <span className="text-up">Green = net buyer</span>,{' '}
-                    <span className="text-down">red = net seller</span>.
-                    Top 10 by absolute net quantity.
-                  </p>
-                  <NetBrokerChart txs={floorsheet} />
-                </>
-              )}
-            </div>
-
-            {/* Top buyers / sellers tables */}
-            <div className="card space-y-5">
-              <SectionTitle icon={Activity}>Most Active Brokers</SectionTitle>
-              {floorsheet.length === 0 ? (
-                <p className="text-xs text-text-muted text-center py-4">No data.</p>
-              ) : (
-                <>
-                  <BrokerTable
-                    rows={buyers}
-                    title="Top Buyers"
-                    color="text-up"
-                  />
-                  <div className="h-px bg-bg-border" />
-                  <BrokerTable
-                    rows={sellers}
-                    title="Top Sellers"
-                    color="text-down"
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── Row 5: News-price correlation ───────────────────────────── */}
+          {/* Categorized articles tagged to the selected company */}
           <div className="card">
-            <div className="flex items-start justify-between flex-wrap gap-3 mb-1">
-              <SectionTitle icon={Newspaper}>News Volume & Sentiment vs Next-Day Price Change</SectionTitle>
-              {correlation && correlation.correlation_coefficient !== null && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-text-muted">Pearson r =</span>
-                  <span className={clsx(
-                    'text-sm font-bold font-mono',
-                    Math.abs(correlation.correlation_coefficient) > 0.4 ? 'text-up' : 'text-text-secondary',
-                  )}>
-                    {correlation.correlation_coefficient.toFixed(3)}
-                  </span>
-                  <Badge variant={Math.abs(correlation.correlation_coefficient) > 0.4 ? 'green' : 'gray'}>
-                    {correlation.correlation_label}
-                  </Badge>
-                </div>
-              )}
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <SectionTitle icon={Newspaper}>{company?.symbol ?? 'Company'} News</SectionTitle>
+              <span className="text-[10px] text-text-muted">{categorizedNews?.length ?? 0} categorized articles</span>
             </div>
-
-            {correlation?.analysis_note && (
-              <p className="text-xs text-text-muted mb-3 italic">{correlation.analysis_note}</p>
-            )}
-
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-text-muted mb-2">
-                  Scatter — sentiment score (day N) vs price change % (day N+1)
-                </p>
-                <NewsPriceScatter points={corrPoints} />
-              </div>
-              <div>
-                <p className="text-xs text-text-muted mb-2">
-                  Bar — article count and next-day price change for days with news
-                </p>
-                <NewsVolumeChart points={corrPoints} />
-              </div>
-            </div>
-
-            {/* Data table of news days */}
-            {corrPoints.filter(p => p.news_count > 0).length > 0 && (
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-xs min-w-[460px]">
-                  <thead>
-                    <tr className="border-b border-bg-border text-text-muted">
-                      <th className="text-left py-1.5 font-medium">Date</th>
-                      <th className="text-right py-1.5 font-medium">Articles</th>
-                      <th className="text-right py-1.5 font-medium">Avg Sentiment</th>
-                      <th className="text-right py-1.5 font-medium">Close</th>
-                      <th className="text-right py-1.5 font-medium">Next-day Δ%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {corrPoints
-                      .filter(p => p.news_count > 0)
-                      .map((p, i) => {
-                        const sent    = p.sentiment_score;
-                        const change  = p.price_change_pct;
-                        const aligned = (sent > 0 && change > 0) || (sent < 0 && change < 0);
-                        return (
-                          <tr key={i} className="table-row">
-                            <td className="py-2 font-mono text-text-secondary">{p.date}</td>
-                            <td className="py-2 text-right">
-                              <Badge variant="blue">{p.news_count}</Badge>
-                            </td>
-                            <td className={clsx(
-                              'py-2 text-right font-mono',
-                              sent > 0.1 ? 'text-up' : sent < -0.1 ? 'text-down' : 'text-text-secondary',
-                            )}>
-                              {sent >= 0 ? '+' : ''}{sent.toFixed(3)}
-                            </td>
-                            <td className="py-2 text-right font-mono text-text-secondary">
-                              Rs. {p.volume > 0 ? '—' : '—'}
-                            </td>
-                            <td className={clsx('py-2 text-right font-mono font-medium',
-                              change > 0 ? 'text-up' : change < 0 ? 'text-down' : 'text-text-secondary',
-                            )}>
-                              <span className="flex items-center justify-end gap-1">
-                                {change > 0
-                                  ? <ArrowUp size={10} />
-                                  : change < 0
-                                  ? <ArrowDown size={10} />
-                                  : null}
-                                {change >= 0 ? '+' : ''}{change.toFixed(2)}%
-                                {aligned && (
-                                  <span className="ml-1 text-up text-[9px]">✓</span>
-                                )}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-                <p className="text-[10px] text-text-muted mt-1.5">
-                  ✓ indicates sentiment direction aligned with next-day price movement.
-                  This is an observational signal only, not a validated trading indicator.
-                </p>
+            {categorizedNews === null ? (
+              <p className="py-4 text-center text-xs text-text-muted">
+                {loadingData ? 'Loading categorized company news…' : 'Unable to load categorized news.'}
+              </p>
+            ) : categorizedNews.length === 0 ? (
+              <p className="py-4 text-center text-xs text-text-muted">
+                No categorized news is linked to this company yet.
+              </p>
+            ) : (
+              <div className="divide-y divide-bg-border">
+                {categorizedNews.map(article => (
+                  <article key={article.id} className="flex flex-wrap items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                    <div className="min-w-0 flex-1">
+                      <a href={article.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-text-primary hover:text-accent-light">
+                        {article.headline}
+                      </a>
+                      <p className="mt-1 text-[10px] text-text-muted">
+                        {article.source}{article.published_at ? ` · ${new Date(article.published_at).toLocaleString()}` : ''}
+                        {' · '}Company match {Math.round(article.confidence * 100)}%{article.is_manual ? ' · Manually categorized' : ''}
+                      </p>
+                    </div>
+                    <span className={clsx(
+                      'rounded px-2 py-1 text-[10px] uppercase',
+                      article.sentiment_label === 'positive' ? 'bg-up/10 text-up'
+                        : article.sentiment_label === 'negative' ? 'bg-down/10 text-down'
+                        : 'bg-bg-elevated text-text-muted',
+                    )}>
+                      {article.sentiment_label || 'Sentiment unavailable'}
+                    </span>
+                  </article>
+                ))}
               </div>
             )}
           </div>

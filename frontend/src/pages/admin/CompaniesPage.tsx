@@ -641,7 +641,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                             onClick={() => toggleActive(company)}
                             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                               company.is_active
-                                ? 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                                ? 'bg-purple-500/10 text-purple-300 border border-purple-500/20'
                                 : 'bg-bg-elevated text-text-muted border border-bg-border'
                             }`}
                           >
@@ -650,7 +650,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                         ) : (
                           <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                             company.is_active
-                              ? 'bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                              ? 'bg-purple-500/10 text-purple-300 border border-purple-500/20'
                               : 'bg-bg-elevated text-text-muted border border-bg-border'
                           }`}>
                             {company.is_active ? 'Active' : 'Inactive'}
@@ -667,7 +667,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                             className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-text-secondary transition hover:bg-bg-elevated"
                           >
                             {tracked ? (
-                              <><ToggleRight size={22} className="text-blue-600" /><span className="text-blue-700">Tracked</span></>
+                              <><ToggleRight size={22} className="text-purple-600" /><span className="text-purple-700">Tracked</span></>
                             ) : (
                               <><ToggleLeft size={22} className="text-slate-400" /><span className="text-slate-500">Not tracked</span></>
                             )}
@@ -675,7 +675,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                         ) : (
                           <span className="inline-flex items-center gap-2 px-2 py-1 text-sm text-text-muted">
                             {tracked ? (
-                              <><ToggleRight size={22} className="text-blue-600 opacity-50" /><span className="text-blue-700 opacity-50">Tracked</span></>
+                              <><ToggleRight size={22} className="text-purple-600 opacity-50" /><span className="text-purple-700 opacity-50">Tracked</span></>
                             ) : (
                               <><ToggleLeft size={22} className="text-slate-400 opacity-50" /><span className="text-slate-500 opacity-50">Not tracked</span></>
                             )}

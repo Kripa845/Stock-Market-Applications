@@ -166,35 +166,11 @@ class Command(BaseCommand):
         DailyAnalysis.objects.bulk_create(analysis_objects, ignore_conflicts=True)
         self.stdout.write(self.style.SUCCESS(f"Daily analysis seeded ({DailyAnalysis.objects.count()} records)."))
 
-        # 5. Seed / Link Floorsheet Transactions if needed
-        existing_fs_count = FloorsheetTransaction.objects.count()
-        if existing_fs_count < 200:
-            fs_objects = []
-            brokers = [f"Broker-{i}" for i in [58, 45, 34, 28, 19, 57, 42, 38, 50, 14, 49, 36, 25]]
-            for symbol, (company, _) in companies_dict.items():
-                recent_prices = DailyPrice.objects.filter(company=company).order_by("-date")[:5]
-                for p in recent_prices:
-                    for tx_idx in range(25):
-                        qty = random.choice([50, 100, 200, 500, 1000, 2500, 5000])
-                        rate = round(float(p.close) * random.uniform(0.985, 1.015), 2)
-                        b_broker = random.choice(brokers)
-                        s_broker = random.choice([b for b in brokers if b != b_broker])
-                        fs_objects.append(
-                            FloorsheetTransaction(
-                                company=company,
-                                date=p.date,
-                                transaction_id=f"TX-{company.symbol}-{p.date.strftime('%Y%m%d')}-{tx_idx:04d}",
-                                buyer_broker=b_broker,
-                                seller_broker=s_broker,
-                                quantity=qty,
-                                rate=Decimal(str(rate)),
-                                amount=Decimal(str(round(qty * rate, 2))),
-                            )
-                        )
-            FloorsheetTransaction.objects.bulk_create(fs_objects, ignore_conflicts=True)
-            self.stdout.write(self.style.SUCCESS(f"Floorsheet transactions seeded ({FloorsheetTransaction.objects.count()} records)."))
-        else:
-            self.stdout.write(self.style.SUCCESS(f"Existing floorsheet retained ({existing_fs_count} records)."))
+        # Floorsheet transactions are real source data and must come from the crawler.
+        # Do not synthesize broker-side trades in this seed command.
+        self.stdout.write(self.style.SUCCESS(
+            f"Existing crawler floorsheet retained ({FloorsheetTransaction.objects.count()} records)."
+        ))
 
         # 6. Seed Crawl Runs
         now = timezone.now()

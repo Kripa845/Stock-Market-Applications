@@ -447,7 +447,7 @@
 #                 "correlation_coefficient": corr_coeff,
 #                 "correlation_label": "Moderate-to-Strong Positive" if corr_coeff and corr_coeff > 0.4 else "Neutral",
 #                 "lead_lag_days": 1,
-#                 "analysis_note": f"News releases for {company.symbol} typically lead price and volume movements by 1–2 trading sessions.",
+#                 "analysis_note": "Historical categorized news and market data are compared across observed trading sessions. Correlation indicates association, not causation.",
 #                 "data_points": data_points,  # Already bounded by the 60-day DB filter
 #             }
 #         )
@@ -655,7 +655,8 @@
 from datetime import datetime, timedelta
 import math
 
-from django.db.models import Avg, Count, Sum, Max, Min, StdDev
+from django.db.models import Avg, Count, DecimalField, ExpressionWrapper, F, Sum, Max, Min, StdDev
+from django.db.models.functions import Trim
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics
@@ -664,7 +665,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
-from apps.users.company_access import filter_company_queryset, require_company_access
+from apps.users.company_access import (
+    filter_company_queryset,
+    get_accessible_company_ids,
+    require_company_access,
+)
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.market_data.services.trading_calendar import rolling_window_bounds
 from apps.news.models import ArticleCompanyTag, NewsArticle
@@ -674,6 +679,7 @@ from .models import DailyAnalysis
 from .serializers import BrokerActivitySerializer, DailyAnalysisSerializer
 from .services.brokers import build_broker_activity, sampled_floorsheet_dates
 from .services.daily_metrics import PRESSURE_METHOD
+from .services.news_market_reaction import build_news_market_reaction
 
 
 class DailyAnalysisListAPIView(generics.ListAPIView):
@@ -973,6 +979,298 @@ def _parse_date_param(request, name):
         return None
 
 
+def _broker_date_filters(request):
+    values = {}
+    for key in ("start_date", "end_date"):
+        raw = request.query_params.get(key, "").strip()
+        if not raw:
+            values[key] = None
+            continue
+        try:
+            values[key] = datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None, Response(
+                {"detail": f"{key} must use YYYY-MM-DD format."},
+                status=400,
+            )
+    if values["start_date"] and values["end_date"] and values["start_date"] > values["end_date"]:
+        return None, Response(
+            {"detail": "start_date must not be after end_date."},
+            status=400,
+        )
+    return values, None
+
+
+def _broker_company_scope(request):
+    accessible_ids = get_accessible_company_ids(request.user)
+    company = None
+    company_id = request.query_params.get("company_id", "").strip()
+    if company_id:
+        if not company_id.isdigit():
+            return None, accessible_ids, Response(
+                {"detail": "company_id must be an integer."}, status=400
+            )
+        company = get_object_or_404(Company, pk=int(company_id), is_active=True)
+        require_company_access(request.user, company.pk)
+    if company is not None:
+        company_ids = [company.pk]
+    else:
+        company_ids = accessible_ids
+    return company, company_ids, None
+
+
+class BrokerAnalysisAPIView(APIView):
+    """Aggregated floorsheet activity across accessible companies."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+    PAGE_SIZE = 25
+
+    def get(self, request):
+        dates, error = _broker_date_filters(request)
+        if error:
+            return error
+        company, company_ids, error = _broker_company_scope(request)
+        if error:
+            return error
+
+        broker = request.query_params.get("broker") or None
+        try:
+            page = max(1, int(request.query_params.get("page", "1")))
+        except ValueError:
+            return Response({"detail": "page must be a positive integer."}, status=400)
+
+        activity = build_broker_activity(
+            company=company,
+            company_ids=company_ids,
+            start_date=dates["start_date"],
+            end_date=dates["end_date"],
+            broker=broker,
+        )
+        # The broker directory follows the captured turnover ranking shown in
+        # the UI; the shared analysis service keeps its own stable net-position order.
+        rows = sorted(
+            activity["brokers"],
+            key=lambda item: (-item["total_value"], item["broker"]),
+        )
+        start = (page - 1) * self.PAGE_SIZE
+        end = start + self.PAGE_SIZE
+        sampled_dates = sampled_floorsheet_dates(
+            company=company,
+            company_ids=company_ids,
+            start_date=dates["start_date"],
+            end_date=dates["end_date"],
+            broker=broker,
+        )
+        companies = filter_company_queryset(
+            Company.objects.filter(is_active=True), request.user, "id"
+        ).order_by("symbol").values("id", "symbol", "name")
+        broker_rows = activity["brokers"]
+        if broker:
+            broker_rows = build_broker_activity(
+                company=company,
+                company_ids=company_ids,
+                start_date=dates["start_date"],
+                end_date=dates["end_date"],
+            )["brokers"]
+        broker_options = sorted({row["broker"] for row in broker_rows})
+
+        return Response({
+            "count": len(rows),
+            "page": page,
+            "page_size": self.PAGE_SIZE,
+            "next": page + 1 if end < len(rows) else None,
+            "previous": page - 1 if page > 1 else None,
+            "results": BrokerActivitySerializer(rows[start:end], many=True).data,
+            "broker_options": broker_options,
+            "companies": list(companies),
+            "summary": {
+                "total_buy_quantity": activity["total_buy_quantity"],
+                "total_sell_quantity": activity["total_sell_quantity"],
+                "total_activity": activity["total_buy_quantity"] + activity["total_sell_quantity"],
+                "total_buy_value": str(activity["total_buy_value"]),
+                "total_sell_value": str(activity["total_sell_value"]),
+                "total_turnover": str(activity["total_buy_value"] + activity["total_sell_value"]),
+                "active_brokers": activity["broker_count"],
+                "sampled_trading_days": len(sampled_dates),
+                "transaction_count": activity["transaction_count"],
+            },
+            "most_active_buyers": BrokerActivitySerializer(
+                sorted((row for row in rows if row["buy_quantity"] > 0), key=lambda row: (-row["buy_quantity"], row["broker"]))[:5],
+                many=True,
+            ).data,
+            "most_active_sellers": BrokerActivitySerializer(
+                sorted((row for row in rows if row["sell_quantity"] > 0), key=lambda row: (-row["sell_quantity"], row["broker"]))[:5],
+                many=True,
+            ).data,
+            "top_net_buyers": BrokerActivitySerializer(
+                sorted((row for row in rows if row["net_quantity"] > 0), key=lambda row: (-row["net_quantity"], row["broker"]))[:5],
+                many=True,
+            ).data,
+            "top_net_sellers": BrokerActivitySerializer(
+                sorted((row for row in rows if row["net_quantity"] < 0), key=lambda row: (row["net_quantity"], row["broker"]))[:5],
+                many=True,
+            ).data,
+            "sampled_dates": [day.isoformat() for day in sampled_dates],
+            "note": "Floorsheet data covers sampled trading sessions only.",
+        })
+
+
+class BrokerDetailAPIView(APIView):
+    """Real broker-side totals, daily activity, and company breakdown."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request, broker_id):
+        dates, error = _broker_date_filters(request)
+        if error:
+            return error
+        company, company_ids, error = _broker_company_scope(request)
+        if error:
+            return error
+
+        activity = build_broker_activity(
+            company=company,
+            company_ids=company_ids,
+            start_date=dates["start_date"],
+            end_date=dates["end_date"],
+            broker=broker_id,
+        )
+        row = next((item for item in activity["brokers"] if item["broker"] == broker_id), None)
+        if row is None:
+            return Response({"detail": "No floorsheet activity found for this broker."}, status=404)
+
+        from django.db.models import Q
+        transaction_value = ExpressionWrapper(
+            F("quantity") * F("rate"),
+            output_field=DecimalField(max_digits=30, decimal_places=4),
+        )
+        base = FloorsheetTransaction.objects.filter(
+            company__is_active=True
+        ).annotate(
+            _buyer_broker_clean=Trim("buyer_broker"),
+            _seller_broker_clean=Trim("seller_broker"),
+        ).exclude(transaction_id__startswith="TX-").filter(
+            Q(_buyer_broker_clean=broker_id) | Q(_seller_broker_clean=broker_id)
+        )
+        if company_ids is not None:
+            base = base.filter(company_id__in=company_ids)
+        if dates["start_date"]:
+            base = base.filter(date__gte=dates["start_date"])
+        if dates["end_date"]:
+            base = base.filter(date__lte=dates["end_date"])
+        if company:
+            base = base.filter(company=company)
+
+        daily = list(base.values("date").annotate(
+            buy_quantity=Sum("quantity", filter=Q(_buyer_broker_clean=broker_id)),
+            sell_quantity=Sum("quantity", filter=Q(_seller_broker_clean=broker_id)),
+            buy_value=Sum(transaction_value, filter=Q(_buyer_broker_clean=broker_id)),
+            sell_value=Sum(transaction_value, filter=Q(_seller_broker_clean=broker_id)),
+            high_rate=Max("rate"),
+            low_rate=Min("rate"),
+            largest_trade=Max(transaction_value),
+            trades=Count("id"),
+        ).order_by("date"))
+        grouped_companies = base.values(
+            "company_id", "company__symbol", "company__name", "company__sector"
+        ).annotate(
+            buy_quantity=Sum("quantity", filter=Q(_buyer_broker_clean=broker_id)),
+            sell_quantity=Sum("quantity", filter=Q(_seller_broker_clean=broker_id)),
+            buy_value=Sum(transaction_value, filter=Q(_buyer_broker_clean=broker_id)),
+            sell_value=Sum(transaction_value, filter=Q(_seller_broker_clean=broker_id)),
+            trades=Count("id"),
+        )
+        grouped_companies = sorted(
+            grouped_companies,
+            key=lambda item: -((item["buy_value"] or 0) + (item["sell_value"] or 0)),
+        )
+
+        return Response({
+            "broker": broker_id,
+            "summary": BrokerActivitySerializer([row], many=True).data[0],
+            "daily_activity": [{
+                "date": item["date"].isoformat(),
+                "buy_quantity": item["buy_quantity"] or 0,
+                "sell_quantity": item["sell_quantity"] or 0,
+                "net_quantity": (item["buy_quantity"] or 0) - (item["sell_quantity"] or 0),
+                "buy_value": item["buy_value"] or 0,
+                "sell_value": item["sell_value"] or 0,
+                "net_value": (item["buy_value"] or 0) - (item["sell_value"] or 0),
+                "high_rate": item["high_rate"],
+                "low_rate": item["low_rate"],
+                "largest_trade": item["largest_trade"],
+                "trades": item["trades"],
+            } for item in daily],
+            "companies": [{
+                "company_id": item["company_id"],
+                "symbol": item["company__symbol"],
+                "name": item["company__name"],
+                "sector": item["company__sector"],
+                "buy_quantity": item["buy_quantity"] or 0,
+                "sell_quantity": item["sell_quantity"] or 0,
+                "net_quantity": (item["buy_quantity"] or 0) - (item["sell_quantity"] or 0),
+                "buy_value": item["buy_value"] or 0,
+                "sell_value": item["sell_value"] or 0,
+                "net_value": (item["buy_value"] or 0) - (item["sell_value"] or 0),
+                "trades": item["trades"],
+            } for item in grouped_companies],
+            "company_options": list(filter_company_queryset(
+                Company.objects.filter(is_active=True), request.user, "id"
+            ).order_by("symbol").values("id", "symbol", "name")),
+            "sampled_dates": [item["date"].isoformat() for item in daily],
+        })
+
+
+class CompanyCategorizedNewsAPIView(APIView):
+    """Company news articles with an explicit categorization tag for this company."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+    PAGE_SIZE = 20
+
+    def get(self, request, pk):
+        company = get_object_or_404(Company, pk=pk, is_active=True)
+        require_company_access(request.user, company.pk)
+        try:
+            page = max(1, int(request.query_params.get("page", "1")))
+        except ValueError:
+            return Response({"detail": "page must be a positive integer."}, status=400)
+
+        tags = ArticleCompanyTag.objects.filter(
+            company=company,
+        ).select_related("article").order_by(
+            F("article__published_at").desc(nulls_last=True),
+            "-article_id",
+        )
+        count = tags.count()
+        start = (page - 1) * self.PAGE_SIZE
+        results = [{
+            "id": tag.article_id,
+            "headline": tag.article.headline,
+            "source": tag.article.source,
+            "url": tag.article.url,
+            "published_at": tag.article.published_at.isoformat() if tag.article.published_at else None,
+            "sentiment": tag.article.sentiment,
+            "sentiment_label": tag.article.sentiment_label,
+            "confidence": tag.confidence,
+            "method": tag.method,
+            "is_manual": tag.is_manual,
+        } for tag in tags[start:start + self.PAGE_SIZE]]
+
+        return Response({
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            "count": count,
+            "page": page,
+            "page_size": self.PAGE_SIZE,
+            "next": page + 1 if start + self.PAGE_SIZE < count else None,
+            "previous": page - 1 if page > 1 else None,
+            "results": results,
+        })
+
+
 class CompanyNewsPriceCorrelationAPIView(APIView):
     """
     GET /api/companies/:id/news-pricecorrelation/
@@ -995,10 +1293,14 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
         window_start = timezone.localdate() - timedelta(days=self.WINDOW_DAYS)
 
         # DB-level date filter — no Python-side slicing needed
-        prices = list(
-            DailyPrice.objects
-            .filter(company=company, date__gte=window_start)
-            .order_by("date")
+        all_prices = list(
+            DailyPrice.objects.filter(company=company).order_by("date")
+        )
+        prices = [price for price in all_prices if price.date >= window_start]
+        market_reaction = build_news_market_reaction(
+            company=company,
+            window_start=window_start,
+            prices=all_prices,
         )
 
         if not prices:
@@ -1006,9 +1308,12 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                 {
                     "company_id": company.id,
                     "symbol": company.symbol,
-                    "correlation_coefficient": 0.0,
+                    "correlation_coefficient": None,
+                    "correlation_label": "Insufficient historical data",
                     "lead_lag_days": 1,
+                    "analysis_note": "Historical news and market comparisons are observational, and require both categorized news and stored price history.",
                     "data_points": [],
+                    "market_reaction": market_reaction,
                 }
             )
 
@@ -1107,8 +1412,9 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                 "correlation_coefficient": corr_coeff,
                 "correlation_label": "Moderate-to-Strong Positive" if corr_coeff and corr_coeff > 0.4 else "Neutral",
                 "lead_lag_days": 1,
-                "analysis_note": f"News releases for {company.symbol} typically lead price and volume movements by 1–2 trading sessions.",
+                "analysis_note": "Historical categorized news and market data are compared across observed trading sessions. Correlation indicates association, not causation.",
                 "data_points": data_points,  # Already bounded by the 60-day DB filter
+                "market_reaction": market_reaction,
             }
         )
 

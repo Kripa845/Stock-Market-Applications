@@ -564,6 +564,34 @@ VOLUME_ANOMALY_THRESHOLD = Decimal("1.5")
 #: a partial baseline — a 3-session average is too noisy to trust.
 ANOMALY_REQUIRES_FULL_BASELINE = True
 
+
+def detect_volume_anomalies(company_id, start_date, end_date, include_seeded=False):
+    """Compare each crawled session with the prior 20 crawled sessions.
+
+    Sessions with fewer than 20 prior observations return is_anomaly=None and
+    reason='insufficient_history'; partial averages are never presented as
+    reliable baselines. Seeded rows are excluded unless explicitly opted in.
+    """
+    from apps.market_data.models import DailyPrice
+
+    sources = ["crawled"] + (["seeded"] if include_seeded else [])
+    warmup = list(DailyPrice.objects.filter(company_id=company_id, source__in=sources, date__lt=start_date).order_by("-date")[:BASELINE_SESSIONS])
+    rows = list(DailyPrice.objects.filter(company_id=company_id, source__in=sources, date__gte=start_date, date__lte=end_date).order_by("date"))
+    history = [row.volume for row in reversed(warmup)]
+    results = []
+    for row in rows:
+        previous = history[-BASELINE_SESSIONS:]
+        enough = len(previous) == BASELINE_SESSIONS
+        avg = (sum(previous) / len(previous)) if previous else None
+        ratio = (row.volume / avg) if avg else None
+        results.append({"date": row.date, "volume": row.volume, "baseline_avg": round(avg, 2) if avg is not None else None,
+                        "ratio": round(ratio, 4) if ratio is not None else None,
+                        "is_anomaly": (row.volume > avg * float(VOLUME_ANOMALY_THRESHOLD)) if enough and avg else (None if not enough else False),
+                        "low_confidence": not enough, "sessions_used": len(previous),
+                        "reason": "insufficient_history" if not enough else None, "source": row.source})
+        history.append(row.volume)
+    return results
+
 #: Identifier stored on every row so the frontend can explain the signal.
 PRESSURE_METHOD = "OHLCV_PRICE_VOLUME"
 

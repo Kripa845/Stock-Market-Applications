@@ -4,7 +4,6 @@ import {
   Activity,
   Users,
   TrendingUp,
-  LineChart,
   Radio,
   ShieldCheck,
   BarChart3,
@@ -88,7 +87,7 @@ export const universalDashboardConfig: DashboardConfig = {
           icon: Newspaper,
           type: 'stat',
           dataPath: 'totalNews',
-          iconColor: 'text-blue-400',
+          iconColor: 'text-accent-light',
           requiredPermission: 'view_news',
         },
         {
@@ -148,16 +147,6 @@ export const universalDashboardConfig: DashboardConfig = {
           requiredPermission: 'view_market_data',
         },
         {
-          id: 'trading-behaviour',
-          title: 'Trading Behaviour',
-          description: 'Analyze trading patterns',
-          route: '/trading',
-          icon: LineChart,
-          type: 'stat',
-          iconColor: 'text-yellow-400',
-          requiredPermission: 'view_trading_volume',
-        },
-        {
           id: 'watchlist',
           title: 'Watchlist',
           description: 'Companies you are tracking',
@@ -188,7 +177,7 @@ export const universalDashboardConfig: DashboardConfig = {
           icon: Newspaper,
           type: 'stat',
           dataPath: 'totalNews',
-          iconColor: 'text-blue-400',
+          iconColor: 'text-accent-light',
           requiredPermission: 'view_news',
         },
         {

@@ -16,7 +16,6 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, RadarChart,
@@ -24,7 +23,7 @@ import {
 } from 'recharts';
 import {
   AlertTriangle, ArrowDown, ArrowUp,
-  BarChart3, Info, Loader2, RefreshCw,
+  BarChart3, Loader2, RefreshCw,
   TrendingDown, TrendingUp, Zap,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -43,7 +42,7 @@ const COLORS = {
   sell:    '#EF4444',
   neutral: '#64748B',
   volume:  '#7C3AED',
-  news:    '#38BDF8',
+  news:    '#A78BFA',
   vwap:    '#F59E0B',
 };
 
@@ -118,7 +117,6 @@ function CompanyTable({
   selected: Set<number>;
   onToggle: (id: number) => void;
 }) {
-  const navigate = useNavigate();
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs min-w-[900px]">
@@ -144,10 +142,9 @@ function CompanyTable({
             <tr
               key={c.id}
               className={clsx(
-                'table-row cursor-pointer',
+                'table-row',
                 selected.has(c.id) && 'bg-accent/5',
               )}
-              onClick={() => navigate(`/companies/${c.symbol}`)}
             >
               <td className="py-2" onClick={e => { e.stopPropagation(); onToggle(c.id); }}>
                 <input
@@ -289,7 +286,7 @@ function ComparisonRadar({ companies, all }: { companies: CompanyStat[]; all: Co
     return entry;
   });
 
-  const RADAR_COLORS = ['#7C3AED', '#22C55E', '#F59E0B', '#38BDF8', '#F472B6'];
+  const RADAR_COLORS = ['#7C3AED', '#22C55E', '#F59E0B', '#A78BFA', '#F472B6'];
 
   return (
     <div className="card">
@@ -405,7 +402,7 @@ export default function WatchlistComparison() {
   );
 
   const { companies, most_volatile, most_active_volume, most_in_news,
-          top_gainers, top_losers, sectors, pressure_distribution } = data;
+          top_gainers, top_losers, sectors } = data;
 
   return (
     <div className="space-y-6">
@@ -420,30 +417,6 @@ export default function WatchlistComparison() {
           </button>
         }
       />
-
-      {/* Pressure distribution summary */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: 'Buying Pressure',  count: pressure_distribution.buying,  color: 'text-up',   bg: 'bg-up/10',      border: 'border-up/20' },
-          { label: 'Neutral',           count: pressure_distribution.neutral, color: 'text-text-secondary', bg: 'bg-bg-elevated', border: 'border-bg-border' },
-          { label: 'Selling Pressure', count: pressure_distribution.selling, color: 'text-down', bg: 'bg-down/10',    border: 'border-down/20' },
-        ].map(item => (
-          <div key={item.label} className={`card border ${item.border} ${item.bg} text-center`}>
-            <p className={`text-2xl font-bold font-mono ${item.color}`}>{item.count}</p>
-            <p className="text-xs text-text-muted mt-0.5">{item.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* OHLCV pressure disclaimer */}
-      <div className="flex items-start gap-1.5 text-[11px] text-text-muted rounded-lg border border-bg-border px-3 py-2">
-        <Info size={11} className="shrink-0 mt-0.5" />
-        <span>
-          Pressure is an OHLCV-based analytical proxy and is not evidence of
-          actual order-book buying or selling.  Volume anomaly threshold is ≥ 1.5×
-          the previous 20-session average.
-        </span>
-      </div>
 
       {/* View selector */}
       <div className="flex gap-1 bg-bg-elevated rounded-xl p-1 w-fit">
@@ -461,7 +434,7 @@ export default function WatchlistComparison() {
       {view === 'table' && (
         <div className="space-y-4">
           <div className="card">
-            <SH icon={BarChart3} title="All Companies" sub="Click a row to open the company detail page. Check boxes to compare." />
+            <SH icon={BarChart3} title="All Companies" sub="Check boxes to compare companies." />
             <CompanyTable companies={companies} selected={selected} onToggle={toggleCompany} />
           </div>
 
@@ -598,7 +571,7 @@ export default function WatchlistComparison() {
                   {most_in_news.map(c => (
                     <tr key={c.id} className="table-row">
                       <td className="py-1.5 font-mono text-accent-light">{c.symbol}</td>
-                      <td className="py-1.5 text-right font-mono text-blue-400">{c.news_count}</td>
+                      <td className="py-1.5 text-right font-mono text-accent-light">{c.news_count}</td>
                       <td className={clsx('py-1.5 text-right font-mono', c.change_pct >= 0 ? 'text-up' : 'text-down')}>{pct(c.change_pct)}</td>
                       <td className="py-1.5 text-right"><PressureBadge p={c.pressure} /></td>
                     </tr>

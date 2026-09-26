@@ -189,7 +189,7 @@ export default function UserCompanyAccess({
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search company or symbol..."
-            className="min-w-[240px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="min-w-[240px] flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-purple-500"
           />
 
           <button
@@ -279,7 +279,7 @@ export default function UserCompanyAccess({
                         disabled={saving}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                           enabled
-                            ? "bg-blue-600"
+                            ? "bg-purple-600"
                             : "bg-gray-300"
                         } ${
                           saving
@@ -319,7 +319,7 @@ export default function UserCompanyAccess({
           type="button"
           onClick={handleSave}
           disabled={loading || saving}
-          className="rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-purple-600 px-5 py-2 text-sm font-medium text-white hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save Access"}
         </button>
@@ -327,4 +327,3 @@ export default function UserCompanyAccess({
     </div>
   );
 }
-

@@ -285,10 +285,11 @@ from django.db.models import (
     DecimalField,
     ExpressionWrapper,
     F,
+    Q,
     Sum,
     Value,
 )
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, Trim
 
 from apps.market_data.models import FloorsheetTransaction
 
@@ -318,8 +319,14 @@ def _decimal_zero():
     )
 
 
-def _base_queryset(company=None, start_date=None, end_date=None, date=None):
-    queryset = FloorsheetTransaction.objects.all()
+def _base_queryset(
+    company=None, start_date=None, end_date=None, date=None,
+    company_ids=None, broker=None,
+):
+    queryset = FloorsheetTransaction.objects.all().annotate(
+        _buyer_broker_clean=Trim("buyer_broker"),
+        _seller_broker_clean=Trim("seller_broker"),
+    ).exclude(transaction_id__startswith="TX-")
 
     if company is not None:
         queryset = queryset.filter(company=company)
@@ -332,6 +339,14 @@ def _base_queryset(company=None, start_date=None, end_date=None, date=None):
 
     if end_date is not None:
         queryset = queryset.filter(date__lte=end_date)
+
+    if company_ids is not None:
+        queryset = queryset.filter(company_id__in=company_ids)
+
+    if broker is not None:
+        queryset = queryset.filter(
+            Q(_buyer_broker_clean=broker) | Q(_seller_broker_clean=broker)
+        )
 
     return queryset
 
@@ -365,14 +380,20 @@ def _aggregate_side(queryset, broker_field):
     # An annotation alias that matches a model field name shadows that
     # field, so ``F("quantity")`` inside the value expression would
     # resolve to ``Sum("quantity")`` and Django rejects a Sum of a Sum.
+    annotations = {
+        "quantity_sum": Coalesce(Sum("quantity"), Value(0)),
+        "value_sum": Coalesce(Sum(_transaction_value()), _decimal_zero()),
+        "trade_count": Count("id"),
+    }
+    if broker_field == "buyer_broker":
+        annotations["self_trade_count"] = Count(
+            "id",
+            filter=Q(_buyer_broker_clean=F("_seller_broker_clean")),
+        )
     return (
         queryset
         .values(broker_field)
-        .annotate(
-            quantity_sum=Coalesce(Sum("quantity"), Value(0)),
-            value_sum=Coalesce(Sum(_transaction_value()), _decimal_zero()),
-            trade_count=Count("id"),
-        )
+        .annotate(**annotations)
     )
 
 
@@ -381,6 +402,8 @@ def build_broker_activity(
     start_date=None,
     end_date=None,
     date=None,
+    company_ids=None,
+    broker=None,
 ):
     """
     Return one combined row per broker plus the derived headline metrics.
@@ -408,6 +431,8 @@ def build_broker_activity(
         start_date=start_date,
         end_date=end_date,
         date=date,
+        company_ids=company_ids,
+        broker=broker,
     )
 
     brokers = {}
@@ -424,6 +449,7 @@ def build_broker_activity(
                 "net_value": ZERO,
                 "buy_trades": 0,
                 "sell_trades": 0,
+                "self_trades": 0,
             }
         return brokers[name]
 
@@ -435,6 +461,7 @@ def build_broker_activity(
         row["buy_quantity"] += int(entry["quantity_sum"] or 0)
         row["buy_value"] += Decimal(entry["value_sum"] or ZERO)
         row["buy_trades"] += int(entry["trade_count"] or 0)
+        row["self_trades"] += int(entry["self_trade_count"] or 0)
 
     for entry in _aggregate_side(queryset, "seller_broker"):
         name = _clean_broker(entry["seller_broker"])
@@ -450,7 +477,7 @@ def build_broker_activity(
         row["net_value"] = row["buy_value"] - row["sell_value"]
         row["total_quantity"] = row["buy_quantity"] + row["sell_quantity"]
         row["total_value"] = row["buy_value"] + row["sell_value"]
-        row["trades"] = row["buy_trades"] + row["sell_trades"]
+        row["trades"] = row["buy_trades"] + row["sell_trades"] - row["self_trades"]
 
     combined = sorted(
         brokers.values(),
@@ -508,7 +535,10 @@ def _pick_top_net_seller(rows):
     )
 
 
-def sampled_floorsheet_dates(company=None):
+def sampled_floorsheet_dates(
+    company=None, start_date=None, end_date=None,
+    company_ids=None, broker=None,
+):
     """
     The trading dates we actually hold floorsheet rows for.
 
@@ -517,7 +547,13 @@ def sampled_floorsheet_dates(company=None):
     know which dates are genuinely represented before drawing a trend.
     """
     return list(
-        _base_queryset(company=company)
+        _base_queryset(
+            company=company,
+            start_date=start_date,
+            end_date=end_date,
+            company_ids=company_ids,
+            broker=broker,
+        )
         .order_by("-date")
         .values_list("date", flat=True)
         .distinct()

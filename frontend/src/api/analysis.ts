@@ -181,6 +181,73 @@ export interface BrokerActivityResponse {
   note: string;
 }
 
+export interface BrokerCompanyChoice {
+  id: number;
+  symbol: string;
+  name: string;
+}
+
+export interface BrokerAnalysisResponse {
+  count: number;
+  page: number;
+  page_size: number;
+  next: number | null;
+  previous: number | null;
+  results: BrokerActivity[];
+  broker_options: string[];
+  companies: BrokerCompanyChoice[];
+  summary: {
+    total_buy_quantity: number;
+    total_sell_quantity: number;
+    total_activity: number;
+    total_buy_value: string;
+    total_sell_value: string;
+    total_turnover: string;
+    active_brokers: number;
+    sampled_trading_days: number;
+    transaction_count: number;
+  };
+  most_active_buyers: BrokerActivity[];
+  most_active_sellers: BrokerActivity[];
+  top_net_buyers: BrokerActivity[];
+  top_net_sellers: BrokerActivity[];
+  sampled_dates: string[];
+  note: string;
+}
+
+export interface BrokerDetailResponse {
+  broker: string;
+  company_options: BrokerCompanyChoice[];
+  summary: BrokerActivity;
+  daily_activity: Array<{
+    date: string;
+    buy_quantity: number;
+    sell_quantity: number;
+    buy_value: string;
+    sell_value: string;
+    net_value: string;
+    net_quantity: number;
+    high_rate: string | null;
+    low_rate: string | null;
+    largest_trade: string | null;
+    trades: number;
+  }>;
+  companies: Array<{
+    company_id: number;
+    symbol: string;
+    name: string;
+    sector: string;
+    buy_quantity: number;
+    sell_quantity: number;
+    buy_value: string;
+    sell_value: string;
+    net_value: string;
+    net_quantity: number;
+    trades: number;
+  }>;
+  sampled_dates: string[];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // News-Price Correlation
 // Matches CompanyNewsPriceCorrelationAPIView response
@@ -208,6 +275,59 @@ export interface NewsPriceCorrelation {
   lead_lag_days: number;        // always 1 in current implementation
   analysis_note: string;
   data_points: CorrelationDataPoint[];  // one entry per trading day in window
+  market_reaction: {
+    minimum_observations: number;
+    observations: number;
+    events: Array<{
+      news_date: string;
+      article_count: number;
+      positive_count: number;
+      neutral_count: number;
+      negative_count: number;
+      sentiment_score: number | null;
+      baseline_date: string | null;
+      sessions: Array<{
+        label: 'News Day' | 'T+1' | 'T+2';
+        date: string;
+        close: number;
+        volume: number;
+        price_return_pct: number | null;
+        volume_change_pct: number | null;
+      } | null>;
+    }>;
+    correlations: {
+      sentiment_t1_return: { coefficient: number | null; observations: number };
+      sentiment_t2_return: { coefficient: number | null; observations: number };
+      news_volume_t1_change: { coefficient: number | null; observations: number };
+      news_volume_t2_change: { coefficient: number | null; observations: number };
+    };
+    baseline_note: string;
+    disclaimer: string;
+  };
+}
+
+export interface CategorizedCompanyNews {
+  id: number;
+  headline: string;
+  source: string;
+  url: string;
+  published_at: string | null;
+  sentiment: number | null;
+  sentiment_label: string;
+  confidence: number;
+  method: string;
+  is_manual: boolean;
+}
+
+export interface CategorizedCompanyNewsResponse {
+  company_id: number;
+  symbol: string;
+  count: number;
+  page: number;
+  page_size: number;
+  next: number | null;
+  previous: number | null;
+  results: CategorizedCompanyNews[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -339,10 +459,33 @@ export const analysisApi = {
       )
       .then((r) => r.data),
 
+  getBrokerAnalysis: (params?: {
+    start_date?: string;
+    end_date?: string;
+    company_id?: number;
+    broker?: string;
+    page?: number;
+  }) => apiClient
+    .get<BrokerAnalysisResponse>('/analysis/brokers/', { params })
+    .then((r) => r.data),
+
+  getBrokerDetail: (broker: string, params?: {
+    start_date?: string;
+    end_date?: string;
+    company_id?: number;
+  }) => apiClient
+    .get<BrokerDetailResponse>(`/analysis/brokers/${encodeURIComponent(broker)}/`, { params })
+    .then((r) => r.data),
+
   // ── News-price correlation (60-day rolling window) ───────────────────────
   getNewsCorrelation: (companyId: number) =>
     apiClient
       .get<NewsPriceCorrelation>(`/companies/${companyId}/news-correlation/`)
+      .then((r) => r.data),
+
+  getCategorizedCompanyNews: (companyId: number, page = 1) =>
+    apiClient
+      .get<CategorizedCompanyNewsResponse>(`/analysis/companies/${companyId}/categorized-news/`, { params: { page } })
       .then((r) => r.data),
 
   // ── Historical prices ────────────────────────────────────────────────────

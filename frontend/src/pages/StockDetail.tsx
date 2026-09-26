@@ -56,7 +56,7 @@ const C = {
   anomaly: '#EF4444',
   buy:     '#22C55E',
   neutral: '#64748B',
-  news:    '#38BDF8',
+  news:    '#A78BFA',
   sent:    '#F472B6',
 };
 
@@ -433,7 +433,7 @@ function CorrelationPanel({ c }: { c: NewsPriceCorrelation }) {
               {withNews.map((d, i) => (
                 <tr key={i} className="table-row">
                   <td className="py-2 font-mono text-text-secondary">{d.date}</td>
-                  <td className="py-2 text-right"><Badge variant="blue">{d.news_count}</Badge></td>
+                  <td className="py-2 text-right"><Badge variant="purple">{d.news_count}</Badge></td>
                   <td className={clsx('py-2 text-right font-mono',
                     d.sentiment_score > 0.1 ? 'text-up' : d.sentiment_score < -0.1 ? 'text-down' : 'text-text-secondary',
                   )}>

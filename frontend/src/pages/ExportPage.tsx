@@ -55,6 +55,7 @@ const DATA_TYPE_OPTIONS: { value: ExportDataType; label: string; description: st
   { value: 'news',       label: 'News',             description: 'Articles, sources, sentiment, tags'         },
   { value: 'trading',    label: 'Trading Data',      description: 'Daily price, volume, turnover'              },
   { value: 'floorsheet', label: 'Floorsheet',        description: 'Transaction-level broker data'              },
+  { value: 'broker_analysis', label: 'Broker Activity', description: 'Aggregated buy, sell, net quantity, trades' },
   { value: 'report',     label: 'Analysis Report',   description: 'Combined trading, news & analysis summary'  },
 ];
 
@@ -63,6 +64,7 @@ const FORMAT_OPTIONS: Record<ExportDataType, ExportFormat[]> = {
   news:       ['csv', 'xlsx', 'pdf'],
   trading:    ['csv', 'xlsx', 'pdf'],
   floorsheet: ['csv', 'xlsx'],
+  broker_analysis: ['csv', 'xlsx'],
   report:     ['pdf', 'xlsx'],
 };
 
@@ -174,6 +176,9 @@ export default function ExportPage() {
           break;
         case 'floorsheet':
           await exportsApi.exportFloorsheet(params, companies);
+          break;
+        case 'broker_analysis':
+          await exportsApi.exportBrokerAnalysis(params, companies);
           break;
         case 'report':
           await exportsApi.exportReport(params, companies);

@@ -5,6 +5,7 @@ import {
   Newspaper,
   BarChart3,
   Activity,
+  Landmark,
   Briefcase,
   Star,
   Database,
@@ -55,14 +56,15 @@ const NAV_ITEMS: NavItem[] = [
     to: '/companies',
   },
   {
-    label: 'Trading Behaviour',
-    icon: Activity,
-    to: '/trading',
-  },
-  {
     label: 'Company Analysis',
     icon: Activity,
     to: '/company-analysis',
+  },
+  {
+    label: 'Broker Analysis',
+    icon: Landmark,
+    to: '/broker-analysis',
+    requiredPermissions: ['view_analysis'],
   },
   {
     label: 'Watchlist',

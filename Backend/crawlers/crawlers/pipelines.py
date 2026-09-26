@@ -704,6 +704,7 @@ class NewsPipeline:
                     body=body,
                     published_at=published_at,
                     content_hash=content_hash,
+                    data_provenance="crawled",
                 )
 
                 self.created_count += 1
@@ -948,6 +949,7 @@ class TradingDataPipeline:
                         "close": close_price,
                         "volume": volume,
                         "turnover": turnover,
+                        "source": "crawled",
                     },
                 )
             )
@@ -1359,4 +1361,3 @@ class FloorsheetPipeline:
             self.skipped_count,
             self.failed_count,
         )
-

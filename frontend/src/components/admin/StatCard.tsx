@@ -32,10 +32,10 @@ export default function StatCard({
           )}
         </div>
 
-        <div className="rounded-lg bg-blue-500/10 p-2.5">
+        <div className="rounded-lg bg-accent/10 p-2.5">
           <Icon
             size={20}
-            className="text-blue-400"
+            className="text-accent-light"
           />
         </div>
       </div>
