@@ -675,8 +675,8 @@ from apps.market_data.services.trading_calendar import rolling_window_bounds
 from apps.news.models import ArticleCompanyTag, NewsArticle
 from apps.users.permissions import HasAppPermission
 
-from .models import DailyAnalysis
-from .serializers import BrokerActivitySerializer, DailyAnalysisSerializer
+from .models import DailyAnalysis, VolumeAnomaly, NewsPriceCorrelation
+from .serializers import BrokerActivitySerializer, DailyAnalysisSerializer, VolumeAnomalySerializer, NewsPriceCorrelationSerializer
 from .services.brokers import build_broker_activity, sampled_floorsheet_dates
 from .services.daily_metrics import PRESSURE_METHOD
 from .services.news_market_reaction import build_news_market_reaction
@@ -741,7 +741,17 @@ class CompanyBehaviorSummaryAPIView(APIView):
             )
 
         if not analysis_rows:
-            return Response(self._empty_payload(company))
+            payload = self._empty_payload(company)
+            anomaly_rows = VolumeAnomaly.objects.filter(
+                company=company,
+                date__gte=timezone.localdate() - timedelta(days=self.WINDOW_DAYS),
+                is_anomaly=True,
+            ).order_by("-date")
+            payload["volume_anomalies"] = {
+                "summary_count": anomaly_rows.count(),
+                "results": VolumeAnomalySerializer(anomaly_rows, many=True).data,
+            }
+            return Response(payload)
 
         latest = analysis_rows[0]
 
@@ -783,6 +793,13 @@ class CompanyBehaviorSummaryAPIView(APIView):
         )
 
         unique_trading_dates = len({row.date for row in analysis_rows})
+        anomaly_rows = VolumeAnomaly.objects.filter(
+            company=company, date__gte=window_start, date__lte=window_end, is_anomaly=True,
+        ).order_by("-date")
+        volume_anomalies = {
+            "summary_count": anomaly_rows.count(),
+            "results": VolumeAnomalySerializer(anomaly_rows, many=True).data,
+        }
 
         return Response(
             {
@@ -816,6 +833,7 @@ class CompanyBehaviorSummaryAPIView(APIView):
                 "volume_anomaly": latest.volume_anomaly,
                 "volume_baseline_sessions": latest.volume_baseline_sessions,
                 "has_sufficient_history": latest.has_sufficient_history,
+                "volume_anomalies": volume_anomalies,
 
                 "brokers": BrokerActivitySerializer(
                     broker_activity["brokers"][:10],
@@ -860,6 +878,7 @@ class CompanyBehaviorSummaryAPIView(APIView):
             "volume_anomaly": False,
             "volume_baseline_sessions": 0,
             "has_sufficient_history": False,
+            "volume_anomalies": {"summary_count": 0, "results": []},
             "brokers": [],
             "most_active_buyer": None,
             "most_active_seller": None,
@@ -1302,6 +1321,20 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
             window_start=window_start,
             prices=all_prices,
         )
+        stored_correlation = NewsPriceCorrelation.objects.filter(company=company).first()
+        correlation_results = stored_correlation.results if stored_correlation else {
+            "company_id": company.pk,
+            "method": "Pearson r and Spearman rho with p-values: daily news intensity vs forward trading-session changes",
+            "confidence_floor": 0.5,
+            "min_n_for_reliable": 8,
+            "lags_days": [1, 2],
+            "window_start": None,
+            "window_end": None,
+            "caveat": "Exploratory only — roughly one month of data; small samples are possible, and this is not a validated trading signal.",
+            "by_lag": {},
+        }
+        correlation_results["computed_at"] = stored_correlation.computed_at if stored_correlation else None
+        correlation_payload = NewsPriceCorrelationSerializer(correlation_results).data
 
         if not prices:
             return Response(
@@ -1314,6 +1347,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                     "analysis_note": "Historical news and market comparisons are observational, and require both categorized news and stored price history.",
                     "data_points": [],
                     "market_reaction": market_reaction,
+                    **correlation_payload,
                 }
             )
 
@@ -1415,6 +1449,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                 "analysis_note": "Historical categorized news and market data are compared across observed trading sessions. Correlation indicates association, not causation.",
                 "data_points": data_points,  # Already bounded by the 60-day DB filter
                 "market_reaction": market_reaction,
+                **correlation_payload,
             }
         )
 

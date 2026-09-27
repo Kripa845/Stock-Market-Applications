@@ -134,6 +134,74 @@ from .services.daily_metrics import (
 )
 
 
+class VolumeAnomalySerializer(serializers.ModelSerializer):
+    class Meta:
+        from .models import VolumeAnomaly
+        model = VolumeAnomaly
+        fields = ("date", "volume", "rolling_mean", "rolling_std", "z_score", "pct_of_avg", "is_anomaly", "insufficient_data", "reason")
+        read_only_fields = fields
+
+
+class NewsPriceCorrelationSerializer(serializers.Serializer):
+    company_id = serializers.IntegerField()
+    method = serializers.CharField()
+    confidence_floor = serializers.FloatField()
+    min_n_for_reliable = serializers.IntegerField()
+    lags_days = serializers.ListField(child=serializers.IntegerField())
+    window_start = serializers.CharField(allow_null=True, required=False)
+    window_end = serializers.CharField(allow_null=True, required=False)
+    caveat = serializers.CharField()
+    by_lag = serializers.DictField()
+    computed_at = serializers.DateTimeField(required=False)
+
+
+class ForwardCorrelationMetricSerializer(serializers.Serializer):
+    coefficient = serializers.FloatField(allow_null=True)
+    observations = serializers.IntegerField(min_value=0)
+
+
+class NewsSentimentItemSerializer(serializers.Serializer):
+    headline = serializers.CharField(allow_blank=True)
+    category = serializers.CharField(allow_null=True, allow_blank=True)
+    sentiment_score = serializers.FloatField(allow_null=True)
+
+
+class NewsSentimentDailySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    article_count = serializers.IntegerField(min_value=0)
+    avg_sentiment = serializers.FloatField(allow_null=True)
+    news_items = NewsSentimentItemSerializer(many=True)
+    positive_count = serializers.IntegerField(min_value=0)
+    negative_count = serializers.IntegerField(min_value=0)
+    t1_date = serializers.DateField(allow_null=True)
+    t2_date = serializers.DateField(allow_null=True)
+    return_t1_pct = serializers.FloatField(allow_null=True)
+    return_t2_pct = serializers.FloatField(allow_null=True)
+    volume_change_t1_pct = serializers.FloatField(allow_null=True)
+    volume_change_t2_pct = serializers.FloatField(allow_null=True)
+
+
+class NewsSentimentCorrelationSummarySerializer(serializers.Serializer):
+    observations = serializers.IntegerField(min_value=0)
+    sentiment_return_t1 = ForwardCorrelationMetricSerializer()
+    sentiment_return_t2 = ForwardCorrelationMetricSerializer()
+    sentiment_volume_change_t1 = ForwardCorrelationMetricSerializer()
+    sentiment_volume_change_t2 = ForwardCorrelationMetricSerializer()
+
+
+class NewsSentimentForwardResponseSerializer(serializers.Serializer):
+    company_id = serializers.IntegerField()
+    symbol = serializers.CharField()
+    daily_data = NewsSentimentDailySerializer(many=True)
+    correlation_summary = NewsSentimentCorrelationSummarySerializer()
+    disclaimer = serializers.CharField()
+
+
+class NewsSentimentCorrelationQuerySerializer(serializers.Serializer):
+    start_date = serializers.DateField(required=False)
+    end_date = serializers.DateField(required=False)
+
+
 class DailyAnalysisSerializer(serializers.ModelSerializer):
     """
     Stored per-trading-day analytical state.

@@ -7,7 +7,10 @@ from .views import (
     CompanyDetailUpdateDestroyAPIView,
     CompanyFloorsheetAPIView,
     CompanyListCreateAPIView,
+    CompanyNewsSentimentCorrelationAPIView,
     CompanyPricesAPIView,
+    CompanyRvolAPIView,
+    CompanyVolumeAnomaliesAPIView,
     CompanyToggleTrackAPIView,
 )
 from .views import CompanySectorsAPIView
@@ -33,6 +36,21 @@ urlpatterns = [
         "<int:pk>/prices/",
         CompanyPricesAPIView.as_view(),
         name="company-prices",
+    ),
+    path(
+        "<str:symbol>/volume-anomalies/",
+        CompanyVolumeAnomaliesAPIView.as_view(),
+        name="company-volume-anomalies",
+    ),
+    path(
+        "<str:symbol>/rvol/",
+        CompanyRvolAPIView.as_view(),
+        name="company-rvol",
+    ),
+    path(
+        "<str:symbol>/news-correlation/",
+        CompanyNewsSentimentCorrelationAPIView.as_view(),
+        name="company-news-sentiment-correlation",
     ),
     path(
         "<int:pk>/floorsheet/",

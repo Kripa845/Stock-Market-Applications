@@ -113,6 +113,7 @@ wrapt==2.4.0
 zope.interface==8.6
 sentence-transformers>=3.0.0
 scikit-learn>=1.4.0
+scipy>=1.10,<2
 torch>=2.2.0
 
 # Export Data / Reports — added for CSV/XLSX/PDF generation

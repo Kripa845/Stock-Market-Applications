@@ -198,6 +198,7 @@ def rebuild_company_analysis_task(self, company_id, since=None):
     rows = rebuild_company_analysis(company, since=since_date)
 
     _update_period_vwap(company)
+    _rebuild_persisted_market_features(company)
 
     logger.info(
         "Analysis rebuilt | company=%s | rows=%s | baseline_sessions=%s",
@@ -243,6 +244,7 @@ def rebuild_all_analysis(self, since=None):
         try:
             rows = rebuild_company_analysis(company, since=since_date)
             _update_period_vwap(company)
+            _rebuild_persisted_market_features(company)
             total_rows += len(rows)
             processed += 1
         except Exception as exc:  # noqa: BLE001 - one bad company must not halt the run
@@ -261,6 +263,21 @@ def rebuild_all_analysis(self, since=None):
         "rows_written": total_rows,
         "failed": failed,
     }
+
+
+def _rebuild_persisted_market_features(company):
+    """Refresh both persisted features after the existing analysis crawl task."""
+    from apps.analysis.services.volume_anomaly import rebuild_company_volume_anomalies
+    from apps.analysis.services.news_price_correlation import rebuild_company_news_price_correlation
+
+    for feature_name, rebuild in (
+        ("volume anomalies", rebuild_company_volume_anomalies),
+        ("news-price correlation", rebuild_company_news_price_correlation),
+    ):
+        try:
+            rebuild(company)
+        except Exception as exc:  # noqa: BLE001 - a bad feature/company must not stop other analysis
+            logger.exception("Could not refresh %s for %s: %s", feature_name, company.symbol, exc)
 
 
 def _update_period_vwap(company):

@@ -557,7 +557,7 @@ BASELINE_SESSIONS = 20
 
 #: Application threshold for flagging a volume anomaly.
 #: This is a project convention, not a universal financial law.
-VOLUME_ANOMALY_THRESHOLD = Decimal("1.5")
+VOLUME_ANOMALY_THRESHOLD = Decimal("2.5")
 
 #: When history is shorter than ``BASELINE_SESSIONS`` we still publish a
 #: provisional ratio for display, but we never raise an anomaly flag off
@@ -586,7 +586,7 @@ def detect_volume_anomalies(company_id, start_date, end_date, include_seeded=Fal
         ratio = (row.volume / avg) if avg else None
         results.append({"date": row.date, "volume": row.volume, "baseline_avg": round(avg, 2) if avg is not None else None,
                         "ratio": round(ratio, 4) if ratio is not None else None,
-                        "is_anomaly": (row.volume > avg * float(VOLUME_ANOMALY_THRESHOLD)) if enough and avg else (None if not enough else False),
+                        "is_anomaly": (row.volume >= avg * float(VOLUME_ANOMALY_THRESHOLD)) if enough and avg else (None if not enough else False),
                         "low_confidence": not enough, "sessions_used": len(previous),
                         "reason": "insufficient_history" if not enough else None, "source": row.source})
         history.append(row.volume)

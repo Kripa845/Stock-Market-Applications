@@ -66,11 +66,10 @@ export interface DailyAnalysis {
   volume: number;
   volume_average: string | null;    // mean of previous 20 sessions
   volume_avg_20d: string | null;    // alias for volume_average
-  volume_ratio: string | null;      // today / 20-session avg; anomaly ≥ 1.5
+  volume_ratio: string | null;      // today / prior 20-session SMA; anomaly ≥ 2.5
   volume_anomaly: boolean;
   volume_baseline_sessions: number;
   has_sufficient_history: boolean;
-
   pressure: PressureLabel;
   pressure_score: string | null;    // OHLCV proxy, -100..+100
   pressure_method: string;          // e.g. "OHLCV_PRICE_VOLUME"
@@ -141,6 +140,20 @@ export interface BehaviorSummary {
   volume_anomaly: boolean;
   volume_baseline_sessions: number;
   has_sufficient_history: boolean;
+  volume_anomalies: {
+    summary_count: number;
+    results: Array<{
+      date: string;
+      volume: number;
+      rolling_mean: number | null;
+      rolling_std: number | null;
+      z_score: number | null;
+      pct_of_avg: number | null;
+      is_anomaly: boolean;
+      insufficient_data: boolean;
+      reason: 'zscore' | 'multiplier' | 'both' | '';
+    }>;
+  };
 
   // Broker activity — from floorsheet sample, NOT a continuous series
   brokers: BrokerActivity[];          // top 10 by net_quantity
@@ -304,6 +317,60 @@ export interface NewsPriceCorrelation {
     baseline_note: string;
     disclaimer: string;
   };
+  method?: string;
+  confidence_floor?: number;
+  min_n_for_reliable?: number;
+  lags_days?: number[];
+  caveat?: string;
+  computed_at?: string;
+  by_lag?: Record<string, Record<string, {
+    n: number;
+    pearson_r: number | null;
+    pearson_p: number | null;
+    spearman_rho: number | null;
+    spearman_p: number | null;
+    reliable: boolean;
+  }>>;
+}
+
+export interface ForwardCorrelationMetric {
+  coefficient: number | null;
+  observations: number;
+}
+
+export interface NewsSentimentDailyPoint {
+  date: string;
+  article_count: number;
+  avg_sentiment: number | null;
+  news_items: Array<{
+    headline: string;
+    category: 'Positive' | 'Neutral' | 'Negative' | 'Unscored' | string;
+    sentiment_score: number | null;
+  }>;
+  positive_count: number;
+  negative_count: number;
+  t1_date: string | null;
+  t2_date: string | null;
+  return_t1_pct: number | null;
+  return_t2_pct: number | null;
+  volume_change_t1_pct: number | null;
+  volume_change_t2_pct: number | null;
+}
+
+export interface NewsSentimentCorrelationSummary {
+  observations: number;
+  sentiment_return_t1: ForwardCorrelationMetric;
+  sentiment_return_t2: ForwardCorrelationMetric;
+  sentiment_volume_change_t1: ForwardCorrelationMetric;
+  sentiment_volume_change_t2: ForwardCorrelationMetric;
+}
+
+export interface NewsSentimentForwardResponse {
+  company_id: number;
+  symbol: string;
+  daily_data: NewsSentimentDailyPoint[];
+  correlation_summary: NewsSentimentCorrelationSummary;
+  disclaimer: string;
 }
 
 export interface CategorizedCompanyNews {
@@ -416,6 +483,30 @@ export interface PricesResponse {
   prices: PricePoint[];
 }
 
+export interface VolumeAnomaly {
+  date: string;
+  volume: number;
+  rolling_mean: number | null;
+  average_volume_20d: number | null;
+  rvol: number | null;
+  anomaly_flag: 'Normal' | 'Anomaly' | null;
+  is_anomaly: boolean | null;
+  price_change_pct: number | null;
+}
+
+export interface RvolPoint {
+  date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number;
+  rolling_avg: number | null;
+  rolling_std: number | null;
+  rvol: number | null;
+  is_above_threshold: boolean;
+}
+
 export interface FloorsheetTx {
   id: number;
   date: string;
@@ -483,6 +574,11 @@ export const analysisApi = {
       .get<NewsPriceCorrelation>(`/companies/${companyId}/news-correlation/`)
       .then((r) => r.data),
 
+  getNewsSentimentForward: (symbol: string, params?: { start_date?: string; end_date?: string }) =>
+    apiClient
+      .get<NewsSentimentForwardResponse>(`/companies/${encodeURIComponent(symbol)}/news-correlation/`, { params })
+      .then((r) => r.data),
+
   getCategorizedCompanyNews: (companyId: number, page = 1) =>
     apiClient
       .get<CategorizedCompanyNewsResponse>(`/analysis/companies/${companyId}/categorized-news/`, { params: { page } })
@@ -490,11 +586,21 @@ export const analysisApi = {
 
   // ── Historical prices ────────────────────────────────────────────────────
   // range: '7d' | '30d' | '31d' | '90d' | '180d' | '1y' | 'all'
-  getPrices: (companyId: number, range = '31d') =>
+  getPrices: (companyId: number, range = '31d', params?: { source?: 'crawled' }) =>
     apiClient
       .get<PricesResponse>(`/companies/${companyId}/prices/`, {
-        params: { range },
+        params: { range, ...params },
       })
+      .then((r) => r.data),
+
+  getVolumeAnomalies: (symbol: string, params?: { start_date?: string; end_date?: string; lookback?: number }) =>
+    apiClient
+      .get<VolumeAnomaly[]>(`/companies/${encodeURIComponent(symbol)}/volume-anomalies/`, { params })
+      .then((r) => r.data),
+
+  getRvol: (symbol: string, params?: { start_date?: string; end_date?: string; ma_length?: number; ma_type?: 'SMA' | 'EMA'; threshold?: number }) =>
+    apiClient
+      .get<RvolPoint[]>(`/companies/${encodeURIComponent(symbol)}/rvol/`, { params })
       .then((r) => r.data),
 
   // ── Latest floorsheet (most recent date) ─────────────────────────────────

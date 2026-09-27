@@ -23,6 +23,8 @@ def import_daily_price(data):
                 "close": data["close"],
                 "volume": data["volume"],
                 "turnover": data["turnover"],
+                # This importer is used by the market-data crawl pipeline.
+                "source": "crawled",
             },
         )
     )

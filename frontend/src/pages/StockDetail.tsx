@@ -23,7 +23,7 @@ import {
 import {
   AreaChart, Area, BarChart, Bar, ComposedChart, Line,
   ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   ReferenceLine,
 } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
@@ -253,6 +253,17 @@ function BehaviorPanel({ b }: { b: BehaviorSummary }) {
         </div>
       </div>
 
+      <div className="card mt-3">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-semibold text-text-primary">Persisted volume anomaly days</h4>
+          <Badge variant={b.volume_anomalies.summary_count ? 'red' : 'gray'}>{b.volume_anomalies.summary_count} flagged</Badge>
+        </div>
+        {b.volume_anomalies.results.length ? <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-text-muted border-b border-bg-border"><th className="text-left py-1">Date</th><th>Reason</th><th>Z-score</th><th>% of average</th></tr></thead><tbody>
+          {b.volume_anomalies.results.map(row => <tr key={row.date} className="table-row"><td className="py-1.5">{row.date}</td><td className="text-center">{row.reason}</td><td className="text-center">{row.z_score?.toFixed(2) ?? '—'}</td><td className="text-center">{row.pct_of_avg !== null ? `${(row.pct_of_avg * 100).toFixed(1)}%` : '—'}</td></tr>)}
+        </tbody></table></div> : <p className="text-[11px] text-text-muted">No persisted anomaly days in this analysis window.</p>}
+        <p className="text-[10px] text-text-muted mt-2">Flagged when volume is at least 2.5× the SMA of the preceding 20 trading sessions. Current day is excluded; incomplete baselines are not scored.</p>
+      </div>
+
       {/* Broker activity */}
       <div>
         <SectionHead icon={Activity} title="Broker Activity (Floorsheet Sample)" />
@@ -321,6 +332,11 @@ function BehaviorPanel({ b }: { b: BehaviorSummary }) {
 
 function CorrelationPanel({ c }: { c: NewsPriceCorrelation }) {
   const withNews = c.data_points.filter(d => d.news_count > 0);
+  const correlationLabels: Record<string, string> = {
+    news_intensity_vs_signed_return: 'News intensity vs signed return',
+    news_intensity_vs_abs_return: 'News intensity vs absolute return',
+    news_intensity_vs_volume_change: 'News intensity vs volume change',
+  };
 
   return (
     <div className="space-y-5">
@@ -328,6 +344,24 @@ function CorrelationPanel({ c }: { c: NewsPriceCorrelation }) {
       <div className="flex items-start gap-1.5 text-[11px] text-text-muted rounded-lg border border-bg-border px-3 py-2">
         <Info size={11} className="shrink-0 mt-0.5" />
         <span>{c.analysis_note}</span>
+      </div>
+
+      <div className="card space-y-3">
+        <SectionHead icon={Activity} title="News activity vs subsequent market movement" />
+        <p className="text-xs text-yellow-400">{c.caveat ?? 'Exploratory only — small sample size; not a validated trading signal.'}</p>
+        <p className="text-[11px] text-text-muted">Pearson r and Spearman rho with p-values; news intensity sums company-tag confidence scores (minimum 0.5).</p>
+        {[1, 2].map(lag => <div key={lag} className="overflow-x-auto">
+          <h4 className="text-xs font-semibold text-text-secondary mb-1">T+{lag}</h4>
+          <table className="w-full text-xs min-w-[620px]"><thead><tr className="text-text-muted border-b border-bg-border"><th className="text-left py-1">Pairing</th><th>Pearson r (p)</th><th>Spearman ρ (p)</th><th>N</th><th>Reliability</th></tr></thead>
+            <tbody>{Object.entries(correlationLabels).map(([key, label]) => {
+              const value = c.by_lag?.[`${lag}d`]?.[key];
+              return <tr key={key} className={clsx('table-row', value && !value.reliable && 'opacity-50')}>
+                <td className="py-1.5">{label}</td><td className="text-center">{value?.pearson_r ?? '—'} ({value?.pearson_p ?? '—'})</td>
+                <td className="text-center">{value?.spearman_rho ?? '—'} ({value?.spearman_p ?? '—'})</td><td className="text-center">{value?.n ?? 0}</td>
+                <td className="text-center">{value ? <Badge variant={value.reliable ? 'green' : 'gray'}>{value.reliable ? 'Reliable (N ≥ 8)' : 'Low N'}</Badge> : 'Pending backfill'}</td>
+              </tr>;
+            })}</tbody></table>
+        </div>)}
       </div>
 
       {/* Pearson r */}
@@ -501,6 +535,7 @@ export default function StockDetail() {
         const found = companyData.results[0];
         if (!found) throw new Error('Company not found');
         setCompany(found);
+        analysisApi.getBehavior(found.id).then(setBehavior).catch(() => undefined);
 
         const [priceData, floorData, newsData] = await Promise.all([
           stocksApi.getPrices(found.id, `${priceRange}d`),
@@ -576,7 +611,8 @@ export default function StockDetail() {
     date: p.date.slice(5),
     price: +p.close,
     volume: p.volume,
-  })), [sliced]);
+    anomaly: behavior?.volume_anomalies.results.some(row => row.date === p.date) ?? false,
+  })), [sliced, behavior]);
 
   // ── Loading / error screens ──────────────────────────────────────────────
 
@@ -697,7 +733,9 @@ export default function StockDetail() {
                     <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#475569' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10, fill: '#475569' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} width={40} />
                     <Tooltip contentStyle={TT} formatter={(v: unknown) => [`${(Number(v ?? 0) / 1000).toFixed(0)}K`, 'Volume']} />
-                    <Bar dataKey="volume" fill={C.volume} opacity={0.6} radius={[2, 2, 0, 0]} />
+                    <Bar dataKey="volume" opacity={0.75} radius={[2, 2, 0, 0]}>
+                      {chartData.map(point => <Cell key={point.date} fill={point.anomaly ? C.anomaly : C.volume} />)}
+                    </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>

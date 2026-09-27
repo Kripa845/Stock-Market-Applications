@@ -372,3 +372,31 @@ class DailyAnalysis(models.Model):
 
     def __str__(self):
         return f"{self.company.symbol} | {self.date} | vwap: {self.vwap}"
+
+
+class VolumeAnomaly(models.Model):
+    """Persisted rolling volume statistics for one company trading session."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="volume_anomalies")
+    date = models.DateField()
+    volume = models.BigIntegerField()
+    rolling_mean = models.FloatField(null=True, blank=True)
+    rolling_std = models.FloatField(null=True, blank=True)
+    z_score = models.FloatField(null=True, blank=True)
+    pct_of_avg = models.FloatField(null=True, blank=True)
+    is_anomaly = models.BooleanField(default=False)
+    insufficient_data = models.BooleanField(default=False)
+    reason = models.CharField(max_length=16, blank=True)
+
+    class Meta:
+        ordering = ["-date"]
+        constraints = [models.UniqueConstraint(fields=["company", "date"], name="unique_company_volume_anomaly")]
+        indexes = [models.Index(fields=["company", "date", "is_anomaly"])]
+
+
+class NewsPriceCorrelation(models.Model):
+    """Latest persisted exploratory news-intensity correlation per company."""
+
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="news_price_correlation")
+    computed_at = models.DateTimeField(auto_now=True)
+    results = models.JSONField(default=dict)

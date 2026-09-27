@@ -9,6 +9,18 @@ from rest_framework.views import APIView
 from django.db.models import Q
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.market_data.serializers import DailyPriceSerializers, FloorsheetSerializer
+from apps.market_data.volume_anomalies import get_volume_anomalies
+from apps.market_data.volume_anomaly_serializers import (
+    VolumeAnomalyQuerySerializer,
+    VolumeAnomalySerializer,
+)
+from apps.market_data.rvol_serializers import RvolPointSerializer, RvolQuerySerializer
+from apps.market_data.services.rvol import get_company_rvol
+from apps.analysis.serializers import (
+    NewsSentimentCorrelationQuerySerializer,
+    NewsSentimentForwardResponseSerializer,
+)
+from apps.analysis.services.news_sentiment_forward import get_company_news_sentiment_forward
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 from apps.users.company_access import (
     filter_company_queryset,
@@ -195,6 +207,8 @@ class CompanyPricesAPIView(APIView):
         range_param = request.query_params.get("range", "31d").lower()
 
         prices_qs = DailyPrice.objects.filter(company=company).order_by("date")
+        if request.query_params.get("source") == "crawled":
+            prices_qs = prices_qs.filter(source="crawled")
 
         if range_param in self.RANGE_DAYS:
             # Anchor to today so the window is always the current rolling period.
@@ -217,6 +231,76 @@ class CompanyPricesAPIView(APIView):
                 "prices": serializer.data,
             }
         )
+
+
+class CompanyVolumeAnomaliesAPIView(APIView):
+    """GET /api/companies/<symbol>/volume-anomalies/"""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_trading_volume"
+
+    def get(self, request, symbol):
+        company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
+        require_company_access(request.user, company.pk)
+
+        params = VolumeAnomalyQuerySerializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        start_date = params.validated_data.get("start_date")
+        end_date = params.validated_data.get("end_date")
+        if start_date and end_date and start_date > end_date:
+            return Response({"detail": "start_date must be on or before end_date."}, status=400)
+
+        results = get_volume_anomalies(company, start_date, end_date, params.validated_data["lookback"])
+        return Response(VolumeAnomalySerializer(results, many=True).data)
+
+
+class CompanyRvolAPIView(APIView):
+    """GET /api/companies/<symbol>/rvol/"""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_trading_volume"
+
+    def get(self, request, symbol):
+        company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
+        require_company_access(request.user, company.pk)
+        params = RvolQuerySerializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        values = params.validated_data
+        rows = get_company_rvol(
+            company,
+            start_date=values.get("start_date"),
+            end_date=values.get("end_date"),
+            ma_length=values["ma_length"],
+            ma_type=values["ma_type"],
+            threshold=values["threshold"],
+        )
+        return Response(RvolPointSerializer(rows, many=True).data)
+
+
+class CompanyNewsSentimentCorrelationAPIView(APIView):
+    """Exploratory daily sentiment versus the next one or two trading sessions."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request, symbol):
+        company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
+        require_company_access(request.user, company.pk)
+        params = NewsSentimentCorrelationQuerySerializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        start_date = params.validated_data.get("start_date")
+        end_date = params.validated_data.get("end_date")
+        if start_date and end_date and start_date > end_date:
+            return Response({"detail": "start_date must be on or before end_date."}, status=400)
+
+        result = get_company_news_sentiment_forward(company, start_date, end_date)
+        payload = {
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            **result,
+            "disclaimer": (
+                "Exploratory, not a trading signal — small sample size. "
+                "Correlation describes association and does not imply causation."
+            ),
+        }
+        return Response(NewsSentimentForwardResponseSerializer(payload).data)
 
 
 class CompanyFloorsheetAPIView(APIView):

@@ -21,8 +21,8 @@ def build_daily_analysis(company_id, date=None):
     date = date or timezone.localdate()
 
     price = (
-        DailyPrice.objects.filter(company_id=company_id, date=date).first()
-        or DailyPrice.objects.filter(company_id=company_id).order_by("-date").first()
+        DailyPrice.objects.filter(company_id=company_id, source="crawled", date=date).first()
+        or DailyPrice.objects.filter(company_id=company_id, source="crawled").order_by("-date").first()
     )
 
     if price is None:
@@ -31,14 +31,15 @@ def build_daily_analysis(company_id, date=None):
     history = list(
         DailyPrice.objects.filter(
             company_id=company_id,
-            date__lte=price.date,
+            source="crawled",
+            date__lt=price.date,
         ).order_by("-date")[:20]
     )
 
     volumes = [Decimal(p.volume) for p in history]
     volume_average = (
         sum(volumes, Decimal("0")) / Decimal(len(volumes))
-        if volumes else None
+        if len(volumes) == 20 else None
     )
 
     # Aggregate traded amount / aggregate quantity.
@@ -52,7 +53,7 @@ def build_daily_analysis(company_id, date=None):
     anomaly = bool(
         volume_average
         and volume_average > 0
-        and Decimal(price.volume) >= volume_average * Decimal("2")
+        and Decimal(price.volume) >= volume_average * Decimal("2.5")
     )
 
     analysis, _ = DailyAnalysis.objects.update_or_create(
