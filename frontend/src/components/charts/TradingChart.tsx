@@ -1,5 +1,4 @@
-
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   dispose, init, registerIndicator,
   type Chart, type KLineData,
@@ -30,7 +29,7 @@ interface Props {
   fetchMinuteBars?: (days: number) => Promise<MinuteBar[]>;
 }
 
-// ─── Custom indicators (module level, registered once) ────────────────────────
+// â”€â”€â”€ Custom indicators (module level, registered once) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Same two as your KlinePriceChart, kept so nothing you already show is lost.
 registerIndicator({
   name: 'DAILY_VWAP', shortName: 'VWAP', series: 'price',
@@ -80,7 +79,7 @@ registerIndicator({
   },
 });
 
-// ─── Menu config ──────────────────────────────────────────────────────────────
+// â”€â”€â”€ Menu config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type Ind = { name: string; label: string; main: boolean; params?: number[] };
 const INDICATORS: Ind[] = [
   { name: 'MA',         label: 'Moving Average',    main: true, params: [5, 10, 30, 60] },
@@ -95,14 +94,14 @@ const INDICATORS: Ind[] = [
 const DEFAULT_ON = ['MA', 'DAILY_VWAP', 'VOL_ANOMALY'];
 
 const TOOLS = [
-  { id: 'cursor', icon: '✛', title: 'Cursor',            overlay: null },
-  { id: 'seg',    icon: '╱', title: 'Trend line',        overlay: 'segment' },
-  { id: 'ray',    icon: '↗', title: 'Ray',               overlay: 'rayLine' },
-  { id: 'hor',    icon: '―', title: 'Horizontal line',   overlay: 'horizontalStraightLine' },
-  { id: 'chan',   icon: '▤', title: 'Parallel channel',  overlay: 'parallelStraightLine' },
-  { id: 'fib',    icon: '≡', title: 'Fib retracement',   overlay: 'fibonacciLine' },
-  { id: 'pchan',  icon: '⇕', title: 'Price channel',     overlay: 'priceChannelLine' },
-  { id: 'clear',  icon: '🗑', title: 'Remove drawings',   overlay: null },
+  { id: 'cursor', icon: 'âœ›', title: 'Cursor',            overlay: null },
+  { id: 'seg',    icon: 'â•±', title: 'Trend line',        overlay: 'segment' },
+  { id: 'ray',    icon: 'â†—', title: 'Ray',               overlay: 'rayLine' },
+  { id: 'hor',    icon: 'â€•', title: 'Horizontal line',   overlay: 'horizontalStraightLine' },
+  { id: 'chan',   icon: 'â–¤', title: 'Parallel channel',  overlay: 'parallelStraightLine' },
+  { id: 'fib',    icon: 'â‰¡', title: 'Fib retracement',   overlay: 'fibonacciLine' },
+  { id: 'pchan',  icon: 'â‡•', title: 'Price channel',     overlay: 'priceChannelLine' },
+  { id: 'clear',  icon: 'ðŸ—‘', title: 'Remove drawings',   overlay: null },
 ] as const;
 
 type Interval = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '1D' | '1W' | '1M';
@@ -122,10 +121,11 @@ const INTERVALS: { id: Interval; group: 'Minutes' | 'Hours' | 'Days'; minutes?: 
 // Nepal Standard Time is UTC+5:45. Intraday buckets are aligned to local time so a 1h bar
 // starts at 11:00, 12:00 ... and not at 05:15 UTC.
 const NPT_OFFSET_MS = 345 * 60_000;
+const NPT_SESSION_OPEN_MS = 11 * 60 * 60_000;
 const MAX_INTRADAY_DAYS = 60;
 const RANGES = [['1M', 30], ['3M', 90], ['6M', 180], ['YTD', -1], ['1Y', 365], ['All', 1e9]] as const;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function toBars(prices: ChartPrice[]): KLineData[] {
   return prices.map((p) => {
     const [y, m, d] = p.date.split('-').map(Number);
@@ -153,9 +153,9 @@ function aggregateIntraday(bars: KLineData[], minutes: number): KLineData[] {
   const size = minutes * 60_000;
   const groups = new Map<number, KLineData>();
   for (const b of bars) {
-    const bucket = Math.floor((b.timestamp + NPT_OFFSET_MS) / size);
+    const bucket = Math.floor((b.timestamp + NPT_OFFSET_MS - NPT_SESSION_OPEN_MS) / size);
     const g = groups.get(bucket);
-    if (!g) groups.set(bucket, { ...b, timestamp: bucket * size - NPT_OFFSET_MS });
+    if (!g) groups.set(bucket, { ...b, timestamp: bucket * size + NPT_SESSION_OPEN_MS - NPT_OFFSET_MS });
     else {
       g.high = Math.max(g.high, b.high); g.low = Math.min(g.low, b.low);
       g.close = b.close; g.volume = (g.volume ?? 0) + (b.volume ?? 0);
@@ -222,7 +222,7 @@ function buildStyles(dark: boolean) {
   };
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -272,7 +272,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   const status = intraday
     ? !fetchMinuteBars ? 'Intraday data is not connected yet'
       : loadingMin ? 'Loading intraday data...'
-      : bars.length === 0 ? 'No timestamped trade data available for this range' : ''
+      : bars.length === 0 ? 'No intraday data for this range' : ''
     : '';
 
   // Create the chart once per symbol.
@@ -394,14 +394,14 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   return (
     <div className="flex h-full w-full flex-col">
       {/* Top bar: symbol, indicators, interval */}
-      <div className="relative flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
+      <div className="relative flex flex-wrap items-center gap-1 border-b border-bg-border px-2 py-1">
         <span className="pr-2 text-sm font-bold text-text-primary">{symbol}</span>
         <button className={btn(menuOpen)} onClick={() => setMenuOpen((o) => !o)}>Indicators</button>
-        <span className="mx-1 h-4 w-px bg-border" />
+        <span className="mx-1 h-4 w-px bg-bg-border" />
         <div className="relative">
-          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)}>{interval} ▾</button>
+          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)}>{interval} â–¾</button>
           {ivOpen && (
-            <div className="absolute left-0 top-8 z-20 min-w-[130px] rounded-lg border border-border bg-bg-card p-1 shadow-lg">
+            <div className="absolute left-0 top-8 z-20 min-w-[130px] rounded-lg border border-bg-border bg-bg-card p-1 shadow-lg">
               {(['Minutes', 'Hours', 'Days'] as const).map((g) => (
                 <div key={g}>
                   <p className="px-2 pb-0.5 pt-1.5 text-[11px] font-semibold text-text-secondary">{g}</p>
@@ -426,7 +426,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         ))}
 
         {menuOpen && (
-          <div className="absolute left-2 top-9 z-20 min-w-[210px] rounded-lg border border-border bg-bg-card p-2 shadow-lg">
+          <div className="absolute left-2 top-9 z-20 min-w-[210px] rounded-lg border border-bg-border bg-bg-card p-2 shadow-lg">
             {[true, false].map((main) => (
               <div key={String(main)}>
                 <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold text-text-secondary">
@@ -447,7 +447,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
       {/* Middle: left drawing toolbar + chart */}
       <div className="flex min-h-0 flex-1">
-        <div className="flex flex-col gap-0.5 border-r border-border p-1">
+        <div className="flex flex-col gap-0.5 border-r border-bg-border p-1">
           {TOOLS.map((t) => (
             <button key={t.id} title={t.title} onClick={() => pickTool(t)}
               className={`h-8 w-8 rounded text-base ${tool === t.id ? 'bg-accent text-white' : 'text-text-secondary hover:bg-bg-elevated'}`}>
@@ -466,7 +466,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       </div>
 
       {/* Bottom bar: date ranges */}
-      <div className="flex items-center gap-1 border-t border-border px-2 py-1">
+      <div className="flex items-center gap-1 border-t border-bg-border px-2 py-1">
         {RANGES.map(([label]) => (
           <button key={label} className={btn(range === label)} onClick={() => setRange(label)}>{label}</button>
         ))}
@@ -474,3 +474,4 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
     </div>
   );
 }
+

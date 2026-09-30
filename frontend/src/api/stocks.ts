@@ -55,6 +55,20 @@ export const stocksApi = {
       )
       .then((response) => response.data),
 
+  getIntradayBars: (id: number, days = 5) =>
+    apiClient
+      .get<{
+        bars: Array<{
+          time: string;
+          open: number;
+          high: number;
+          low: number;
+          close: number;
+          volume: number;
+        }>;
+      }>(`/companies/${id}/intraday/`, { params: { days } })
+      .then((response) => response.data.bars),
+
   getFloorsheet: (
     id: number,
     date?: string

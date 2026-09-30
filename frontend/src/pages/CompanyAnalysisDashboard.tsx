@@ -602,7 +602,6 @@ import {
   type PricePoint,
   type NewsSentimentForwardResponse,
   type VolumeAnomaly,
-  type RvolPoint,
 } from '../api/analysis';
 import type { Company } from '../types/company';
 
@@ -629,9 +628,6 @@ function SectionTitle({ icon: Icon, children }: { icon: React.ElementType; child
   );
 }
 
-const RVOL_LOOKBACK = 20;
-const RVOL_THRESHOLDS: [number, number, number, number] = [0.5, 0.8, 1.25, 4];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function computeVwap(prices: PricePoint[]) {
@@ -646,7 +642,6 @@ export default function CompanyAnalysisDashboard() {
   const [companies,   setCompanies]   = useState<Company[]>([]);
   const [selectedId,  setSelectedId]  = useState<number | null>(null);
   const [prices,      setPrices]      = useState<PricePoint[]>([]);
-  const [rvolData, setRvolData] = useState<RvolPoint[]>([]);
   const [behavior,    setBehavior]    = useState<BehaviorSummary | null>(null);
   const [categorizedNews, setCategorizedNews] = useState<CategorizedCompanyNews[] | null>(null);
   const [newsForward, setNewsForward] = useState<NewsSentimentForwardResponse | null>(null);
@@ -705,6 +700,10 @@ export default function CompanyAnalysisDashboard() {
     const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
     return prices.filter(point => point.date >= startDate);
   }, [prices, priceRange]);
+  const fetchMinuteBars = useCallback(
+    (days: number) => selectedId ? analysisApi.getIntradayBars(selectedId, days) : Promise.resolve([]),
+    [selectedId],
+  );
   const vwap30   = useMemo(() => computeVwap(chartPrices), [chartPrices]);
   const anomalyDates = useMemo(
     () => volumeAnomalies.filter(v => v.is_anomaly).map(v => v.date),
@@ -724,19 +723,6 @@ export default function CompanyAnalysisDashboard() {
       .then((result) => { if (!cancelled) setVolumeAnomalies(result); })
       .catch(() => { if (!cancelled) setVolumeAnomalyError('Unable to load volume anomaly history.'); })
       .finally(() => { if (!cancelled) setLoadingVolumeAnomalies(false); });
-    return () => { cancelled = true; };
-  }, [company, volumeAnomalyRefresh]);
-
-  useEffect(() => {
-    if (!company) return;
-    let cancelled = false;
-    const start = new Date();
-    start.setDate(start.getDate() - 180);
-    const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-    setRvolData([]);
-    analysisApi.getRvol(company.symbol, { start_date: startDate, ma_length: RVOL_LOOKBACK, ma_type: 'SMA' })
-      .then(result => { if (!cancelled) setRvolData(result); })
-      .catch(() => { if (!cancelled) setRvolData([]); });
     return () => { cancelled = true; };
   }, [company, volumeAnomalyRefresh]);
 
@@ -889,11 +875,10 @@ export default function CompanyAnalysisDashboard() {
             <SectionTitle icon={TrendingUp}>Price Action</SectionTitle>
             <div className="h-[560px]">
               <KlinePriceChart
-                prices={chartPrices}
+                prices={prices}
                 symbol={company?.symbol ?? ''}
                 anomalyDates={anomalyDates}
-                rvol={rvolData}
-                rvolThresholds={RVOL_THRESHOLDS}
+                fetchMinuteBars={selectedId ? fetchMinuteBars : undefined}
               />
             </div>
           </div>

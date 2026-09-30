@@ -1137,6 +1137,10 @@ class FloorsheetPipeline:
             return item
 
         trading_date = trading_datetime.date()
+        raw_trade_time = item.get("trade_time")
+        trading_time = normalize_datetime(raw_trade_time) if raw_trade_time else None
+        if isinstance(raw_trade_time, str) and re.fullmatch(r"\s*\d{1,2}:\d{2}(?::\d{2})?\s*", raw_trade_time):
+            trading_time = normalize_datetime(f"{trading_date.isoformat()} {raw_trade_time.strip()}")
 
         # --------------------------------------------------------------
         # BROKER / TRANSACTION INFORMATION
@@ -1277,6 +1281,19 @@ class FloorsheetPipeline:
             transaction_id
             or f"{buyer_broker}-{seller_broker}-{quantity}-{rate}"
         )
+        defaults = {
+            "buyer_broker": buyer_broker,
+            "seller_broker": seller_broker,
+            "quantity": quantity,
+            "rate": rate,
+            "amount": amount,
+        }
+        # Preserve a source trade timestamp when supplied. A date-only
+        # floorsheet row must not be assigned an invented intraday time.
+        if trading_datetime.time().replace(tzinfo=None) != datetime.min.time():
+            defaults["trade_time"] = trading_datetime
+        if trading_time and trading_time.time().replace(tzinfo=None) != datetime.min.time():
+            defaults["trade_time"] = trading_time
 
         try:
             _, created = (
@@ -1284,13 +1301,7 @@ class FloorsheetPipeline:
                     company=company,
                     date=trading_date,
                     transaction_id=transaction_key,
-                    defaults={
-                        "buyer_broker": buyer_broker,
-                        "seller_broker": seller_broker,
-                        "quantity": quantity,
-                        "rate": rate,
-                        "amount": amount,
-                    },
+                    defaults=defaults,
                 )
             )
 

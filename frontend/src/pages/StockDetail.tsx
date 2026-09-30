@@ -26,7 +26,7 @@ import {
 } from '../api/analysis';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
-import KlinePriceChart from '../components/charts/KlinePriceChart';
+import TradingChart from '../components/charts/TradingChart';
 import type { Company, DailyPrice, FloorsheetTransaction, NewsArticle, SentimentLabel } from '../types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -491,8 +491,6 @@ export default function StockDetail() {
   const navigate   = useNavigate();
 
   const [tab,        setTab]        = useState<Tab>('Overview');
-  const [priceRange, setPriceRange] = useState<7 | 30 | 90>(30);
-
   const [company,     setCompany]     = useState<Company | null>(null);
   const [prices,      setPrices]      = useState<DailyPrice[]>([]);
   const [floorsheet,  setFloorsheet]  = useState<FloorsheetTransaction[]>([]);
@@ -525,7 +523,7 @@ export default function StockDetail() {
         analysisApi.getBehavior(found.id).then(setBehavior).catch(() => undefined);
 
         const [priceData, floorData, newsData] = await Promise.all([
-          stocksApi.getPrices(found.id, `${priceRange}d`),
+          stocksApi.getPrices(found.id, 'all'),
           stocksApi.getFloorsheet(found.id),
           newsApi.getNews({ company_id: found.id }),
         ]);
@@ -540,7 +538,7 @@ export default function StockDetail() {
         setLoading(false);
       }
     })();
-  }, [symbol, priceRange]);
+  }, [symbol]);
 
   // Lazy-load behavior when tab is selected or company changes
   const loadBehavior = useCallback(async (companyId: number) => {
@@ -586,12 +584,15 @@ export default function StockDetail() {
   const sellers = useMemo(() => aggregateBrokers(floorsheet, 'seller_broker'), [floorsheet]);
 
   // Price chart helpers
-  const sliced    = useMemo(() => prices.slice(-priceRange), [prices, priceRange]);
-  const last      = sliced.length ? +sliced[sliced.length - 1].close : 0;
+  const last      = prices.length ? +prices[prices.length - 1].close : 0;
   const prev      = prices.length >= 2 ? +prices[prices.length - 2].close : last;
   const change    = +(last - prev).toFixed(2);
   const changePct = prev > 0 ? +((change / prev) * 100).toFixed(2) : 0;
   const positive  = changePct >= 0;
+  const fetchMinuteBars = useCallback(
+    (days: number) => company ? stocksApi.getIntradayBars(company.id, days) : Promise.resolve([]),
+    [company?.id],
+  );
 
   // ── Loading / error screens ──────────────────────────────────────────────
 
@@ -672,23 +673,17 @@ export default function StockDetail() {
       {/* ── Overview ─────────────────────────────────────────────────────── */}
       {tab === 'Overview' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-1 bg-bg-elevated rounded-lg p-0.5 w-fit">
-            {([7, 30, 90] as const).map(d => (
-              <button key={d} onClick={() => setPriceRange(d)}
-                className={`px-3 py-1 rounded text-xs font-medium transition-all ${priceRange === d ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}>
-                {d === 7 ? '1W' : d === 30 ? '1M' : '3M'}
-              </button>
-            ))}
-          </div>
-
           {prices.length === 0 ? (
             <EmptyState title="No price data" description="This company has no crawled prices yet." />
           ) : (
             <>
-              {/* KLineChart candlesticks with OHLC price and built-in volume pane */}
+              {/* Candlesticks with daily and intraday intervals. */}
               <div className="card h-[420px] p-1">
-                <p style={{ color: "red" }}>DEBUG: StockDetail Overview is rendering</p>
-                <KlinePriceChart prices={sliced} symbol={company.symbol} />
+                <TradingChart
+                  prices={prices}
+                  symbol={company.symbol}
+                  fetchMinuteBars={fetchMinuteBars}
+                />
               </div>
 
               {/* Period stats */}

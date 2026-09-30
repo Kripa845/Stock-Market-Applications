@@ -474,6 +474,15 @@ export interface PricePoint {
   company_name?: string;
 }
 
+export interface IntradayBar {
+  time: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 export interface PricesResponse {
   company_id: number;
   symbol: string;
@@ -592,6 +601,11 @@ export const analysisApi = {
         params: { range, ...params },
       })
       .then((r) => r.data),
+
+  getIntradayBars: (companyId: number, days = 1) =>
+    apiClient
+      .get<{ bars: IntradayBar[] }>(`/companies/${companyId}/intraday/`, { params: { days } })
+      .then((r) => r.data.bars),
 
   getVolumeAnomalies: (symbol: string, params?: { start_date?: string; end_date?: string; lookback?: number }) =>
     apiClient

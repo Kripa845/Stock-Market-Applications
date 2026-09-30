@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Q
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.services.intraday import aggregate_intraday_trades
 from apps.market_data.serializers import DailyPriceSerializers, FloorsheetSerializer
 from apps.market_data.volume_anomalies import get_volume_anomalies
 from apps.market_data.volume_anomaly_serializers import (
@@ -231,6 +232,29 @@ class CompanyPricesAPIView(APIView):
                 "prices": serializer.data,
             }
         )
+
+
+class CompanyIntradayBarsAPIView(APIView):
+    """GET /api/companies/<id>/intraday/?days=5."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
+
+    def get(self, request, pk):
+        company = get_object_or_404(Company, pk=pk, is_active=True)
+        require_company_access(request.user, company.pk)
+        try:
+            days = min(max(int(request.query_params.get("days", 5)), 1), 60)
+        except (TypeError, ValueError):
+            return Response({"detail": "days must be an integer from 1 to 60."}, status=400)
+
+        since = timezone.now() - timedelta(days=days)
+        trades = FloorsheetTransaction.objects.filter(
+            company=company,
+            trade_time__isnull=False,
+            trade_time__gte=since,
+        ).order_by("trade_time", "pk")
+        bars = aggregate_intraday_trades(trades.iterator(chunk_size=2000))
+        return Response({"bars": bars})
 
 
 class CompanyVolumeAnomaliesAPIView(APIView):

@@ -36,6 +36,7 @@ class FloorsheetItem(scrapy.Item):
 
     company = scrapy.Field()
     date = scrapy.Field()
+    trade_time = scrapy.Field()
 
     transaction_id = scrapy.Field()
     buyer_broker = scrapy.Field()

@@ -757,6 +757,7 @@ class FloorsheetSpider(scrapy.Spider):
         mode="latest",
         floorsheet_date=None,
         sample_offsets=None,
+        company_symbol=None,
         *args,
         **kwargs,
     ):
@@ -766,6 +767,7 @@ class FloorsheetSpider(scrapy.Spider):
 
         # Single-date override: scrape only this one date.
         self.floorsheet_date = floorsheet_date
+        self.company_symbol = str(company_symbol or "").strip().upper()
 
         if sample_offsets:
             try:
@@ -870,6 +872,8 @@ class FloorsheetSpider(scrapy.Spider):
 
     def start_requests(self):
         companies = Company.objects.filter(is_active=True).order_by("symbol")
+        if self.company_symbol:
+            companies = companies.filter(symbol__iexact=self.company_symbol)
 
         if self.COMPANY_LIMIT:
             companies = companies[: self.COMPANY_LIMIT]
@@ -1140,6 +1144,15 @@ class FloorsheetSpider(scrapy.Spider):
                 )
             return
 
+        if start == 0 and isinstance(rows[0], dict):
+            self.logger.info(
+                "Floorsheet raw timestamp probe | symbol=%s | keys=%s | trade_time=%r | date_=%r",
+                symbol,
+                sorted(rows[0].keys()),
+                rows[0].get("trade_time") or rows[0].get("tradeTime"),
+                rows[0].get("date_"),
+            )
+
         self.successful_responses += 1
 
         for row in rows:
@@ -1155,6 +1168,11 @@ class FloorsheetSpider(scrapy.Spider):
             rate = row.get("rate") or row.get("price")
             amount = row.get("amount") or row.get("turnover")
             transaction_date = row.get("date_") or row.get("date") or date_text
+            transaction_trade_time = (
+                row.get("trade_time")
+                or row.get("tradeTime")
+                or row.get("date_")
+            )
 
             if not buyer_broker:
                 self.logger.warning("Skipping row for %s: buyer broker missing", symbol)
@@ -1175,6 +1193,7 @@ class FloorsheetSpider(scrapy.Spider):
                 item_type="floorsheet",
                 company=symbol,
                 date=transaction_date,
+                trade_time=transaction_trade_time,
                 transaction_id=transaction_id,
                 buyer_broker=buyer_broker,
                 seller_broker=seller_broker,

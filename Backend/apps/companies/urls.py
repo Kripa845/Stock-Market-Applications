@@ -6,6 +6,7 @@ from apps.analysis.views import (
 from .views import (
     CompanyDetailUpdateDestroyAPIView,
     CompanyFloorsheetAPIView,
+    CompanyIntradayBarsAPIView,
     CompanyListCreateAPIView,
     CompanyNewsSentimentCorrelationAPIView,
     CompanyPricesAPIView,
@@ -36,6 +37,11 @@ urlpatterns = [
         "<int:pk>/prices/",
         CompanyPricesAPIView.as_view(),
         name="company-prices",
+    ),
+    path(
+        "<int:pk>/intraday/",
+        CompanyIntradayBarsAPIView.as_view(),
+        name="company-intraday-bars",
     ),
     path(
         "<str:symbol>/volume-anomalies/",

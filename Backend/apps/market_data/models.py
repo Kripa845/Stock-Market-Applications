@@ -55,6 +55,7 @@ class FloorsheetTransaction(models.Model):
     )
 
     date = models.DateField()
+    trade_time = models.DateTimeField(null=True, blank=True, db_index=True)
 
     transaction_id = models.CharField(
         max_length=100,
