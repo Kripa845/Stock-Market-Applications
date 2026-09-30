@@ -1,17 +1,4 @@
-/**
- * StockDetail.tsx
- *
- * Company detail page.  All data comes from the Django REST API — no mock
- * values, no hardcoded prices.
- *
- * Tabs
- * ────
- * Overview   — price chart + volume chart + period stats
- * Behavior   — behavior summary from stored DailyAnalysis + broker activity
- * Correlation — news-price correlation from CompanyNewsPriceCorrelationAPIView
- * News       — articles tagged to this company
- * Floorsheet — raw floorsheet transactions
- */
+
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -21,9 +8,9 @@ import {
   Activity, BarChart3, Info,
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, ComposedChart, Line,
+  Bar, ComposedChart, Line,
   ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine,
 } from 'recharts';
 import { formatDistanceToNow } from 'date-fns';
@@ -39,6 +26,7 @@ import {
 } from '../api/analysis';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
+import KlinePriceChart from '../components/charts/KlinePriceChart';
 import type { Company, DailyPrice, FloorsheetTransaction, NewsArticle, SentimentLabel } from '../types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -53,7 +41,6 @@ const C = {
   sell:    '#EF4444',
   volume:  '#7C3AED',
   vwap:    '#F59E0B',
-  anomaly: '#EF4444',
   buy:     '#22C55E',
   neutral: '#64748B',
   news:    '#A78BFA',
@@ -599,20 +586,12 @@ export default function StockDetail() {
   const sellers = useMemo(() => aggregateBrokers(floorsheet, 'seller_broker'), [floorsheet]);
 
   // Price chart helpers
-  const sliced    = prices.slice(-priceRange);
-  const first     = sliced.length ? +sliced[0].close : 0;
+  const sliced    = useMemo(() => prices.slice(-priceRange), [prices, priceRange]);
   const last      = sliced.length ? +sliced[sliced.length - 1].close : 0;
   const prev      = prices.length >= 2 ? +prices[prices.length - 2].close : last;
   const change    = +(last - prev).toFixed(2);
   const changePct = prev > 0 ? +((change / prev) * 100).toFixed(2) : 0;
   const positive  = changePct >= 0;
-
-  const chartData = useMemo(() => sliced.map(p => ({
-    date: p.date.slice(5),
-    price: +p.close,
-    volume: p.volume,
-    anomaly: behavior?.volume_anomalies.results.some(row => row.date === p.date) ?? false,
-  })), [sliced, behavior]);
 
   // ── Loading / error screens ──────────────────────────────────────────────
 
@@ -706,38 +685,10 @@ export default function StockDetail() {
             <EmptyState title="No price data" description="This company has no crawled prices yet." />
           ) : (
             <>
-              {/* Close price chart */}
-              <div className="card h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="sdGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor={positive ? C.price : C.sell} stopOpacity={0.2} />
-                        <stop offset="95%" stopColor={positive ? C.price : C.sell} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1E2538" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#475569' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: '#475569' }} tickLine={false} axisLine={false} width={52} />
-                    <Tooltip contentStyle={TT} formatter={(v: unknown) => [`Rs. ${Number(v ?? 0).toFixed(2)}`, 'Close']} />
-                    <ReferenceLine y={first} stroke="#1E2538" strokeDasharray="4 4" />
-                    <Area type="monotone" dataKey="price" stroke={positive ? C.price : C.sell} strokeWidth={1.5} fill="url(#sdGrad)" dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Volume chart */}
-              <div className="card h-28">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 0, right: 4, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#475569' }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-                    <YAxis tick={{ fontSize: 10, fill: '#475569' }} tickLine={false} axisLine={false} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} width={40} />
-                    <Tooltip contentStyle={TT} formatter={(v: unknown) => [`${(Number(v ?? 0) / 1000).toFixed(0)}K`, 'Volume']} />
-                    <Bar dataKey="volume" opacity={0.75} radius={[2, 2, 0, 0]}>
-                      {chartData.map(point => <Cell key={point.date} fill={point.anomaly ? C.anomaly : C.volume} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* KLineChart candlesticks with OHLC price and built-in volume pane */}
+              <div className="card h-[420px] p-1">
+                <p style={{ color: "red" }}>DEBUG: StockDetail Overview is rendering</p>
+                <KlinePriceChart prices={sliced} symbol={company.symbol} />
               </div>
 
               {/* Period stats */}
