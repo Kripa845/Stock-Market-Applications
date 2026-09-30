@@ -7,6 +7,9 @@ import EmptyState from '../components/common/EmptyState';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
 import { useLiveRefresh } from '../hooks/useLiveRefresh';
+import MarketBreadthWidget from '../components/market-intelligence/MarketBreadthWidget';
+import MarketHeatmap from '../components/market-intelligence/MarketHeatmap';
+import MarketRankings from '../components/market-intelligence/MarketRankings';
 
 export default function MarketPage() {
   const navigate = useNavigate();
@@ -28,7 +31,10 @@ export default function MarketPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Market Overview" subtitle="Live company prices from the backend." />
+      <PageHeader title="Market Overview" subtitle="Latest close, not live. Metrics cover tracked stocks." />
+      <MarketBreadthWidget />
+      <MarketRankings />
+      <MarketHeatmap />
       <div className="relative max-w-md">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
         <input

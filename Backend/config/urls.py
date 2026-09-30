@@ -16,6 +16,7 @@ urlpatterns = [
 
     # Behavior Analysis
     path("api/analysis/", include("apps.analysis.urls")),
+    path("api/market-intelligence/", include("apps.market_intelligence.urls")),
 
     # Auth & Users
     path("api/users/", include("apps.users.urls")),

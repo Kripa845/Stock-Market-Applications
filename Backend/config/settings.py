@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.news",
     "apps.users",
     "apps.dashboard",
+    "apps.market_intelligence",
     
 ]
 
