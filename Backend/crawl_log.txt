@@ -1,0 +1,6 @@
+Scrapy 2.18.0 - no active project
+
+The crawl command is not available from this location.
+These commands are only available from within a project: check, crawl, edit, list, parse.
+
+Use "scrapy" to see available commands

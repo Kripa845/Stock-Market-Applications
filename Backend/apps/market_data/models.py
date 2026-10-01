@@ -118,3 +118,26 @@ class FloorsheetTransaction(models.Model):
             f"{self.date} - "
             f"{self.quantity}"
         )
+
+
+class Broker(models.Model):
+    broker_no = models.PositiveIntegerField(
+        unique=True,
+        null=True,
+        blank=True,
+    )
+    broker_code = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=200)
+    short_name = models.CharField(max_length=100, blank=True)
+    # Logo filename maps to frontend/public/broker-logos/.
+    logo = models.CharField(max_length=255, blank=True)
+    website = models.URLField(blank=True)
+    tms_link = models.CharField(max_length=100, blank=True)
+    is_active = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["broker_code"]
+
+    def __str__(self):
+        return f"{self.broker_code} - {self.name}"

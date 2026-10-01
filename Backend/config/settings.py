@@ -225,6 +225,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.crawler_runs.tasks.crawl_daily_prices",
         "schedule": crontab(minute=0, hour=18),
     },
+    "crawl-brokers-weekly": {
+        "task": "apps.crawler_runs.tasks.crawl_brokers",
+        "schedule": crontab(minute=0, hour=20, day_of_week=6),
+    },
 
     # ---- Floorsheet ----
     "crawl-floorsheet-evening": {

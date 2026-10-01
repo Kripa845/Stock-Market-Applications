@@ -8,10 +8,12 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
+import requests
 from twisted.internet.threads import deferToThread
 
-
+from pathlib import Path
+import requests
+from asgiref.sync import sync_to_async
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -38,7 +40,7 @@ from apps.crawler_runs.models import CrawlRun
 from apps.news.models import NewsArticle, RawArticle
 from apps.news.tasks import categorize_article_task
 from apps.companies.models import Company
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import Broker, DailyPrice, FloorsheetTransaction
 
 
 
@@ -1372,3 +1374,69 @@ class FloorsheetPipeline:
             self.skipped_count,
             self.failed_count,
         )
+
+
+class BrokerPipeline:
+    """Persist broker-directory items emitted by the brokers spider."""
+
+    def process_item(self, item, spider):
+        broker_no = int(item["broker_no"])
+        name = clean_text(item.get("name"))
+        tms_link = clean_text(item.get("tms_link"))
+        legacy_row = Broker.objects.filter(
+            broker_no__isnull=True,
+            broker_code=str(broker_no),
+        ).first()
+        if legacy_row:
+            legacy_row.broker_no = broker_no
+            legacy_row.save(update_fields=["broker_no"])
+        Broker.objects.update_or_create(
+            broker_no=broker_no,
+            defaults={
+                "name": name,
+                "tms_link": tms_link,
+                # Keep the existing directory key populated for rows added by
+                # the crawler; other broker endpoints still consume this code.
+                "broker_code": str(broker_no),
+            },
+        )
+        return item
+
+
+
+class MoneymitraBrokerPipeline:
+    def open_spider(self, spider):
+        from django.conf import settings
+        self.logo_dir = (
+            Path(settings.BASE_DIR).parent / "frontend" / "public" / "broker-logos"
+        )
+        self.logo_dir.mkdir(parents=True, exist_ok=True)
+
+    async def process_item(self, item, spider):
+        return await sync_to_async(self._save, thread_sensitive=True)(item, spider)
+
+    def _save(self, item, spider):
+        from apps.market_data.models import Broker
+
+        logo_name = ""
+        if item["logo_url"]:
+            ext = Path(item["logo_url"].split("?")[0]).suffix or ".png"
+            fname = f"{item['broker_no']}{ext}"
+            try:
+                r = requests.get(item["logo_url"], timeout=15)
+                r.raise_for_status()
+                (self.logo_dir / fname).write_bytes(r.content)
+                logo_name = fname
+            except requests.RequestException as e:
+                spider.logger.warning("Logo failed for %s: %s", item["broker_no"], e)
+
+        defaults = {
+            "broker_code": str(item["broker_no"]),
+            "name": item["name"],
+            "is_active": True,
+        }
+        if logo_name:
+            defaults["logo"] = logo_name
+
+        Broker.objects.update_or_create(broker_no=item["broker_no"], defaults=defaults)
+        return item

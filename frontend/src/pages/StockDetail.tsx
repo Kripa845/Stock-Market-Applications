@@ -25,6 +25,7 @@ import {
   type NewsPriceCorrelation,
 } from '../api/analysis';
 import Badge from '../components/common/Badge';
+import BrokerBadge from '../components/brokers/BrokerBadge';
 import EmptyState from '../components/common/EmptyState';
 import TradingChart from '../components/charts/TradingChart';
 import type { Company, DailyPrice, FloorsheetTransaction, NewsArticle, SentimentLabel } from '../types';
@@ -797,8 +798,8 @@ export default function StockDetail() {
                   <tbody>
                     {floorsheet.map(f => (
                       <tr key={f.id} className="table-row">
-                        <td className="py-1.5 text-text-secondary">{f.buyer_broker}</td>
-                        <td className="py-1.5 text-text-secondary">{f.seller_broker}</td>
+                        <td className="py-1.5"><BrokerBadge brokerCode={f.buyer_broker} name={f.buyer_broker_name} shortName={f.buyer_broker_short_name} logoUrl={f.buyer_broker_logo_url} /></td>
+                        <td className="py-1.5"><BrokerBadge brokerCode={f.seller_broker} name={f.seller_broker_name} shortName={f.seller_broker_short_name} logoUrl={f.seller_broker_logo_url} /></td>
                         <td className="py-1.5 text-right font-mono">{f.quantity.toLocaleString()}</td>
                         <td className="py-1.5 text-right font-mono">{Number(f.rate).toFixed(2)}</td>
                         <td className="py-1.5 text-right font-mono text-text-primary">

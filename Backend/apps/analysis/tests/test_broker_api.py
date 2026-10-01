@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from apps.companies.models import Company
 from apps.crawler_runs.models import CrawlRun
-from apps.market_data.models import FloorsheetTransaction
+from apps.market_data.models import Broker, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle, RawArticle
 from apps.users.models import CustomRole, User, UserCompanyAccess
 
@@ -51,6 +51,20 @@ class BrokerAnalysisApiTests(TestCase):
         self.assertEqual(response.data["summary"]["total_activity"], 440)
         self.assertEqual(response.data["summary"]["sampled_trading_days"], 2)
         self.assertEqual(set(response.data["broker_options"]), {"17", "44", "52", "88"})
+
+    def test_overview_broker_name_uses_fallback_and_directory_name(self):
+        response = self.client.get("/api/analysis/brokers/")
+        broker_52 = next(row for row in response.data["results"] if row["broker"] == "52")
+        self.assertEqual(broker_52["broker_name"], "Broker 52")
+
+        Broker.objects.create(
+            broker_no=52,
+            broker_code="52",
+            name="Naasa Securities Co. Ltd.",
+        )
+        response = self.client.get("/api/analysis/brokers/")
+        broker_52 = next(row for row in response.data["results"] if row["broker"] == "52")
+        self.assertEqual(broker_52["broker_name"], "Naasa Securities Co. Ltd.")
 
     def test_company_and_date_filters_apply_to_overview(self):
         response = self.client.get("/api/analysis/brokers/", {

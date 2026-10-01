@@ -303,6 +303,38 @@ class BrokerActivitySerializer(serializers.Serializer):
     """One combined row per broker: gross both sides plus net position."""
 
     broker = serializers.CharField()
+    broker_code = serializers.CharField(source="broker")
+    name = serializers.SerializerMethodField()
+    short_name = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
+    broker_name = serializers.CharField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.market_data.serializers import broker_metadata
+
+        rows = self.instance
+        if isinstance(rows, dict):
+            rows = [rows]
+        self._broker_metadata = self.context.get("broker_metadata")
+        if self._broker_metadata is None:
+            self._broker_metadata = broker_metadata(
+                row.get("broker") for row in rows
+            ) if rows is not None else {}
+
+    def _broker_detail(self, obj, key):
+        from apps.market_data.serializers import broker_payload
+
+        return broker_payload(obj.get("broker"), self._broker_metadata)[key]
+
+    def get_name(self, obj):
+        return self._broker_detail(obj, "name")
+
+    def get_short_name(self, obj):
+        return self._broker_detail(obj, "short_name")
+
+    def get_logo_url(self, obj):
+        return self._broker_detail(obj, "logo_url")
 
     buy_quantity = serializers.IntegerField()
     sell_quantity = serializers.IntegerField()
@@ -318,3 +350,8 @@ class BrokerActivitySerializer(serializers.Serializer):
     buy_trades = serializers.IntegerField()
     sell_trades = serializers.IntegerField()
     trades = serializers.IntegerField()
+
+    class Meta:
+        from apps.market_data.serializers import BrokerMetadataListSerializer
+
+        list_serializer_class = BrokerMetadataListSerializer

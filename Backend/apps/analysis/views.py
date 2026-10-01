@@ -670,7 +670,7 @@ from apps.users.company_access import (
     get_accessible_company_ids,
     require_company_access,
 )
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import Broker, DailyPrice, FloorsheetTransaction
 from apps.market_data.services.trading_calendar import rolling_window_bounds
 from apps.news.models import ArticleCompanyTag, NewsArticle
 from apps.users.permissions import HasAppPermission
@@ -1093,6 +1093,36 @@ class BrokerAnalysisAPIView(APIView):
                 end_date=dates["end_date"],
             )["brokers"]
         broker_options = sorted({row["broker"] for row in broker_rows})
+        broker_names = dict(Broker.objects.values_list("broker_no", "name"))
+        for row in rows:
+            try:
+                broker_no = int(row["broker"])
+            except (TypeError, ValueError):
+                broker_no = None
+            row["broker_name"] = broker_names.get(
+                broker_no, f"Broker {row['broker']}"
+            )
+        serializer_context = {
+            "broker_metadata": {
+                str(broker_no): {
+                    "name": name,
+                    "short_name": name,
+                    "logo_url": None,
+                }
+                for broker_no, name in broker_names.items()
+            }
+        }
+        broker_directory = [
+            {
+                "broker_code": code,
+                "name": broker_names.get(int(code), f"Broker {code}")
+                if code.isdigit() else f"Broker {code}",
+                "short_name": broker_names.get(int(code), f"Broker {code}")
+                if code.isdigit() else f"Broker {code}",
+                "logo_url": None,
+            }
+            for code in broker_options
+        ]
 
         return Response({
             "count": len(rows),
@@ -1100,8 +1130,11 @@ class BrokerAnalysisAPIView(APIView):
             "page_size": self.PAGE_SIZE,
             "next": page + 1 if end < len(rows) else None,
             "previous": page - 1 if page > 1 else None,
-            "results": BrokerActivitySerializer(rows[start:end], many=True).data,
+            "results": BrokerActivitySerializer(
+                rows[start:end], many=True, context=serializer_context
+            ).data,
             "broker_options": broker_options,
+            "broker_directory": broker_directory,
             "companies": list(companies),
             "summary": {
                 "total_buy_quantity": activity["total_buy_quantity"],
@@ -1117,18 +1150,22 @@ class BrokerAnalysisAPIView(APIView):
             "most_active_buyers": BrokerActivitySerializer(
                 sorted((row for row in rows if row["buy_quantity"] > 0), key=lambda row: (-row["buy_quantity"], row["broker"]))[:5],
                 many=True,
+                context=serializer_context,
             ).data,
             "most_active_sellers": BrokerActivitySerializer(
                 sorted((row for row in rows if row["sell_quantity"] > 0), key=lambda row: (-row["sell_quantity"], row["broker"]))[:5],
                 many=True,
+                context=serializer_context,
             ).data,
             "top_net_buyers": BrokerActivitySerializer(
                 sorted((row for row in rows if row["net_quantity"] > 0), key=lambda row: (-row["net_quantity"], row["broker"]))[:5],
                 many=True,
+                context=serializer_context,
             ).data,
             "top_net_sellers": BrokerActivitySerializer(
                 sorted((row for row in rows if row["net_quantity"] < 0), key=lambda row: (row["net_quantity"], row["broker"]))[:5],
                 many=True,
+                context=serializer_context,
             ).data,
             "sampled_dates": [day.isoformat() for day in sampled_dates],
             "note": "Floorsheet data covers sampled trading sessions only.",

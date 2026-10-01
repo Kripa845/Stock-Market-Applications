@@ -369,6 +369,34 @@ def crawl_daily_prices():
     return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "trading"}
 
 
+@shared_task(name="apps.crawler_runs.tasks.crawl_brokers")
+def crawl_brokers():
+    """Refresh the broker directory with the weekly brokers spider."""
+    if _has_active_crawl(CrawlRun.CrawlType.TRADING):
+        logger.info("crawl_brokers: skipping because a trading crawl is active.")
+        return {"skipped": True, "reason": "trading crawl already active"}
+
+    with transaction.atomic():
+        crawl_run = CrawlRun.objects.create(
+            crawl_type=CrawlRun.CrawlType.TRADING,
+            source="brokers",
+            target="Broker directory",
+            status=CrawlRun.Status.PENDING,
+            sources=["brokers"],
+        )
+
+    task = run_crawl.apply_async(
+        args=[crawl_run.id],
+        kwargs={"spider_name": "brokers"},
+    )
+    crawl_run.task_id = task.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+    crawl_run.started_at = timezone.now()
+    crawl_run.save(update_fields=["task_id", "status", "started_at"])
+    logger.info("crawl_brokers: started CrawlRun #%s.", crawl_run.id)
+    return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "brokers"}
+
+
 # ---------------------------------------------------------------------------
 # Scheduled: daily floorsheet top-up (latest session only)
 # ---------------------------------------------------------------------------

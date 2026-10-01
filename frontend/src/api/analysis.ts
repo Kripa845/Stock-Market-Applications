@@ -86,6 +86,11 @@ export interface DailyAnalysis {
 
 export interface BrokerActivity {
   broker: string;
+  broker_code: string;
+  broker_name?: string;
+  name: string;
+  short_name: string;
+  logo_url: string | null;
   buy_quantity: number;
   sell_quantity: number;
   net_quantity: number;         // buy_quantity - sell_quantity
@@ -208,6 +213,7 @@ export interface BrokerAnalysisResponse {
   previous: number | null;
   results: BrokerActivity[];
   broker_options: string[];
+  broker_directory: Array<{ broker_code: string; name: string; short_name: string; logo_url: string | null }>;
   companies: BrokerCompanyChoice[];
   summary: {
     total_buy_quantity: number;
@@ -522,6 +528,12 @@ export interface FloorsheetTx {
   transaction_id: string;
   buyer_broker: string;
   seller_broker: string;
+  buyer_broker_name: string;
+  buyer_broker_short_name: string;
+  buyer_broker_logo_url: string | null;
+  seller_broker_name: string;
+  seller_broker_short_name: string;
+  seller_broker_logo_url: string | null;
   quantity: number;
   rate: string;
   amount: string;

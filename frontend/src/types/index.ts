@@ -23,6 +23,12 @@ export interface FloorsheetTransaction {
   transaction_id: string;
   buyer_broker: string;
   seller_broker: string;
+  buyer_broker_name: string;
+  buyer_broker_short_name: string;
+  buyer_broker_logo_url: string | null;
+  seller_broker_name: string;
+  seller_broker_short_name: string;
+  seller_broker_logo_url: string | null;
   quantity: number;
   rate: string;
   amount: string;
