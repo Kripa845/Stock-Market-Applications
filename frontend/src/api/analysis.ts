@@ -412,6 +412,7 @@ export interface CompanyStat {
   id: number;
   symbol: string;
   name: string;
+  logo_url: string | null;
   sector: string;
   latest_price: number;
   change_pct: number;

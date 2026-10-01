@@ -592,6 +592,7 @@ import clsx from 'clsx';
 
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
+import CompanyLogo from '../components/companies/CompanyLogo';
 import VolumeAnomalyChart from '../components/analysis/VolumeAnomalyChart';
 import { NewsSentimentScatter } from '../components/analysis/NewsSentimentScatter';
 import { getCompanies } from '../api/companies';
@@ -803,9 +804,7 @@ export default function CompanyAnalysisDashboard() {
       {company && (
         <div className="card flex flex-wrap items-center gap-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-accent/20 flex items-center justify-center font-bold font-mono text-accent-light text-sm">
-              {company.symbol.slice(0, 3)}
-            </div>
+            <CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="md" />
             <div>
               <p className="font-semibold text-text-primary text-base">{company.symbol}</p>
               <p className="text-xs text-text-muted">{company.name}</p>

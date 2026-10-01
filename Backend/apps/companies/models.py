@@ -6,6 +6,10 @@ from django.conf import settings
 class Company(models.Model):
     symbol=models.CharField(max_length=20,unique=True)
     name=models.CharField(max_length=300)
+    logo_url = models.URLField(
+    blank=True,
+    null=True
+)
     sector=models.CharField(max_length=100)
     aliases = models.JSONField(
         default=list,

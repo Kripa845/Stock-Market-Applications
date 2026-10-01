@@ -12,11 +12,13 @@ import {
 
 import apiClient from '../../api/client';
 import { useAuth } from '../../contexts/AuthContext';
+import CompanyLogo from '../../components/companies/CompanyLogo';
 
 interface Company {
   id: number;
   symbol: string;
   name: string;
+  logo_url?: string | null;
   sector: string;
   is_active: boolean;
   is_tracked?: boolean;
@@ -615,7 +617,8 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                     >
 
                       <td className="px-5 py-4">
-                        <span className="font-semibold text-accent-light">
+                        <span className="flex items-center gap-2 font-semibold text-accent-light">
+                          <CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="sm" />
                           {company.symbol}
                         </span>
                       </td>

@@ -8,6 +8,7 @@ export interface Company {
   id: number;
   symbol: string;
   name: string;
+  logo_url: string | null;
   sector: string;
   aliases: string[];
 

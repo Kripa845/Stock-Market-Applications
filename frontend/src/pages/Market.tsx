@@ -10,6 +10,7 @@ import { useLiveRefresh } from '../hooks/useLiveRefresh';
 import MarketBreadthWidget from '../components/market-intelligence/MarketBreadthWidget';
 import MarketHeatmap from '../components/market-intelligence/MarketHeatmap';
 import MarketRankings from '../components/market-intelligence/MarketRankings';
+import CompanyLogo from '../components/companies/CompanyLogo';
 
 export default function MarketPage() {
   const navigate = useNavigate();
@@ -80,8 +81,11 @@ export default function MarketPage() {
                     onClick={() => navigate(`/companies/${company.symbol}`)}
                     className="table-row cursor-pointer"
                   >
-                    <td className="py-3 font-mono font-semibold text-accent-light">
-                      {company.symbol}
+                    <td className="py-3">
+                      <span className="flex items-center gap-2 font-mono font-semibold text-accent-light">
+                        <CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="sm" />
+                        {company.symbol}
+                      </span>
                     </td>
                     <td className="py-3 text-text-primary">{company.name}</td>
                     <td className="py-3">

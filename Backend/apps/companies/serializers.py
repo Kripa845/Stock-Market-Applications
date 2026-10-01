@@ -38,6 +38,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "id",
             "symbol",
             "name",
+            "logo_url",
             "sector",
             "aliases",
             "is_active",

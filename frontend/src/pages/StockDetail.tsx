@@ -26,6 +26,7 @@ import {
 } from '../api/analysis';
 import Badge from '../components/common/Badge';
 import BrokerBadge from '../components/brokers/BrokerBadge';
+import CompanyLogo from '../components/companies/CompanyLogo';
 import EmptyState from '../components/common/EmptyState';
 import TradingChart from '../components/charts/TradingChart';
 import type { Company, DailyPrice, FloorsheetTransaction, NewsArticle, SentimentLabel } from '../types';
@@ -629,9 +630,7 @@ export default function StockDetail() {
       {/* Header */}
       <div className="card flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center font-bold font-mono text-white text-sm">
-            {company.symbol.slice(0, 3)}
-          </div>
+          <CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="lg" />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-text-primary">{company.symbol}</h1>

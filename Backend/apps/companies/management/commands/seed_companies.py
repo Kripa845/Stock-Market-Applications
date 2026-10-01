@@ -1,115 +1,5 @@
-# from django.core.management.base import BaseCommand
-
-# from apps.companies.models import (
-#     Company,
-#     TrackedCompany,
-# )
-
-
-# COMPANIES = [
-
-#     {
-#         "symbol": "NABIL",
-#         "name": "Nabil Bank Limited",
-#         "sector": "Commercial Bank",
-#     },
-
-#     {
-#         "symbol": "ADBL",
-#         "name": "Agricultural Development Bank Limited",
-#         "sector": "Commercial Bank",
-#     },
-
-#     {
-#         "symbol": "NICA",
-#         "name": "NIC Asia Bank Limited",
-#         "sector": "Commercial Bank",
-#     },
-
-#     {
-#         "symbol": "SCB",
-#         "name": "Standard Chartered Bank Nepal Limited",
-#         "sector": "Commercial Bank",
-#     },
-
-#     {
-#         "symbol": "NLIC",
-#         "name": "Nepal Life Insurance Company Limited",
-#         "sector": "Life Insurance",
-#     },
-
-#     {
-#         "symbol": "SHIVM",
-#         "name": "Shivam Cements Limited",
-#         "sector": "Manufacturing",
-#     },
-
-#     {
-#         "symbol": "CHCL",
-#         "name": "Chilime Hydropower Company Limited",
-#         "sector": "Hydropower",
-#     },
-
-#     {
-#         "symbol": "UPPER",
-#         "name": "Upper Tamakoshi Hydropower Limited",
-#         "sector": "Hydropower",
-#     },
-
-#     {
-#         "symbol": "HDL",
-#         "name": "Himalayan Distillery Limited",
-#         "sector": "Manufacturing",
-#     },
-
-#     {
-#         "symbol": "SANIMA",
-#         "name": "Sanima Bank Limited",
-#         "sector": "Commercial Bank",
-#     },
-# ]
-
-
-# class Command(BaseCommand):
-
-#     help = (
-#         "Create the 10-company "
-#         "stock-market watchlist."
-#     )
-
-#     def handle(self, *args, **kwargs):
-
-#         for data in COMPANIES:
-
-#             company, created = (
-#                 Company.objects.update_or_create(
-#                     symbol=data["symbol"],
-#                     defaults={
-#                         "name": data["name"],
-#                         "sector": data["sector"],
-#                         "is_active": True,
-#                     },
-#                 )
-#             )
-
-#             TrackedCompany.objects.update_or_create(
-#                 company=company,
-#                 defaults={
-#                     "is_tracked": True,
-#                 },
-#             )
-
-#             action = (
-#                 "CREATED"
-#                 if created
-#                 else "UPDATED"
-#             )
-
-#             self.stdout.write(
-#                 self.style.SUCCESS(
-#                     f"{action}: {company.symbol}"
-#                 )
-#             )
+import json
+from pathlib import Path
 
 
 from django.core.management.base import BaseCommand
@@ -236,23 +126,72 @@ COMPANIES = [
 
 
 class Command(BaseCommand):
-
     help = "Create or update the 10-company stock-market watchlist."
 
     def handle(self, *args, **kwargs):
 
+        # -----------------------------------------
+        # 1. Load company logos
+        # -----------------------------------------
+
+        logo_path = Path("company_logos.json")
+
+        if not logo_path.exists():
+            self.stdout.write(
+                self.style.ERROR(
+                    f"Logo file not found: {logo_path.resolve()}"
+                )
+            )
+            return
+
+        with open(logo_path, "r", encoding="utf-8") as f:
+            logo_data = json.load(f)
+
+        # -----------------------------------------
+        # 2. Create symbol → logo URL lookup
+        # -----------------------------------------
+
+        logo_lookup = {
+            item["symbol"].strip().upper(): item["logo_url"]
+            for item in logo_data
+            if item.get("symbol") and item.get("logo_url")
+        }
+
+        # -----------------------------------------
+        # 3. Seed the 10 companies
+        # -----------------------------------------
+
         for data in COMPANIES:
 
+            symbol = data["symbol"].upper()
+
+            # Find matching logo
+            logo_url = logo_lookup.get(symbol)
+
+            if logo_url:
+                self.stdout.write(
+                    f"Logo found for {symbol}"
+                )
+            else:
+                self.stdout.write(
+                    self.style.WARNING(
+                        f"No logo found for {symbol}"
+                    )
+                )
+
+            # Create/update company
             company, created = Company.objects.update_or_create(
-                symbol=data["symbol"],
+                symbol=symbol,
                 defaults={
                     "name": data["name"],
                     "sector": data["sector"],
                     "aliases": data["aliases"],
                     "is_active": True,
+                    "logo_url": logo_url,
                 },
             )
 
+            # Make company tracked
             TrackedCompany.objects.update_or_create(
                 company=company,
                 defaults={
@@ -264,8 +203,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"{action}: {company.symbol} - "
-                    f"{company.name}"
+                    f"{action}: {company.symbol} - {company.name}"
                 )
             )
 

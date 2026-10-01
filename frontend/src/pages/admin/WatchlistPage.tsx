@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import PageHeader from '../../components/common/PageHeader';
 import BrokerBadge from '../../components/brokers/BrokerBadge';
+import CompanyLogo from '../../components/companies/CompanyLogo';
 import EmptyState from '../../components/common/EmptyState';
 import { getCompanies } from '../../api/companies';
 import { stocksApi } from '../../api/stocks';
@@ -108,7 +109,7 @@ export default function WatchlistPage() {
           <tbody>{items.map(({ company, prices, floorsheet, floorDate }) => {
             const latest = prices[prices.length - 1];
             return <tr key={company.id} className="table-row">
-              <td className="py-3"><p className="font-mono font-semibold text-accent-light">{company.symbol}</p><p className="text-xs text-text-muted">{company.name}</p></td>
+              <td className="py-3"><div className="flex items-center gap-2"><CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="sm" /><span><span className="block font-mono font-semibold text-accent-light">{company.symbol}</span><span className="block text-xs text-text-muted">{company.name}</span></span></div></td>
               <td className="py-3 text-text-secondary">{latest?.date || 'No data'}</td>
               <td className="py-3 text-right font-mono">{latest ? Number(latest.open).toFixed(2) : 'â€”'}</td>
               <td className="py-3 text-right font-mono text-up">{latest ? Number(latest.high).toFixed(2) : 'â€”'}</td>

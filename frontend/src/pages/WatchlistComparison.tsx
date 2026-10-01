@@ -32,6 +32,7 @@ import { analysisApi, type CompanyStat, type CrossCompanyAnalysis, type SectorSt
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
+import CompanyLogo from '../components/companies/CompanyLogo';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -146,13 +147,19 @@ function CompanyTable({
                 selected.has(c.id) && 'bg-accent/5',
               )}
             >
-              <td className="py-2" onClick={e => { e.stopPropagation(); onToggle(c.id); }}>
-                <input
-                  type="checkbox"
-                  checked={selected.has(c.id)}
-                  onChange={() => onToggle(c.id)}
-                  className="h-3.5 w-3.5 accent-accent"
-                />
+              <td className="py-2">
+                <button
+                  type="button"
+                  aria-label={`${selected.has(c.id) ? 'Remove' : 'Add'} ${c.name} ${selected.has(c.id) ? 'from' : 'to'} comparison`}
+                  aria-pressed={selected.has(c.id)}
+                  onClick={() => onToggle(c.id)}
+                  className={clsx(
+                    'rounded-lg transition',
+                    selected.has(c.id) ? 'ring-2 ring-accent' : 'opacity-70 hover:opacity-100',
+                  )}
+                >
+                  <CompanyLogo symbol={c.symbol} name={c.name} logoUrl={c.logo_url} size="sm" />
+                </button>
               </td>
               <td className="py-2 font-mono font-semibold text-accent-light">{c.symbol}</td>
               <td className="py-2 text-text-muted">{c.sector}</td>

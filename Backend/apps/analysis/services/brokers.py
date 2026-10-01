@@ -262,3 +262,43 @@ def sampled_floorsheet_dates(
         .values_list("date", flat=True)
         .distinct()
     )
+    
+    
+
+def build_top_stock_by_broker(
+    company=None, start_date=None, end_date=None, company_ids=None, broker=None,
+):
+    """Each broker's highest-turnover stock (buy + sell value) in the selection."""
+    queryset = _base_queryset(
+        company=company, start_date=start_date, end_date=end_date,
+        company_ids=company_ids, broker=broker,
+    )
+
+    book = {}  # (broker, symbol) -> {"buy": x, "sell": y}
+    for side, field in (("buy", "_buyer_broker_clean"), ("sell", "_seller_broker_clean")):
+        grouped = (
+            queryset.order_by()
+            .values(field, "company__symbol")
+            .annotate(value_sum=Sum(_transaction_value()))
+        )
+        for entry in grouped:
+            name = _clean_broker(entry[field])
+            if name is None:
+                continue
+            slot = book.setdefault(
+                (name, entry["company__symbol"]), {"buy": ZERO, "sell": ZERO}
+            )
+            slot[side] += Decimal(entry["value_sum"] or ZERO)
+
+    best = {}
+    for (name, symbol), amt in book.items():
+        total = amt["buy"] + amt["sell"]
+        current = best.get(name)
+        if current is None or (total, symbol) > (current["turnover"], current["symbol"]):
+            best[name] = {
+                "symbol": symbol,
+                "buy_amt": amt["buy"],
+                "sell_amt": amt["sell"],
+                "turnover": total,
+            }
+    return best
