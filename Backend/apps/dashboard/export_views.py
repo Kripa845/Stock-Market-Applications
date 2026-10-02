@@ -565,7 +565,7 @@ class ExportTradingAPIView(APIView):
         if fmt not in ("csv", "xlsx", "pdf"):
             return _bad_request("format must be csv, xlsx, or pdf.")
 
-        qs = DailyPrice.objects.select_related("company").order_by("-date", "company__symbol")
+        qs = DailyPrice.objects.filter(source="crawled").select_related("company").order_by("-date", "company__symbol")
 
         qs = qs.filter(company__in=companies)
         if date_from:
@@ -933,7 +933,7 @@ class ExportReportAPIView(APIView):
         result = {"has_any_data": False}
 
         # ── Trading summary ───────────────────────────────────────────
-        price_qs = DailyPrice.objects.select_related("company")
+        price_qs = DailyPrice.objects.filter(source="crawled").select_related("company")
         price_qs = price_qs.filter(company__in=companies)
         if date_from:
             price_qs = price_qs.filter(date__gte=date_from)

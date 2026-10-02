@@ -99,7 +99,7 @@ def rebuild_company_news_price_correlation(company):
     from apps.market_data.models import DailyPrice
     from apps.news.models import ArticleCompanyTag
 
-    prices = list(DailyPrice.objects.filter(company=company, source__in=("crawled", "unverified")).order_by("date").values("date", "close", "volume"))
+    prices = list(DailyPrice.objects.filter(company=company, source="crawled").order_by("date").values("date", "close", "volume"))
     tags = ArticleCompanyTag.objects.filter(
         company=company,
         confidence__gte=CONFIDENCE_FLOOR,

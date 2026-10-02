@@ -56,14 +56,11 @@ def calculate_rvol(rows, ma_length=21, ma_type="SMA", threshold=2.0, start_date=
     return output
 
 
-def get_company_rvol(company, start_date=None, end_date=None, ma_length=21, ma_type="SMA", threshold=2.0):
+def get_company_rvol(company, start_date=None, end_date=None, ma_length=21, ma_type="SMA", threshold=2.0, source="crawled"):
     """Fetch OHLCV once, retaining enough warm-up history for indicators."""
     from apps.market_data.models import DailyPrice
 
-    queryset = DailyPrice.objects.filter(
-        company=company,
-        source__in=("crawled", "unverified"),
-    )
+    queryset = DailyPrice.objects.filter(company=company, source=source)
     if start_date is not None:
         before = queryset.filter(date__lt=start_date)
         if ma_type == "EMA":

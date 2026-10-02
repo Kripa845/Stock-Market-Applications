@@ -1,6 +1,9 @@
 
 
 import hashlib
+import re
+from unittest.mock import patch
+
 import numpy as np
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -29,12 +32,38 @@ from apps.news.services.categorization import (
     normalize_text,
 )
 from apps.news.tasks import categorize_article_task
+from apps.users.models import UserCompanyAccess
 
 User = get_user_model()
+
+# Automatic tags store the evidence type that carried the decision as their method.
+LEXICAL_METHODS = ("symbol", "company_name", "alias", "body_mention")
+
+
+class FakeEmbeddingModel:
+    """Deterministic bag-of-words stand-in for SentenceTransformer.
+
+    Loading the real model downloads weights and needs native DLLs, which made
+    these tests depend on the network and the machine. Texts sharing words get
+    a high cosine similarity, which is all the categorization logic needs.
+    """
+
+    def encode(self, text, convert_to_numpy=True, normalize_embeddings=True):
+        vector = np.zeros(384, dtype=np.float32)
+        for word in re.findall(r"[a-z0-9]+", text.lower()):
+            vector[int(hashlib.md5(word.encode()).hexdigest(), 16) % 384] += 1.0
+        norm = np.linalg.norm(vector)
+        return vector / norm if normalize_embeddings and norm else vector
 
 
 class NewsCategorizationTests(TestCase):
     def setUp(self):
+        model_patch = patch(
+            "apps.news.services.categorization.get_embedding_model",
+            return_value=FakeEmbeddingModel(),
+        )
+        model_patch.start()
+        self.addCleanup(model_patch.stop)
         invalidate_company_cache()
 
         # Create test users for RBAC
@@ -93,6 +122,10 @@ class NewsCategorizationTests(TestCase):
             is_active=True,
         )
         TrackedCompany.objects.create(company=self.shivm, is_tracked=True)
+
+        # Correcting tags also requires per-company access (status 1) for non-admins.
+        for company in (self.nabil, self.nica, self.nlic, self.shivm):
+            UserCompanyAccess.objects.create(user=self.analyst_user, company=company, status=1)
 
         # Create CrawlRun & RawArticle for FK relations
         self.crawl_run = CrawlRun.objects.create(
@@ -226,7 +259,7 @@ class NewsCategorizationTests(TestCase):
         # Every tag must have its own confidence score
         for tag in tags:
             self.assertGreaterEqual(tag.confidence, 0.65)
-            self.assertEqual(tag.method, "hybrid")
+            self.assertIn(tag.method, LEXICAL_METHODS)
 
     # -----------------------------------------------------------------------
     # 8. No-Match Article (No false company tags)
@@ -256,7 +289,7 @@ class NewsCategorizationTests(TestCase):
 
         self.assertIsNotNone(saved_tag)
         self.assertGreater(saved_tag.confidence, 0.60)
-        self.assertEqual(saved_tag.method, "hybrid")
+        self.assertIn(saved_tag.method, LEXICAL_METHODS)
         self.assertIn("lexical_score", saved_tag.evidence)
         self.assertIn("semantic_similarity", saved_tag.evidence)
 

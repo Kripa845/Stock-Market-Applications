@@ -1044,12 +1044,12 @@ def rebuild_company_analysis(company, since=None, persist=True):
     from apps.analysis.models import DailyAnalysis
     from apps.market_data.models import DailyPrice
 
-    queryset = DailyPrice.objects.filter(company=company).order_by("date")
+    queryset = DailyPrice.objects.filter(company=company, source="crawled").order_by("date")
 
     if since is not None:
         warmup_dates = list(
             DailyPrice.objects
-            .filter(company=company, date__lt=since)
+            .filter(company=company, source="crawled", date__lt=since)
             .order_by("-date")
             .values_list("date", flat=True)[:BASELINE_SESSIONS]
         )

@@ -269,6 +269,7 @@ class CalendarTestBase(TestCase):
     def price(self, when, close="100", volume=1000, company=None):
         return DailyPrice.objects.create(
             company=company or self.company,
+            source="crawled",
             date=when,
             open=Decimal(close),
             high=Decimal(close),
@@ -628,3 +629,16 @@ class BrokerDirectoryTests(TestCase):
         self.assertEqual(Broker.objects.filter(broker_no=58).count(), 1)
         broker = Broker.objects.get(broker_no=58)
         self.assertEqual(broker.name, item["name"])
+
+
+class PriceSourceParamTests(TestCase):
+    def test_unknown_source_is_rejected(self):
+        from rest_framework.test import APIClient
+        from apps.users.models import User
+
+        client = APIClient()
+        client.force_authenticate(User.objects.create_user(
+            username="source-admin", email="source-admin@example.test", password="x", role=User.Role.ADMIN,
+        ))
+        self.assertEqual(client.get("/api/market-data/", {"source": "bogus"}).status_code, 400)
+        self.assertEqual(client.get("/api/market-data/", {"source": "seeded"}).status_code, 200)

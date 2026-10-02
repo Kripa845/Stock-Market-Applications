@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { TrendingUp, TrendingDown } from 'lucide-react';
 import { getCompanies } from '../../api/companies';
 import type { Company } from '../../types/company';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
@@ -11,13 +11,14 @@ export default function MarketTicker() {
   useEffect(() => { load(); }, []);
   useLiveRefresh(load);
   const items = [...companies, ...companies];
+  const dates = companies.map(company => company.latest_price_date).filter((date): date is string => Boolean(date)).sort();
+  const latestDate = dates[dates.length - 1];
 
   return (
     <div className="h-9 bg-bg-secondary border-b border-bg-border flex items-center overflow-hidden select-none shrink-0">
       {/* Status pill */}
       <div className="flex items-center gap-1.5 px-4 border-r border-bg-border shrink-0 h-full">
-        <span className="w-1.5 h-1.5 rounded-full bg-up animate-pulse" />
-        <span className="text-xs text-up font-medium whitespace-nowrap">Market Open</span>
+        <span className="text-xs text-text-secondary font-medium whitespace-nowrap">Latest close{latestDate ? ` · ${latestDate}` : ''}</span>
       </div>
 
       {/* Scrolling ticker */}
@@ -40,12 +41,6 @@ export default function MarketTicker() {
         </div>
       </div>
 
-      {/* NEPSE index pill */}
-      <div className="flex items-center gap-2 px-4 border-l border-bg-border shrink-0 h-full">
-        <Activity size={12} className="text-accent-light" />
-        <span className="text-xs text-text-secondary">NEPSE</span>
-        <span className="text-xs font-mono font-semibold text-text-primary">Live data</span>
-      </div>
     </div>
   );
 }

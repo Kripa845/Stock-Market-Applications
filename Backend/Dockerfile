@@ -4,13 +4,6 @@
 #   web     → gunicorn config.wsgi:application
 #   worker  → celery -A config worker --pool=solo -Q crawling
 #   beat    → celery -A config beat   --scheduler django_celery_beat...
-#
-# OCR support:
-#   tesseract-ocr  — required by pytesseract
-#   poppler-utils  — required by pdf2image (pdf → images)
-#
-# The poppler PATH is resolved automatically from /usr/bin on Linux, so no
-# Windows-style path like C:\...\Poppler\Library\bin should ever appear here.
 
 FROM python:3.12-slim AS base
 
@@ -22,11 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libxml2-dev \
         libxslt1-dev \
-        # OCR: Tesseract + language data
-        tesseract-ocr \
-        tesseract-ocr-eng \
-        # PDF → image: Poppler utilities (pdftoppm etc.)
-        poppler-utils \
         # Pillow
         libjpeg-dev \
         libpng-dev \
@@ -58,7 +46,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # Requires a placeholder SECRET_KEY; real secrets come from the env at runtime.
 RUN SECRET_KEY=build-time-placeholder \
     DB_PASSWORD=unused \
-    python manage.py collectstatic --noinput || true
+    python manage.py collectstatic --noinput
 
 # ── Default command (overridden per Render service) ───────────────────────────
 # Production web: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT

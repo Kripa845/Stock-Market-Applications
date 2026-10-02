@@ -1,7 +1,9 @@
 from rest_framework import serializers
+from .models import DailyPrice
 
 
 class RvolQuerySerializer(serializers.Serializer):
+    source = serializers.ChoiceField(required=False, default="crawled", choices=tuple(choice[0] for choice in DailyPrice.SOURCE_CHOICES))
     start_date = serializers.DateField(required=False)
     end_date = serializers.DateField(required=False)
     ma_length = serializers.IntegerField(required=False, default=21, min_value=1, max_value=1000)

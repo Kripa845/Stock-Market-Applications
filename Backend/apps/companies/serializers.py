@@ -15,13 +15,14 @@ def _get_prices(obj, n=None):
     if hasattr(obj, "_prices_cache"):
         cache = obj._prices_cache  # already ordered -date
         return cache[:n] if n is not None else cache
-    qs = obj.dailyprice_set.order_by("-date")
+    qs = obj.dailyprice_set.filter(source="crawled").order_by("-date")
     return list(qs[:n]) if n is not None else list(qs)
 
 
 class CompanySerializer(serializers.ModelSerializer):
     is_tracked = serializers.SerializerMethodField()
     latest_price = serializers.SerializerMethodField()
+    latest_price_date = serializers.SerializerMethodField()
     price_change = serializers.SerializerMethodField()
     price_change_percent = serializers.SerializerMethodField()
     volume_24h = serializers.SerializerMethodField()
@@ -44,6 +45,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "is_active",
             "is_tracked",
             "latest_price",
+            "latest_price_date",
             "price_change",
             "price_change_percent",
             "volume_24h",
@@ -64,6 +66,10 @@ class CompanySerializer(serializers.ModelSerializer):
     def get_latest_price(self, obj):
         prices = _get_prices(obj, 1)
         return float(prices[0].close) if prices else 0.0
+
+    def get_latest_price_date(self, obj):
+        prices = _get_prices(obj, 1)
+        return prices[0].date.isoformat() if prices else None
 
     def get_price_change(self, obj):
         prices = _get_prices(obj, 2)

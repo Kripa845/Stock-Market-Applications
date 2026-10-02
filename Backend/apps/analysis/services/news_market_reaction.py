@@ -112,7 +112,7 @@ def build_news_market_reaction(company, window_start, prices=None):
     from django.utils import timezone
 
     price_rows = prices if prices is not None else list(
-        DailyPrice.objects.filter(company=company).order_by("date")
+        DailyPrice.objects.filter(company=company, source="crawled").order_by("date")
     )
     price_dates = [row.date for row in price_rows]
     tags = list(

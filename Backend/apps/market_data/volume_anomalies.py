@@ -16,13 +16,9 @@ def get_volume_anomalies(company, start_date=None, end_date=None, lookback=LOOKB
     when its volume is at least 2.5 times the mean of the prior lookback
     sessions. Incomplete or zero baselines yield null RVOL and anomaly flags.
     """
-    # The crawler currently keeps only about one calendar month of rows as
-    # ``crawled``. Older imported rows are ``unverified`` but are already part
-    # of the application's RVOL history, so use them as historical baseline
-    # observations. Only return crawled rows for the requested output period.
     queryset = DailyPrice.objects.filter(
         company=company,
-        source__in=("crawled", "unverified"),
+        source="crawled",
     )
     if start_date:
         warmup = list(
@@ -56,7 +52,6 @@ def get_volume_anomalies(company, start_date=None, end_date=None, lookback=LOOKB
         frame = frame[frame["date"] >= start_date]
     if end_date:
         frame = frame[frame["date"] <= end_date]
-    frame = frame[frame["source"] == "crawled"]
 
     results = []
     for row in frame.itertuples(index=False):

@@ -4,12 +4,14 @@ from io import StringIO
 
 from django.core.management import call_command
 from django.test import TestCase, override_settings
+from django.conf import settings
 
 from apps.analysis.models import DailyAnalysis
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice
 from apps.market_intelligence.models import MarketBreadthSnapshot, ProxyIndexSnapshot
 from apps.market_intelligence.services.snapshots import compute_market_snapshots
+from apps.market_intelligence.tasks import build_daily_market_intelligence
 
 
 class MarketSnapshotTests(TestCase):
@@ -162,3 +164,20 @@ class MarketSnapshotTests(TestCase):
             row.pop("computed_at", None)
         self.assertEqual(first_breadth, second_breadth)
         self.assertEqual(first_proxy, second_proxy)
+
+    def test_scheduled_intelligence_task_is_idempotent_and_runs_after_analysis(self):
+        self.add_price(self.first, self.start, 100)
+
+        self.assertEqual(build_daily_market_intelligence.run()["ok"], True)
+        first_counts = (
+            MarketBreadthSnapshot.objects.count(),
+            ProxyIndexSnapshot.objects.count(),
+        )
+        self.assertEqual(build_daily_market_intelligence.run()["ok"], True)
+        self.assertEqual(
+            (MarketBreadthSnapshot.objects.count(), ProxyIndexSnapshot.objects.count()),
+            first_counts,
+        )
+        schedule = settings.CELERY_BEAT_SCHEDULE["build-market-intelligence-after-analysis"]
+        self.assertEqual(schedule["task"], "apps.market_intelligence.tasks.build_daily_market_intelligence")
+        self.assertEqual(schedule["schedule"].hour, {19})

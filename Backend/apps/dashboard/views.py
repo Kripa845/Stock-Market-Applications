@@ -40,6 +40,7 @@ class DashboardSummaryAPIView(APIView):
 
             latest_prices = DailyPrice.objects.filter(
                 company__in=companies,
+                source="crawled",
             ).order_by("-date")
 
             market_volume = 0
@@ -57,6 +58,7 @@ class DashboardSummaryAPIView(APIView):
             result["total_trading_days"] = (
                 DailyPrice.objects
                 .filter(company__in=companies)
+                .filter(source="crawled")
                 .values("date")
                 .distinct()
                 .count()

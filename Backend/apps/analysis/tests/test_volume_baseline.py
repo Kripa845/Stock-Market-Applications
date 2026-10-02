@@ -23,12 +23,12 @@ class VolumeBaselineTests(TestCase):
 
     def test_exactly_twenty_previous_sessions(self):
         previous = [1000] * BASELINE_SESSIONS
-        result = calculate_volume_baseline(2000, previous)
+        result = calculate_volume_baseline(3000, previous)
 
         self.assertEqual(result.sessions_used, 20)
         self.assertTrue(result.sufficient_history)
         self.assertEqual(result.average, Decimal("1000.00"))
-        self.assertEqual(result.ratio, Decimal("2.00"))
+        self.assertEqual(result.ratio, Decimal("3.00"))
         self.assertTrue(result.anomaly)
 
     def test_more_than_twenty_sessions_uses_only_most_recent_twenty(self):
@@ -88,23 +88,25 @@ class VolumeBaselineTests(TestCase):
         self.assertEqual(result.ratio, Decimal("1.10"))
         self.assertFalse(result.anomaly)
 
-    def test_threshold_is_inclusive_at_exactly_1_5(self):
+    def test_threshold_is_inclusive(self):
         previous = [1000] * BASELINE_SESSIONS
-        result = calculate_volume_baseline(1500, previous)
+        at_threshold = int(1000 * VOLUME_ANOMALY_THRESHOLD)
+        result = calculate_volume_baseline(at_threshold, previous)
 
-        self.assertEqual(result.ratio, Decimal("1.50"))
+        self.assertEqual(result.ratio, VOLUME_ANOMALY_THRESHOLD)
         self.assertTrue(result.anomaly)
 
     def test_just_below_threshold_does_not_flag(self):
         previous = [1000] * BASELINE_SESSIONS
-        result = calculate_volume_baseline(1499, previous)
+        at_threshold = int(1000 * VOLUME_ANOMALY_THRESHOLD)
+        result = calculate_volume_baseline(at_threshold - 1, previous)
 
-        self.assertEqual(result.ratio, Decimal("1.50"))  # rounds to 1.50
-        # Rounding means 1499/1000 presents as 1.50 and does flag.
+        # Rounding to 2 dp means one share below the threshold presents as the threshold and does flag.
+        self.assertEqual(result.ratio, VOLUME_ANOMALY_THRESHOLD)
         self.assertTrue(result.anomaly)
 
-        result = calculate_volume_baseline(1400, previous)
-        self.assertEqual(result.ratio, Decimal("1.40"))
+        result = calculate_volume_baseline(at_threshold - 100, previous)
+        self.assertEqual(result.ratio, VOLUME_ANOMALY_THRESHOLD - Decimal("0.10"))
         self.assertFalse(result.anomaly)
 
     def test_zero_volume_today_is_not_an_anomaly(self):

@@ -1,3 +1,5 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import (
@@ -194,72 +196,6 @@ class CustomTokenObtainPairSerializer(
 # REGISTRATION
 # ============================================================
 
-# class UserRegistrationSerializer(
-#     serializers.ModelSerializer
-# ):
-#     password = serializers.CharField(
-#         write_only=True,
-#         min_length=6,
-#     )
-
-#     password_confirm = serializers.CharField(
-#         write_only=True,
-#     )
-
-#     role = serializers.ChoiceField(
-#         choices=User.Role.choices,
-#         default=User.Role.VIEWER,
-#         required=False,
-#     )
-
-#     class Meta:
-#         model = User
-
-#         fields = [
-#             "id",
-#             "username",
-#             "email",
-#             "password",
-#             "password_confirm",
-#             "first_name",
-#             "last_name",
-#             "role",
-#         ]
-
-#         read_only_fields = ["id"]
-
-#     def validate_email(self, value):
-#         return value.lower().strip()
-
-#     def validate(self, attrs):
-#         if attrs["password"] != attrs["password_confirm"]:
-#             raise serializers.ValidationError(
-#                 {
-#                     "password_confirm":
-#                     "Passwords do not match."
-#                 }
-#             )
-
-#         return attrs
-
-#     def create(self, validated_data):
-#         validated_data.pop(
-#             "password_confirm"
-#         )
-
-#         password = validated_data.pop(
-#             "password"
-#         )
-
-#         user = User(
-#             **validated_data,
-#         )
-
-#         user.set_password(password)
-#         user.save()
-
-#         return user
-
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=6)
     password_confirm = serializers.CharField(write_only=True)
@@ -276,6 +212,12 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirm"]:
             raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+        # Apply settings.AUTH_PASSWORD_VALIDATORS, which min_length alone does not.
+        candidate = User(username=attrs.get("username"), email=attrs.get("email"))
+        try:
+            validate_password(attrs["password"], user=candidate)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
         return attrs
 
     def create(self, validated_data):
@@ -285,57 +227,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.set_password(password)
         user.save()
         return user
-# ============================================================
-# ADMIN USER CREATE
-# ============================================================
-class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(
-        write_only=True,
-        min_length=6,
-    )
 
-    password_confirm = serializers.CharField(
-        write_only=True,
-    )
 
-    class Meta:
-        model = User
-        fields = [
-            "id",
-            "username",
-            "email",
-            "password",
-            "password_confirm",
-            "first_name",
-            "last_name",
-        ]
-        read_only_fields = ["id"]
-
-    def validate_email(self, value):
-        return value.lower().strip()
-
-    def validate(self, attrs):
-        if attrs["password"] != attrs["password_confirm"]:
-            raise serializers.ValidationError({
-                "password_confirm": "Passwords do not match."
-            })
-
-        return attrs
-
-    def create(self, validated_data):
-        validated_data.pop("password_confirm")
-
-        password = validated_data.pop("password")
-
-        user = User(
-            **validated_data,
-            role=User.Role.VIEWER,
-        )
-
-        user.set_password(password)
-        user.save()
-
-        return user
 class UserCompanyAccessItemSerializer(serializers.Serializer):
     company_id = serializers.IntegerField(min_value=1)
     status = serializers.IntegerField(min_value=0, max_value=1)

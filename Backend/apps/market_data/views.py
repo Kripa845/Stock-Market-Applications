@@ -9,6 +9,7 @@ import django_filters
 from rest_framework.filters import SearchFilter, OrderingFilter
 
 from .models import DailyPrice, FloorsheetTransaction
+from .services.price_source import requested_price_source
 from .serializers import DailyPriceSerializers, FloorsheetSerializer
 
 
@@ -36,7 +37,7 @@ class CompanyPriceList(APIView):
 
     def get(self, request):
         prices = DailyPrice.objects.filter(
-            company__is_active=True
+            company__is_active=True, source=requested_price_source(request)
         ).select_related("company")
 
         prices = filter_company_queryset(prices, request.user)

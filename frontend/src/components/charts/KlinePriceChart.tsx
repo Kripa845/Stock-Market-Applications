@@ -1,9 +1,20 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  dispose, init, registerIndicator,
+  dispose, init,
   type Chart, type KLineData,
 } from 'klinecharts';
+import { paneOf } from './customIndicators';
+import RangeBar from './RangeBar';
+import {
+  defaultRange, rangeAvailable, rangeCalendarDays, rangeStart as rangeStartFor, type RangeId,
+} from './chartRanges';
+import IndicatorPicker, { PICKER_TOGGLE_ATTR, type ActiveIndicator } from './IndicatorPicker';
+import { Layers } from 'lucide-react';
+import { ensureRegistered, toSeries, type RegistrySeries } from './registryIndicators';
+import {
+  marketIntelligenceApi, type IndicatorDef, type IndicatorParams, type IndicatorRegistry,
+} from '../../api/marketIntelligence';
 
 // Same shape as KlinePriceChart, so <TradingChart prices={...} symbol={...} /> is a drop-in swap.
 interface ChartPrice {
@@ -28,71 +39,46 @@ interface Props {
   // Optional. Returns 1-minute bars for the last `days` days. Every intraday interval is built from
   // these, so the backend only needs one endpoint. Without it, intraday intervals are disabled.
   fetchMinuteBars?: (days: number) => Promise<MinuteBar[]>;
+  // Enables the indicator library (server-calculated, daily bars only).
+  companyId?: number;
 }
-
-// ─── Custom indicators (module level, registered once) ────────────────────────
-// Same two as your KlinePriceChart, kept so nothing you already show is lost.
-registerIndicator({
-  name: 'DAILY_VWAP', shortName: 'VWAP', series: 'price',
-  figures: [{ key: 'vwap', title: 'VWAP: ', type: 'line' }],
-  calc: (list) => list.map((d) => ({ vwap: d.volume && d.turnover ? d.turnover / d.volume : d.close })),
-});
-
-registerIndicator({
-  name: 'VOL_ANOMALY', shortName: 'VOL',
-  figures: [{
-    key: 'volume', title: 'VOL: ', type: 'bar', baseValue: 0,
-    styles: (data: any) => {
-      if (data.current?.indicatorData?.anomaly) return { color: '#d946ef' };
-      const k = data.current?.kLineData;
-      return { color: k && k.close >= k.open ? '#22C55E' : '#EF4444' };
-    },
-  }],
-  calc: (list, ind: any) => {
-    const flagged: string[] = ind.extendData ?? [];
-    return list.map((d) => ({
-      volume: d.volume ?? 0,
-      anomaly: flagged.includes(new Date(d.timestamp).toISOString().slice(0, 10)),
-    }));
-  },
-});
-
-// Approximation of a "buy sell pressure" pane: 14-bar share of up-volume vs down-volume, 0-100.
-// Replace calc() with your real formula when you have it.
-registerIndicator({
-  name: 'BSP', shortName: 'Buy/Sell pressure', calcParams: [14],
-  figures: [
-    { key: 'buy', title: 'Buy: ', type: 'line' },
-    { key: 'sell', title: 'Sell: ', type: 'line' },
-  ],
-  calc: (list, ind: any) => {
-    const n: number = ind.calcParams?.[0] ?? 14;
-    return list.map((_, i) => {
-      if (i < n - 1) return {};
-      let up = 0, down = 0;
-      for (let j = i - n + 1; j <= i; j++) {
-        const x = (list[j].close - list[j].open) * (list[j].volume ?? 0);
-        if (x > 0) up += x; else down -= x;
-      }
-      const buy = up + down ? (up / (up + down)) * 100 : 50;
-      return { buy, sell: 100 - buy };
-    });
-  },
-});
 
 // ─── Menu config ──────────────────────────────────────────────────────────────
 type Ind = { name: string; label: string; main: boolean; params?: number[] };
+// Chart-native extras. Everything else comes from the server indicator library (see IndicatorPicker).
 const INDICATORS: Ind[] = [
-  { name: 'MA',         label: 'Moving Average',    main: true, params: [5, 10, 30, 60] },
-  { name: 'EMA',        label: 'Exponential MA',    main: true },
-  { name: 'BOLL',       label: 'Bollinger Bands',   main: true },
-  { name: 'DAILY_VWAP', label: 'VWAP (daily)',      main: true },
-  { name: 'VOL_ANOMALY',label: 'Volume',            main: false },
-  { name: 'MACD',       label: 'MACD',              main: false },
-  { name: 'RSI',        label: 'RSI',               main: false },
-  { name: 'BSP',        label: 'Buy/Sell pressure', main: false },
+  { name: 'DAILY_VWAP', label: 'VWAP (daily, from turnover)', main: true },
+  { name: 'VOL_ANOMALY',label: 'Volume (anomalies highlighted)', main: false },
+  { name: 'BSP',        label: 'Buy/Sell pressure (approximation)', main: false },
 ];
-const DEFAULT_ON = ['MA', 'DAILY_VWAP', 'VOL_ANOMALY'];
+const DEFAULT_ON = ['VOL_ANOMALY'];
+// Library indicators shown on first load: EMA + Bollinger on the price, RSI and MACD below.
+const DEFAULT_LIBRARY = ['ema', 'bollinger', 'rsi', 'macd'];
+const MAX_PER_REQUEST = 20;
+// Fixed heights keep the price pane readable when several lower panes are open.
+const VOLUME_PANE_HEIGHT = 70;
+const LIBRARY_PANE_HEIGHT = 90;
+
+function sizePane(chart: Chart, paneId: string, height = VOLUME_PANE_HEIGHT) {
+  if (paneId !== 'candle_pane') chart.setPaneOptions({ id: paneId, height });
+}
+
+// The registry is the same for every chart, so it is fetched once per page load.
+let registryRequest: Promise<IndicatorRegistry> | null = null;
+const loadRegistry = () => {
+  registryRequest ??= marketIntelligenceApi.getIndicatorRegistry().catch((err) => {
+    registryRequest = null;
+    throw err;
+  });
+  return registryRequest;
+};
+
+const defaultParams = (def: IndicatorDef): IndicatorParams =>
+  Object.fromEntries(def.params.map((p) => [p.name, p.default]));
+
+const isoDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
+let uidCounter = 0;
+const newUid = () => `ind${++uidCounter}`;
 
 const TOOLS = [
   { id: 'cursor', icon: '✛', title: 'Cursor',            overlay: null },
@@ -106,6 +92,11 @@ const TOOLS = [
 ] as const;
 
 type Interval = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '1D' | '1W' | '1M';
+// Candle size, worded differently from the 1D / 5D / 1M *ranges* in the bottom bar so the two never look alike.
+const INTERVAL_LABELS: Record<Interval, string> = {
+  '1m': '1 min', '3m': '3 min', '5m': '5 min', '15m': '15 min', '30m': '30 min',
+  '1h': '1 hour', '2h': '2 hours', '1D': 'Daily', '1W': 'Weekly', '1M': 'Monthly',
+};
 type Period = { span: number; type: 'minute' | 'hour' | 'day' | 'week' | 'month' };
 const INTERVALS: { id: Interval; group: 'Minutes' | 'Hours' | 'Days'; minutes?: number; period: Period }[] = [
   { id: '1m',  group: 'Minutes', minutes: 1,   period: { span: 1,  type: 'minute' } },
@@ -123,7 +114,6 @@ const INTERVALS: { id: Interval; group: 'Minutes' | 'Hours' | 'Days'; minutes?: 
 // starts at 11:00, 12:00 ... and not at 05:15 UTC.
 const NPT_OFFSET_MS = 345 * 60_000;
 const MAX_INTRADAY_DAYS = 60;
-const RANGES = [['1M', 30], ['3M', 90], ['6M', 180], ['YTD', -1], ['1Y', 365], ['All', 1e9]] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toBars(prices: ChartPrice[]): KLineData[] {
@@ -223,14 +213,14 @@ function buildStyles(dark: boolean) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars }: Props) {
+export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars, companyId }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const paneIds = useRef<Record<string, string>>({});   // indicator name -> pane id
   const anomalyKey = (anomalyDates ?? []).join(',');
 
   const [interval, setIntervalMode] = useState<Interval>('1D');
-  const [range, setRange] = useState<(typeof RANGES)[number][0]>('All');
+  const [rangeChoice, setRange] = useState<RangeId | null>(null);
   const [tool, setTool] = useState<string>('cursor');
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<string[]>(DEFAULT_ON);
@@ -245,8 +235,12 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   const cfg = INTERVALS.find((i) => i.id === interval)!;
   const intraday = cfg.group !== 'Days';
-  const rangeSpec = RANGES.find((r) => r[0] === range)![1];
-  const rangeDays = rangeSpec === -1 ? 365 : rangeSpec;
+  // Ranges are measured against the real trading dates in `prices` (see chartRanges.ts).
+  const dailyDates = useMemo(() => [...new Set(prices.map((p) => p.date))].sort(), [prices]);
+  const range: RangeId = rangeChoice && rangeAvailable(dailyDates, rangeChoice) ? rangeChoice : defaultRange(dailyDates);
+  const rangeFrom = rangeStartFor(dailyDates, range);
+  const shownCount = rangeFrom ? dailyDates.filter((d) => d >= rangeFrom).length : 0;
+  const rangeDays = Math.max(1, rangeCalendarDays(dailyDates, rangeFrom));
 
   // Intraday: fetch 1-minute bars whenever the interval group, range or symbol changes.
   useEffect(() => {
@@ -263,17 +257,133 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   const bars = useMemo(() => {
     if (intraday) return aggregateIntraday(minuteBars, cfg.minutes!);
     const all = toBars(prices);
-    if (!all.length) return all;
-    const last = all[all.length - 1].timestamp;
-    const from = rangeSpec === -1 ? Date.UTC(new Date(last).getUTCFullYear(), 0, 1) : last - rangeSpec * 864e5;
+    if (!all.length || !rangeFrom) return all;
+    const from = Date.UTC(+rangeFrom.slice(0, 4), +rangeFrom.slice(5, 7) - 1, +rangeFrom.slice(8, 10));
     return aggregate(all.filter((b) => b.timestamp >= from), interval as '1D' | '1W' | '1M');
-  }, [prices, minuteBars, intraday, cfg, interval, rangeSpec]);
+  }, [prices, minuteBars, intraday, cfg, interval, rangeFrom]);
 
   const status = intraday
     ? !fetchMinuteBars ? 'Intraday data is not connected yet'
       : loadingMin ? 'Loading intraday data...'
       : bars.length === 0 ? 'No timestamped trade data available for this range' : ''
     : '';
+
+  // ─── Indicator library ────────────────────────────────────────────────────────
+  const [registry, setRegistry] = useState<IndicatorRegistry | null>(null);
+  const [registryError, setRegistryError] = useState('');
+  const [library, setLibrary] = useState<ActiveIndicator[]>([]);
+  const [seriesVersion, setSeriesVersion] = useState(0);
+  const [loadingSeries, setLoadingSeries] = useState(false);
+  const [chartGeneration, setChartGeneration] = useState(0);
+  // Calculated series by request key, so removing and re-adding an indicator never refetches it.
+  const seriesCache = useRef(new Map<string, RegistrySeries>());
+  const errorCache = useRef(new Map<string, string>());
+  // What is currently drawn: library uid -> chart indicator id + the series key it shows.
+  const mounted = useRef(new Map<string, { chartId: string; key: string }>());
+  const defs = useMemo(() => new Map((registry?.indicators ?? []).map((d) => [d.id, d])), [registry]);
+  const libraryActive = interval === '1D';
+  const rangeStart = interval === '1D' && bars.length ? isoDay(bars[0].timestamp) : '';
+
+  useEffect(() => {
+    let cancelled = false;
+    loadRegistry()
+      .then((r) => {
+        if (cancelled) return;
+        setRegistry(r);
+        setLibrary((current) => current.length ? current : DEFAULT_LIBRARY
+          .map((id) => r.indicators.find((d) => d.id === id))
+          .filter((d): d is IndicatorDef => !!d)
+          .map((d) => ({ uid: newUid(), id: d.id, params: defaultParams(d) })));
+      })
+      .catch(() => { if (!cancelled) setRegistryError('Unable to load the indicator list.'); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const keyFor = (a: ActiveIndicator) => {
+    const def = defs.get(a.id);
+    return [companyId, def?.scope === 'range' ? rangeStart : '', a.id, JSON.stringify(a.params)].join('|');
+  };
+
+  // Fetch whatever the active indicators need that is not cached yet.
+  useEffect(() => {
+    if (!companyId || !registry || !libraryActive) return;
+    const missing = library.filter((a) => {
+      if (a.hidden) return false;
+      const key = keyFor(a);
+      return !seriesCache.current.has(key) && !errorCache.current.has(key);
+    });
+    if (!missing.length) return;
+    let cancelled = false;
+    // Range-scoped indicators (anchored VWAP, volume profile) are computed for the visible range only;
+    // everything else over the full history so the warm-up is never cut short.
+    const groups = [
+      { start: undefined, items: missing.filter((a) => defs.get(a.id)?.scope !== 'range') },
+      { start: rangeStart || undefined, items: missing.filter((a) => defs.get(a.id)?.scope === 'range') },
+    ].flatMap(({ start, items }) => Array.from(
+      { length: Math.ceil(items.length / MAX_PER_REQUEST) },
+      (_, i) => ({ start, items: items.slice(i * MAX_PER_REQUEST, (i + 1) * MAX_PER_REQUEST) }),
+    ));
+    setLoadingSeries(true);
+    Promise.all(groups.map(({ start, items }) => marketIntelligenceApi
+      .getIndicatorSeries(companyId, items.map((a) => ({ id: a.id, params: a.params })), { start_date: start })
+      .then((response) => {
+        response.results.forEach((result, i) => {
+          const key = keyFor(items[i]);
+          if (result.error) errorCache.current.set(key, result.error);
+          else seriesCache.current.set(key, toSeries(response.dates, result));
+        });
+      })
+      .catch((err) => {
+        const detail = err?.response?.data?.detail;
+        // Not cached, so a later change retries.
+        if (!cancelled) setRegistryError(typeof detail === 'string' ? detail : 'Unable to load indicator values.');
+      })))
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingSeries(false);
+        setSeriesVersion((v) => v + 1);
+      });
+    return () => { cancelled = true; };
+    // keyFor reads defs/rangeStart/companyId, which are all listed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, registry, library, rangeStart, libraryActive, defs]);
+
+  // Draw / replace / remove library indicators to match the active list.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const wanted = new Set(libraryActive ? library.filter((a) => !a.hidden).map((a) => a.uid) : []);
+    for (const [uid, m] of mounted.current) {
+      if (!wanted.has(uid)) {
+        chart.removeIndicator({ id: m.chartId });
+        mounted.current.delete(uid);
+      }
+    }
+    if (!libraryActive) return;
+    for (const a of library) {
+      if (a.hidden) continue;
+      const def = defs.get(a.id);
+      const key = keyFor(a);
+      const series = seriesCache.current.get(key);
+      const current = mounted.current.get(a.uid);
+      if (!def || !series || current?.key === key) continue;
+      const paneId = def.display === 'overlay' ? 'candle_pane' : `pane_${a.uid}`;
+      const chartId = `${a.uid}_${Date.now()}`;
+      // Stack the new version into the same pane before removing the old one, so the pane keeps its place.
+      chart.createIndicator({
+        name: ensureRegistered(def), id: chartId, paneId,
+        calcParams: def.params.map((p) => a.params[p.name]), extendData: series,
+      } as any, true);
+      if (current) chart.removeIndicator({ id: current.chartId });
+      else sizePane(chart, paneId, LIBRARY_PANE_HEIGHT);
+      mounted.current.set(a.uid, { chartId, key });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seriesVersion, library, libraryActive, defs, chartGeneration, rangeStart, companyId]);
+
+  const indicatorErrors = Object.fromEntries(
+    library.map((a) => [a.uid, errorCache.current.get(keyFor(a)) ?? '']).filter(([, e]) => e),
+  );
 
   // Create the chart once per symbol.
   useEffect(() => {
@@ -283,6 +393,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
     if (!chart) return;
     chartRef.current = chart;
     paneIds.current = {};
+    mounted.current = new Map();
     chart.setSymbol({ ticker: symbol });
     chart.setPeriod({ span: 1, type: 'day' });
 
@@ -292,12 +403,15 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         { name, paneId: ind.main ? 'candle_pane' : undefined, calcParams: ind.params, extendData: name === 'VOL_ANOMALY' ? anomalyKey.split(',').filter(Boolean) : undefined } as any,
         ind.main,
       );
-      paneIds.current[name] = ind.main ? 'candle_pane' : (id as string);
+      paneIds.current[name] = paneOf(chart, id);
+      sizePane(chart, paneIds.current[name]);
     }
 
     // Follow the app's light/dark switch (html[data-theme]).
     const obs = new MutationObserver(() => chart.setStyles(buildStyles(isDarkTheme())));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+    setChartGeneration((g) => g + 1);   // redraw library indicators on the new chart
 
     return () => { obs.disconnect(); dispose(host); chartRef.current = null; };
   }, [symbol]);
@@ -321,7 +435,10 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         volume.slice(1).forEach((indicator) => chart.removeIndicator({ id: indicator.id }));
       }
       const paneId = chart.getIndicators({ name: 'VOL_ANOMALY' })[0]?.paneId;
-      if (paneId) paneIds.current.VOL_ANOMALY = paneId;
+      if (paneId) {
+        paneIds.current.VOL_ANOMALY = paneId;
+        sizePane(chart, paneId);
+      }
     } else {
       volume.forEach((indicator) => chart.removeIndicator({ id: indicator.id }));
       delete paneIds.current.VOL_ANOMALY;
@@ -370,7 +487,8 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         } as any,
         ind.main,
       );
-      paneIds.current[ind.name] = ind.main ? 'candle_pane' : (id as string);
+      paneIds.current[ind.name] = paneOf(chart, id);
+      sizePane(chart, paneIds.current[ind.name]);
     } else {
       chart.removeIndicator({ name: ind.name, paneId: paneIds.current[ind.name] } as any);
       delete paneIds.current[ind.name];
@@ -396,10 +514,21 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       {/* Top bar: symbol, indicators, interval */}
       <div className="relative flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
         <span className="pr-2 text-sm font-bold text-text-primary">{symbol}</span>
-        <button className={btn(menuOpen)} onClick={() => setMenuOpen((o) => !o)}>Indicators</button>
+        <button {...{ [PICKER_TOGGLE_ATTR]: '' }} onClick={() => setMenuOpen((o) => !o)}
+          aria-expanded={menuOpen} aria-haspopup="dialog"
+          className={`flex items-center gap-1.5 ${btn(menuOpen)}`}>
+          <Layers size={13} />
+          Indicators
+          {library.filter((a) => !a.hidden).length > 0 && (
+            <span className={`rounded-full px-1.5 text-[10px] tabular-nums ${menuOpen ? 'bg-white/25' : 'bg-accent/15 text-accent'}`}>
+              {library.filter((a) => !a.hidden).length}
+            </span>
+          )}
+        </button>
+        {loadingSeries && <span className="text-[11px] text-text-secondary">Calculating…</span>}
         <span className="mx-1 h-4 w-px bg-border" />
         <div className="relative">
-          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)}>{interval} ▾</button>
+          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)} title="Candle size">{INTERVAL_LABELS[interval]} candles ▾</button>
           {ivOpen && (
             <div className="absolute left-0 top-8 z-20 min-w-[130px] rounded-lg border border-border bg-bg-card p-1 shadow-lg">
               {(['Minutes', 'Hours', 'Days'] as const).map((g) => (
@@ -412,7 +541,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
                         title={disabled ? 'Needs an intraday data source' : undefined}
                         onClick={() => { setIntervalMode(i.id); setIvOpen(false); }}
                         className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-bg-elevated'} disabled:cursor-not-allowed disabled:opacity-40`}>
-                        {i.id}
+                        {INTERVAL_LABELS[i.id]}
                       </button>
                     );
                   })}
@@ -422,26 +551,27 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
           )}
         </div>
         {(['1D', '1W', '1M'] as const).map((i) => (
-          <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}>{i}</button>
+          <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}
+            title={`Each candle = 1 ${INTERVAL_LABELS[i] === 'Daily' ? 'day' : INTERVAL_LABELS[i] === 'Weekly' ? 'week' : 'month'}`}>
+            {INTERVAL_LABELS[i]}
+          </button>
         ))}
 
         {menuOpen && (
-          <div className="absolute left-2 top-9 z-20 min-w-[210px] rounded-lg border border-border bg-bg-card p-2 shadow-lg">
-            {[true, false].map((main) => (
-              <div key={String(main)}>
-                <p className="px-2 pb-1 pt-1.5 text-[11px] font-semibold text-text-secondary">
-                  {main ? 'On price chart' : 'In separate pane'}
-                </p>
-                {INDICATORS.filter((i) => i.main === main).map((ind) => (
-                  <label key={ind.name} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-text-primary hover:bg-bg-elevated">
-                    <input type="checkbox" checked={active.includes(ind.name)}
-                      onChange={(e) => toggleIndicator(ind, e.target.checked)} />
-                    {ind.label}
-                  </label>
-                ))}
-              </div>
-            ))}
-          </div>
+          <IndicatorPicker
+            registry={registry}
+            registryError={registryError}
+            active={library}
+            errors={indicatorErrors}
+            builtins={INDICATORS.map((ind) => ({ name: ind.name, label: ind.label, on: active.includes(ind.name) }))}
+            dailyOnly={!libraryActive}
+            onAdd={(def) => setLibrary((l) => [...l, { uid: newUid(), id: def.id, params: defaultParams(def) }])}
+            onRemove={(uid) => setLibrary((l) => l.filter((x) => x.uid !== uid))}
+            onParams={(uid, params) => setLibrary((l) => l.map((x) => (x.uid === uid ? { ...x, params } : x)))}
+            onToggleHidden={(uid) => setLibrary((l) => l.map((x) => (x.uid === uid ? { ...x, hidden: !x.hidden } : x)))}
+            onBuiltin={(name, on) => toggleIndicator(INDICATORS.find((i) => i.name === name)!, on)}
+            onClose={() => setMenuOpen(false)}
+          />
         )}
       </div>
 
@@ -465,12 +595,8 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         </div>
       </div>
 
-      {/* Bottom bar: date ranges */}
-      <div className="flex items-center gap-1 border-t border-border px-2 py-1">
-        {RANGES.map(([label]) => (
-          <button key={label} className={btn(range === label)} onClick={() => setRange(label)}>{label}</button>
-        ))}
-      </div>
+      {/* Bottom bar: date ranges, measured against the real trading dates */}
+      <RangeBar dates={dailyDates} value={range} onChange={setRange} shownFrom={rangeFrom} shownCount={shownCount} />
     </div>
   );
 }

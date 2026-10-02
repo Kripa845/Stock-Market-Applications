@@ -577,7 +577,8 @@ def categorize_article(
     5. Computes lexical matching score & semantic cosine similarity.
     6. Combines signals into independent heuristic confidence score.
     7. Respects manual corrections: manual tags (is_manual=True) are NEVER overwritten.
-    8. Persists ArticleCompanyTag records with confidence, method='hybrid', and evidence.
+    8. Persists ArticleCompanyTag records with confidence, method (the evidence
+       match type, e.g. 'symbol' or 'semantic_only') and evidence.
     9. Removes obsolete automatic tags that no longer meet the threshold.
     10. Marks article as processed.
 
@@ -688,7 +689,9 @@ def categorize_article(
                 hybrid_score=final_confidence,
             )
 
-            if decision["accept"]:
+            # The evidence tiers decide *whether* a match is credible; the caller's
+            # threshold (CATEGORIZATION_THRESHOLD by default) can still raise the bar.
+            if decision["accept"] and decision["confidence"] >= threshold:
                 evidence_payload = {
                     # What kind of evidence carried the decision.
                     "match_type": decision["match_type"],

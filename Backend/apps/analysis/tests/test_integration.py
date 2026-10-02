@@ -28,6 +28,7 @@ class AnalysisPipelineTests(TestCase):
         for index, day in enumerate(self.sessions):
             close = Decimal("100") + index
             DailyPrice.objects.create(
+                source="crawled",
                 company=self.company,
                 date=day,
                 open=close,
@@ -143,6 +144,7 @@ class AnalysisPipelineTests(TestCase):
     def test_volume_spike_is_flagged_after_rebuild(self):
         spike_day = self.sessions[-1] + timedelta(days=3)
         DailyPrice.objects.create(
+            source="crawled",
             company=self.company,
             date=spike_day,
             open=Decimal("130"),
@@ -164,6 +166,7 @@ class AnalysisPipelineTests(TestCase):
     def test_zero_volume_day_stores_null_vwap_and_does_not_crash(self):
         quiet_day = self.sessions[-1] + timedelta(days=3)
         DailyPrice.objects.create(
+            source="crawled",
             company=self.company,
             date=quiet_day,
             open=Decimal("124"),

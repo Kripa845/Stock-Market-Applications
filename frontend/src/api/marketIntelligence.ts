@@ -66,4 +66,71 @@ export const marketIntelligenceApi = {
     }>('/market-intelligence/rankings/', { params: { metric, limit: 20 } });
     return data;
   },
+  async getIndicatorRegistry() {
+    const { data } = await apiClient.get<IndicatorRegistry>('/market-intelligence/indicators/registry/');
+    return data;
+  },
+  async getIndicatorSeries(
+    companyId: number,
+    specs: { id: string; params: IndicatorParams }[],
+    options: { start_date?: string; benchmark?: string } = {},
+  ) {
+    const { data } = await apiClient.get<IndicatorSeriesResponse>(
+      `/market-intelligence/companies/${companyId}/indicators/`,
+      { params: { specs: JSON.stringify(specs), ...options } },
+    );
+    return data;
+  },
 };
+
+// ─── Indicator library (Backend/apps/market_intelligence/indicators) ─────────────
+export type IndicatorParams = Record<string, number | string>;
+
+export interface IndicatorParamDef {
+  name: string;
+  label: string;
+  default: number | string;
+  min: number;
+  max: number;
+  kind: 'int' | 'float' | 'choice';
+  choices: string[];
+}
+
+export interface IndicatorDef {
+  id: string;
+  name: string;
+  category: string;
+  inputs: string[];
+  params: IndicatorParamDef[];
+  outputs: { key: string; label: string; kind: 'line' | 'bar' | 'dot' }[];
+  display: 'overlay' | 'panel';
+  ref_lines: number[];
+  value_range: number[];
+  fill: string[];
+  color_by: string;
+  scope: 'stock' | 'range' | 'market' | 'benchmark' | 'floorsheet';
+  notes: string;
+}
+
+export interface IndicatorRegistry {
+  indicators: IndicatorDef[];
+  not_implemented: { name: string; reason: string }[];
+}
+
+export interface IndicatorResult {
+  id: string;
+  params?: IndicatorParams;
+  // One value per date in IndicatorSeriesResponse.dates; null during warm-up.
+  outputs?: Record<string, (number | null)[]>;
+  extra?: { rows?: { low: number; high: number; volume: number }[] };
+  error?: string;
+}
+
+export interface IndicatorSeriesResponse {
+  company_id: number;
+  symbol: string;
+  benchmark: string | null;
+  dates: string[];
+  results: IndicatorResult[];
+  disclaimer: string;
+}

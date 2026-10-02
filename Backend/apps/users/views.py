@@ -9,6 +9,7 @@ from rest_framework.permissions import (
     IsAuthenticated,
 )
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from rest_framework_simplejwt.views import (
@@ -227,6 +228,9 @@ class CustomTokenObtainPairView(
     serializer_class = (
         CustomTokenObtainPairSerializer
     )
+    # Limits password guessing; rate is REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["auth"].
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
 
 # ======================================================
@@ -235,6 +239,8 @@ class CustomTokenObtainPairView(
 
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
 
     def post(self, request):
         serializer = (

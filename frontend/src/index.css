@@ -611,3 +611,52 @@ html[data-theme="light"] .hover\:text-down:hover {
 html[data-theme="light"] .stroke-down {
   stroke: #EF4444 !important;
 }
+
+/* =========================
+   LANDING PAGE THEME
+   Dark by default; light when the app theme is light (html[data-theme="light"]).
+   ========================= */
+
+.landing {
+  --l-bg: #050409;
+  --l-header: rgba(3, 2, 7, 0.75);
+  --l-surface: rgba(255, 255, 255, 0.03);
+  --l-surface-hover: rgba(255, 255, 255, 0.06);
+  --l-surface-solid: #0d0c12;
+  --l-card-from: rgba(255, 255, 255, 0.05);
+  --l-card-to: rgba(255, 255, 255, 0.01);
+  --l-text: #ffffff;
+  --l-text-2: #d4d4d8;
+  --l-muted: #a1a1aa;
+  --l-faint: #71717a;
+  --l-border: rgba(255, 255, 255, 0.1);
+  --l-border-strong: rgba(255, 255, 255, 0.28);
+  --l-accent: #c4b5fd;
+  --l-pill-text: #ede9fe;
+  --l-number: rgba(255, 255, 255, 0.06);
+  --l-btn-bg: linear-gradient(to bottom, #ffffff, #e4e4e7);
+  --l-btn-text: #0b0a12;
+  --l-cta-bg: #0c0918;
+}
+
+html[data-theme="light"] .landing {
+  --l-bg: #f8f7fc;
+  --l-header: rgba(248, 247, 252, 0.8);
+  --l-surface: rgba(17, 12, 46, 0.03);
+  --l-surface-hover: rgba(17, 12, 46, 0.06);
+  --l-surface-solid: #ffffff;
+  --l-card-from: #ffffff;
+  --l-card-to: #f5f3ff;
+  --l-text: #0f0d1a;
+  --l-text-2: #3f3a52;
+  --l-muted: #5b566b;
+  --l-faint: #868198;
+  --l-border: rgba(17, 12, 46, 0.1);
+  --l-border-strong: rgba(17, 12, 46, 0.24);
+  --l-accent: #6d28d9;
+  --l-pill-text: #5b21b6;
+  --l-number: rgba(17, 12, 46, 0.07);
+  --l-btn-bg: linear-gradient(to bottom, #8b5cf6, #6d28d9);
+  --l-btn-text: #ffffff;
+  --l-cta-bg: #efe9ff;
+}

@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.db.models import Q
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.services.price_source import requested_price_source
 from apps.market_data.services.intraday import aggregate_intraday_trades
 from apps.market_data.serializers import DailyPriceSerializers, FloorsheetSerializer
 from apps.market_data.volume_anomalies import get_volume_anomalies
@@ -48,7 +49,7 @@ def _company_list_queryset():
         .prefetch_related(
             Prefetch(
                 "dailyprice_set",
-                queryset=DailyPrice.objects.order_by("-date"),
+                queryset=DailyPrice.objects.filter(source="crawled").order_by("-date"),
                 to_attr="_prices_cache",
             ),
             "article_tags__article",
@@ -207,9 +208,8 @@ class CompanyPricesAPIView(APIView):
         require_company_access(request.user, company.pk)
         range_param = request.query_params.get("range", "31d").lower()
 
-        prices_qs = DailyPrice.objects.filter(company=company).order_by("date")
-        if request.query_params.get("source") == "crawled":
-            prices_qs = prices_qs.filter(source="crawled")
+        source = requested_price_source(request)
+        prices_qs = DailyPrice.objects.filter(company=company, source=source).order_by("date")
 
         if range_param in self.RANGE_DAYS:
             # Anchor to today so the window is always the current rolling period.
@@ -295,6 +295,7 @@ class CompanyRvolAPIView(APIView):
             ma_length=values["ma_length"],
             ma_type=values["ma_type"],
             threshold=values["threshold"],
+            source=values["source"],
         )
         return Response(RvolPointSerializer(rows, many=True).data)
 

@@ -193,7 +193,7 @@ from apps.market_data.models import DailyPrice
 DEFAULT_SAMPLE_OFFSETS = (0, 5, 10, 15, 20, 25)
 
 
-def trading_dates(company=None, limit=None, since=None):
+def trading_dates(company=None, limit=None, since=None, source="crawled"):
     """
     Return distinct trading dates, most recent first.
 
@@ -201,7 +201,7 @@ def trading_dates(company=None, limit=None, since=None):
     :param limit: maximum number of dates to return.
     :param since: only include dates >= this date.
     """
-    queryset = DailyPrice.objects.all()
+    queryset = DailyPrice.objects.filter(source=source)
 
     if company is not None:
         queryset = queryset.filter(company=company)
@@ -222,7 +222,7 @@ def trading_dates(company=None, limit=None, since=None):
     return list(queryset)
 
 
-def latest_trading_date(company=None):
+def latest_trading_date(company=None, source="crawled"):
     """
     Latest trading date we actually hold data for, or ``None``.
 
@@ -230,11 +230,11 @@ def latest_trading_date(company=None):
     three days, the latest available trading date is three days old and
     every downstream window must anchor to that, not to today.
     """
-    dates = trading_dates(company=company, limit=1)
+    dates = trading_dates(company=company, limit=1, source=source)
     return dates[0] if dates else None
 
 
-def previous_trading_sessions(anchor_date, count, company=None):
+def previous_trading_sessions(anchor_date, count, company=None, source="crawled"):
     """
     Return the ``count`` trading dates strictly BEFORE ``anchor_date``,
     most recent first.
@@ -245,7 +245,7 @@ def previous_trading_sessions(anchor_date, count, company=None):
     if anchor_date is None or count <= 0:
         return []
 
-    queryset = DailyPrice.objects.filter(date__lt=anchor_date)
+    queryset = DailyPrice.objects.filter(source=source, date__lt=anchor_date)
 
     if company is not None:
         queryset = queryset.filter(company=company)
@@ -262,6 +262,7 @@ def select_sample_dates(
     offsets=DEFAULT_SAMPLE_OFFSETS,
     company=None,
     anchor_date=None,
+    source="crawled",
 ):
     """
     Deterministically select trading dates by SESSION offset.
@@ -282,7 +283,7 @@ def select_sample_dates(
 
     needed = max(ordered_offsets) + 1
 
-    available = trading_dates(company=company, limit=None)
+    available = trading_dates(company=company, limit=None, source=source)
 
     if anchor_date is not None:
         available = [d for d in available if d <= anchor_date]
@@ -303,7 +304,7 @@ def select_sample_dates(
     return sorted(selected, reverse=True)
 
 
-def rolling_window_bounds(window_days=31, company=None, anchor_date=None):
+def rolling_window_bounds(window_days=31, company=None, anchor_date=None, source="crawled"):
     """
     Return ``(start_date, end_date)`` for the rolling analysis window.
 
@@ -313,7 +314,7 @@ def rolling_window_bounds(window_days=31, company=None, anchor_date=None):
 
     Returns ``(None, None)`` when no trading data exists at all.
     """
-    end_date = anchor_date or latest_trading_date(company=company)
+    end_date = anchor_date or latest_trading_date(company=company, source=source)
 
     if end_date is None:
         return None, None
@@ -321,12 +322,12 @@ def rolling_window_bounds(window_days=31, company=None, anchor_date=None):
     return end_date - timedelta(days=int(window_days)), end_date
 
 
-def is_trading_date(value, company=None):
+def is_trading_date(value, company=None, source="crawled"):
     """True when ``value`` is a date the market actually traded on."""
     if not isinstance(value, date):
         return False
 
-    queryset = DailyPrice.objects.filter(date=value)
+    queryset = DailyPrice.objects.filter(source=source, date=value)
 
     if company is not None:
         queryset = queryset.filter(company=company)

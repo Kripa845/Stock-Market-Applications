@@ -20,11 +20,12 @@ SECRET_KEY = os.getenv(
     "django-insecure-change-me-in-production",
 )
 
-DEBUG = os.getenv("DEBUG", "True") == "True"
+# Safe defaults: development turns these on explicitly in .env.
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
 ALLOWED_HOSTS = os.getenv(
     "ALLOWED_HOSTS",
-    "*,localhost,127.0.0.1,testserver",
+    "localhost,127.0.0.1,testserver",
 ).split(",")
 
 
@@ -155,6 +156,10 @@ REST_FRAMEWORK = {
         "rest_framework.pagination.PageNumberPagination"
     ),
     "PAGE_SIZE": 20,
+    # Used by the login and registration views (throttle_scope = "auth").
+    "DEFAULT_THROTTLE_RATES": {
+        "auth": os.getenv("AUTH_THROTTLE_RATE", "10/min"),
+    },
 }
 
 SIMPLE_JWT = {
@@ -245,6 +250,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.analysis.tasks.rebuild_all_analysis",
         "schedule": crontab(minute=45, hour=18),
     },
+    "build-market-intelligence-after-analysis": {
+        "task": "apps.market_intelligence.tasks.build_daily_market_intelligence",
+        "schedule": crontab(minute=0, hour=19),
+    },
 
     # ---- News categorization ----
     "categorize-unprocessed-news-every-10-minutes": {
@@ -305,7 +314,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5174",
 ]
-CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "True") == "True"
+CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False") == "True"
 CORS_ALLOW_CREDENTIALS = True
 
 

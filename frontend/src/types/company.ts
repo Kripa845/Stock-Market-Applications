@@ -18,6 +18,7 @@ export interface Company {
 
   // ── Latest daily price (SerializerMethodField) ──────────────────────
   latest_price: number;
+  latest_price_date: string | null;
   price_change: number;
   price_change_percent: number;
 

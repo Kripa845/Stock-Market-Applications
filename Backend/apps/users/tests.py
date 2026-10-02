@@ -346,7 +346,7 @@ class CompanyScopedEndpointTests(TestCase):
         _give_access(self.user_b, self.denied)
         for company, close in ((self.allowed, 10), (self.denied, 20)):
             DailyPrice.objects.create(
-                company=company, date=date(2025, 1, 2), open=close, high=close,
+                company=company, source="crawled", date=date(2025, 1, 2), open=close, high=close,
                 low=close, close=close, volume=100, turnover=1000,
             )
         self.client = APIClient()
@@ -394,3 +394,31 @@ class CompanyScopedEndpointTests(TestCase):
         self.assertEqual(response.data, [])
         response = self.client.get("/api/reports/export/trading/")
         self.assertEqual(response.status_code, 204)
+
+
+class AuthHardeningTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.client = APIClient()
+
+    def test_login_is_rate_limited(self):
+        from unittest.mock import patch
+        from rest_framework.throttling import ScopedRateThrottle
+
+        User.objects.create_user(username="throttled", email="t@example.test", password="Correct-horse-9")
+        with patch.object(ScopedRateThrottle, "THROTTLE_RATES", {"auth": "2/min"}):
+            codes = [
+                self.client.post("/api/users/login/", {"username": "throttled", "password": "wrong"}).status_code
+                for _ in range(3)
+            ]
+        self.assertEqual(codes, [401, 401, 429])
+
+    def test_registration_rejects_common_passwords(self):
+        response = self.client.post("/api/users/register/", {
+            "username": "weakling", "email": "weak@example.test",
+            "password": "password123", "password_confirm": "password123",
+        }, format="json")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("password", response.data)
+        self.assertFalse(User.objects.filter(username="weakling").exists())

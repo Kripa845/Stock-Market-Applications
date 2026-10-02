@@ -584,6 +584,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import KlinePriceChart from '../components/charts/KlinePriceChart';
 import {
+  RANGE_TITLES, filterRange, rangeAvailable, rangeStart, unavailableReason, type RangeId,
+} from '../components/charts/chartRanges';
+import {
   Activity, AlertTriangle,
   Loader2, Newspaper,
   RefreshCw, TrendingUp,
@@ -652,7 +655,7 @@ export default function CompanyAnalysisDashboard() {
   const [volumeAnomalyRefresh, setVolumeAnomalyRefresh] = useState(0);
   const [loadingVolumeAnomalies, setLoadingVolumeAnomalies] = useState(false);
   const [volumeAnomalyError, setVolumeAnomalyError] = useState('');
-  const [priceRange,  setPriceRange]  = useState<'7d' | '30d' | '90d'>('30d');
+  const [rangeChoice, setPriceRange]  = useState<RangeId>('1M');
   const [loading,     setLoading]     = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error,       setError]       = useState('');
@@ -677,7 +680,7 @@ export default function CompanyAnalysisDashboard() {
     setPrices([]);
     setCategorizedNews(null);
     Promise.allSettled([
-      analysisApi.getPrices(selectedId, '180d', { source: 'crawled' }),
+      analysisApi.getPrices(selectedId, 'all', { source: 'crawled' }),
       analysisApi.getBehavior(selectedId),
       analysisApi.getCategorizedCompanyNews(selectedId),
     ]).then(([prRes, bhRes, newsRes]) => {
@@ -694,13 +697,12 @@ export default function CompanyAnalysisDashboard() {
 
   // ── Derived values ──────────────────────────────────────────────────────────
   const company  = companies.find(c => c.id === selectedId);
-  const chartPrices = useMemo(() => {
-    const days = priceRange === '7d' ? 7 : priceRange === '30d' ? 30 : 90;
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
-    return prices.filter(point => point.date >= startDate);
-  }, [prices, priceRange]);
+  // Ranges count back from the latest crawled session, not from today, so a pause in crawling
+  // never empties the view. A range the data cannot fill falls back to all available data.
+  const priceDates = useMemo(() => [...new Set(prices.map(p => p.date))].sort(), [prices]);
+  const priceRange: RangeId = rangeAvailable(priceDates, rangeChoice) ? rangeChoice : 'All';
+  const rangeFrom = rangeStart(priceDates, priceRange);
+  const chartPrices = useMemo(() => filterRange(prices, rangeFrom), [prices, rangeFrom]);
   const fetchMinuteBars = useCallback(
     (days: number) => selectedId ? analysisApi.getIntradayBars(selectedId, days) : Promise.resolve([]),
     [selectedId],
@@ -714,9 +716,8 @@ export default function CompanyAnalysisDashboard() {
   useEffect(() => {
     if (!company) return;
     let cancelled = false;
-    const start = new Date();
-    start.setDate(start.getDate() - 180);
-    const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    const startDate = rangeStart(priceDates, rangeAvailable(priceDates, '6M') ? '6M' : 'All');
+    if (!startDate) return;
     setVolumeAnomalies([]);
     setLoadingVolumeAnomalies(true);
     setVolumeAnomalyError('');
@@ -725,15 +726,13 @@ export default function CompanyAnalysisDashboard() {
       .catch(() => { if (!cancelled) setVolumeAnomalyError('Unable to load volume anomaly history.'); })
       .finally(() => { if (!cancelled) setLoadingVolumeAnomalies(false); });
     return () => { cancelled = true; };
-  }, [company, volumeAnomalyRefresh]);
+  }, [company, volumeAnomalyRefresh, priceDates]);
 
   useEffect(() => {
     if (!company) return;
     let cancelled = false;
-    const days = priceRange === '7d' ? 7 : priceRange === '30d' ? 30 : 90;
-    const start = new Date();
-    start.setDate(start.getDate() - days);
-    const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    const startDate = rangeFrom;
+    if (!startDate) return;
     setLoadingNewsForward(true);
     setNewsForwardError('');
     analysisApi.getNewsSentimentForward(company.symbol, { start_date: startDate })
@@ -741,7 +740,7 @@ export default function CompanyAnalysisDashboard() {
       .catch(() => { if (!cancelled) setNewsForwardError('Unable to load news sentiment correlation.'); })
       .finally(() => { if (!cancelled) setLoadingNewsForward(false); });
     return () => { cancelled = true; };
-  }, [company, priceRange]);
+  }, [company, rangeFrom]);
 
   const latestClose = chartPrices.length ? parseFloat(chartPrices[chartPrices.length - 1].close) : 0;
   const firstClose  = chartPrices.length ? parseFloat(chartPrices[0].close) : 0;
@@ -825,7 +824,7 @@ export default function CompanyAnalysisDashboard() {
               color={positive ? 'text-up' : 'text-down'}
             />
             <StatPill
-              label="VWAP 30d"
+              label={`VWAP ${priceRange}`}
               value={`Rs. ${vwap30.toFixed(2)}`}
               color="text-yellow-400"
             />
@@ -847,23 +846,28 @@ export default function CompanyAnalysisDashboard() {
 
       {/* ── Range selector ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 bg-bg-elevated rounded-lg p-0.5 w-fit">
-        {(['7d', '30d', '90d'] as const).map(r => (
-          <button
-            key={r}
-            onClick={() => setPriceRange(r)}
-            className={clsx(
-              'px-4 py-1.5 rounded text-xs font-medium transition-all',
-              priceRange === r
-                ? 'bg-accent text-white'
-                : 'text-text-secondary hover:text-text-primary',
-            )}
-          >
-            {r === '7d' ? '1W' : r === '30d' ? '1M' : '3M'}
-          </button>
-        ))}
+        {(['5D', '1M', '3M', 'All'] as const).map(r => {
+          const available = rangeAvailable(priceDates, r);
+          return (
+            <button
+              key={r}
+              disabled={!available}
+              title={available ? RANGE_TITLES[r] : unavailableReason(priceDates, r)}
+              onClick={() => setPriceRange(r)}
+              className={clsx(
+                'px-4 py-1.5 rounded text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-35',
+                priceRange === r
+                  ? 'bg-accent text-white'
+                  : 'text-text-secondary enabled:hover:text-text-primary',
+              )}
+            >
+              {r}
+            </button>
+          );
+        })}
       </div>
 
-      {chartPrices.length === 0 && !loadingData ? (
+      {prices.length === 0 && !loadingData ? (
         <div className="card py-16 text-center">
           <p className="text-sm text-text-muted">No price data available for this company.</p>
         </div>
@@ -872,12 +876,13 @@ export default function CompanyAnalysisDashboard() {
           {/* TradingView-style price and volume chart */}
           <div className="card space-y-2">
             <SectionTitle icon={TrendingUp}>Price Action</SectionTitle>
-            <div className="h-[560px]">
+            <div className="h-[720px]">
               <KlinePriceChart
                 prices={prices}
                 symbol={company?.symbol ?? ''}
                 anomalyDates={anomalyDates}
                 fetchMinuteBars={selectedId ? fetchMinuteBars : undefined}
+                companyId={selectedId ?? undefined}
               />
             </div>
           </div>

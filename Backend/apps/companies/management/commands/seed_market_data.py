@@ -1,8 +1,10 @@
 import datetime
 import random
+import secrets
 from decimal import Decimal
+from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from apps.analysis.models import DailyAnalysis
@@ -17,37 +19,67 @@ User = get_user_model()
 class Command(BaseCommand):
     help = "Seeds rich realistic market data, historical prices, floorsheet, news tags, analysis, and users."
 
+    def add_arguments(self, parser):
+        parser.add_argument("--force", action="store_true", help="Allow seeding outside DEBUG. This command adds synthetic data and removes only rows marked source=seeded.")
+        parser.add_argument("--with-users", action="store_true", help="Create missing demo users with random passwords and print those passwords once.")
+
     def handle(self, *args, **options):
+        if not settings.DEBUG and not options["force"]:
+            raise CommandError("Refusing to seed outside DEBUG. Re-run with --force only if synthetic market data is intended.")
+        self.stderr.write(self.style.WARNING(
+            "This command writes synthetic demo data and replaces DailyPrice rows where source='seeded'. "
+            "It does not remove crawled, manual, or unverified price rows."
+        ))
         self.stdout.write("Starting database seeding...")
 
         # 1. Seed RBAC Users
-        admin_user, _ = User.objects.get_or_create(
-            username="admin",
-            defaults={"email": "admin@genex.com", "role": User.Role.ADMIN, "first_name": "Edward", "last_name": "Admin"},
-        )
-        admin_user.set_password("admin123")
-        admin_user.role = User.Role.ADMIN
-        admin_user.is_staff = True
-        admin_user.is_superuser = True
-        admin_user.save()
+        provision_users = settings.DEBUG or options["with_users"]
+        admin_user = User.objects.filter(username="admin").first()
+        analyst_user = User.objects.filter(username="analyst").first()
+        viewer_user = User.objects.filter(username="viewer").first()
+        generated_passwords = {}
+        if provision_users:
+            admin_user, created = User.objects.get_or_create(
+                username="admin",
+                defaults={"email": "admin@genex.com", "role": User.Role.ADMIN, "first_name": "Edward", "last_name": "Admin"},
+            )
+            if created or admin_user.check_password("admin123"):
+                password = secrets.token_urlsafe(24)
+                admin_user.set_password(password)
+                generated_passwords["admin"] = password
+            admin_user.role = User.Role.ADMIN
+            admin_user.is_staff = True
+            admin_user.is_superuser = True
+            admin_user.save()
 
-        analyst_user, _ = User.objects.get_or_create(
-            username="analyst",
-            defaults={"email": "analyst@genex.com", "role": User.Role.ANALYST, "first_name": "Sarah", "last_name": "Analyst"},
-        )
-        analyst_user.set_password("analyst123")
-        analyst_user.role = User.Role.ANALYST
-        analyst_user.save()
+            analyst_user, created = User.objects.get_or_create(
+                username="analyst",
+                defaults={"email": "analyst@genex.com", "role": User.Role.ANALYST, "first_name": "Sarah", "last_name": "Analyst"},
+            )
+            if created or analyst_user.check_password("analyst123"):
+                password = secrets.token_urlsafe(24)
+                analyst_user.set_password(password)
+                generated_passwords["analyst"] = password
+            analyst_user.role = User.Role.ANALYST
+            analyst_user.save()
 
-        viewer_user, _ = User.objects.get_or_create(
-            username="viewer",
-            defaults={"email": "viewer@genex.com", "role": User.Role.VIEWER, "first_name": "John", "last_name": "Viewer"},
-        )
-        viewer_user.set_password("viewer123")
-        viewer_user.role = User.Role.VIEWER
-        viewer_user.save()
+            viewer_user, created = User.objects.get_or_create(
+                username="viewer",
+                defaults={"email": "viewer@genex.com", "role": User.Role.VIEWER, "first_name": "John", "last_name": "Viewer"},
+            )
+            if created or viewer_user.check_password("viewer123"):
+                password = secrets.token_urlsafe(24)
+                viewer_user.set_password(password)
+                generated_passwords["viewer"] = password
+            viewer_user.role = User.Role.VIEWER
+            viewer_user.save()
 
-        self.stdout.write(self.style.SUCCESS("Users seeded: admin, analyst, viewer (passwords: admin123, analyst123, viewer123)"))
+        if generated_passwords:
+            self.stdout.write(self.style.WARNING("Generated demo credentials (shown once; store them securely):"))
+            for username, password in generated_passwords.items():
+                self.stdout.write(f"{username}: {password}")
+        elif not provision_users:
+            self.stdout.write("Demo user creation skipped outside DEBUG; pass --with-users to create missing demo users.")
 
         # 2. Seed Companies
         companies_data = [
@@ -81,7 +113,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Companies configured: {len(companies_dict)}"))
 
         # 3. Seed 1-Year Historical Prices (Daily OHLCV)
-        DailyPrice.objects.all().delete()
+        DailyPrice.objects.filter(source="seeded").delete()
         today = datetime.date.today()
         num_days = 250  # ~1 year trading days
         random.seed(42)
@@ -111,6 +143,7 @@ class Command(BaseCommand):
                 price_objects.append(
                     DailyPrice(
                         company=company,
+                        source="seeded",
                         date=d,
                         open=Decimal(str(open_p)),
                         high=Decimal(str(high_p)),
@@ -130,7 +163,7 @@ class Command(BaseCommand):
         analysis_objects = []
 
         for symbol, (company, _) in companies_dict.items():
-            prices = list(DailyPrice.objects.filter(company=company).order_by("date"))
+            prices = list(DailyPrice.objects.filter(company=company, source="seeded").order_by("date"))
             for i, p in enumerate(prices[-60:]):  # Last 60 days
                 # 30-day window for VWAP and avg volume
                 window = prices[max(0, i - 30): i + 1]

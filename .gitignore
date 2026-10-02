@@ -1,2 +1,19 @@
-"frontend.zip" 
-"*.zip" 
+# Archives
+*.zip
+
+# Dependencies installed outside the app folders
+/node_modules/
+
+# Local scratch output that should never be committed
+/*.txt
+/fix_*.py
+/findstr
+/git
+/nul)
+
+# Backend data dumps, logs and crawler output (Backend/.gitignore covers the rest)
+Backend/data.json
+Backend/*.sqlite3.backup
+Backend/crawl_log.txt
+Backend/crawlers/crawl_log.txt
+Backend/crawlers/*.json

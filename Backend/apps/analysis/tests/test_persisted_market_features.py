@@ -18,13 +18,18 @@ class VolumeAnomalyTests(TestCase):
         self.assertEqual(result[-1]["reason"], "multiplier")
         self.assertIsNone(result[-1]["z_score"])
 
-    def test_zscore_rule_and_combined_reason(self):
+    def test_only_the_multiplier_rule_flags(self):
+        # A spike that is many standard deviations out but under 2.5x the mean is not flagged:
+        # detect_volume_anomalies implements the multiplier rule only.
         start = date(2025, 2, 1)
         baseline = [90 + (i % 5) * 5 for i in range(20)]
-        zscore_result = detect_volume_anomalies([(start + timedelta(days=i), v) for i, v in enumerate(baseline + [140])])[-1]
-        both_result = detect_volume_anomalies([(start + timedelta(days=i), v) for i, v in enumerate(baseline + [500])])[-1]
-        self.assertEqual(zscore_result["reason"], "zscore")
-        self.assertEqual(both_result["reason"], "both")
+        below = detect_volume_anomalies([(start + timedelta(days=i), v) for i, v in enumerate(baseline + [140])])[-1]
+        above = detect_volume_anomalies([(start + timedelta(days=i), v) for i, v in enumerate(baseline + [500])])[-1]
+        self.assertGreater(below["z_score"], 3)
+        self.assertFalse(below["is_anomaly"])
+        self.assertEqual(below["reason"], "")
+        self.assertTrue(above["is_anomaly"])
+        self.assertEqual(above["reason"], "multiplier")
 
 
 class NewsPriceCorrelationTests(TestCase):

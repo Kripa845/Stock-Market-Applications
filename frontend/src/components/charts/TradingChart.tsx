@@ -1,8 +1,13 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  dispose, init, registerIndicator,
+  dispose, init,
   type Chart, type KLineData,
 } from 'klinecharts';
+import { paneOf } from './customIndicators';
+import RangeBar from './RangeBar';
+import {
+  defaultRange, rangeAvailable, rangeCalendarDays, rangeStart as rangeStartFor, type RangeId,
+} from './chartRanges';
 
 // Same shape as KlinePriceChart, so <TradingChart prices={...} symbol={...} /> is a drop-in swap.
 interface ChartPrice {
@@ -29,57 +34,7 @@ interface Props {
   fetchMinuteBars?: (days: number) => Promise<MinuteBar[]>;
 }
 
-// â”€â”€â”€ Custom indicators (module level, registered once) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// Same two as your KlinePriceChart, kept so nothing you already show is lost.
-registerIndicator({
-  name: 'DAILY_VWAP', shortName: 'VWAP', series: 'price',
-  figures: [{ key: 'vwap', title: 'VWAP: ', type: 'line' }],
-  calc: (list) => list.map((d) => ({ vwap: d.volume && d.turnover ? d.turnover / d.volume : d.close })),
-});
-
-registerIndicator({
-  name: 'VOL_ANOMALY', shortName: 'VOL',
-  figures: [{
-    key: 'volume', title: 'VOL: ', type: 'bar', baseValue: 0,
-    styles: (data: any) => {
-      if (data.current?.indicatorData?.anomaly) return { color: '#d946ef' };
-      const k = data.current?.kLineData;
-      return { color: k && k.close >= k.open ? '#22C55E' : '#EF4444' };
-    },
-  }],
-  calc: (list, ind: any) => {
-    const flagged: string[] = ind.extendData ?? [];
-    return list.map((d) => ({
-      volume: d.volume ?? 0,
-      anomaly: flagged.includes(new Date(d.timestamp).toISOString().slice(0, 10)),
-    }));
-  },
-});
-
-// Approximation of a "buy sell pressure" pane: 14-bar share of up-volume vs down-volume, 0-100.
-// Replace calc() with your real formula when you have it.
-registerIndicator({
-  name: 'BSP', shortName: 'Buy/Sell pressure', calcParams: [14],
-  figures: [
-    { key: 'buy', title: 'Buy: ', type: 'line' },
-    { key: 'sell', title: 'Sell: ', type: 'line' },
-  ],
-  calc: (list, ind: any) => {
-    const n: number = ind.calcParams?.[0] ?? 14;
-    return list.map((_, i) => {
-      if (i < n - 1) return {};
-      let up = 0, down = 0;
-      for (let j = i - n + 1; j <= i; j++) {
-        const x = (list[j].close - list[j].open) * (list[j].volume ?? 0);
-        if (x > 0) up += x; else down -= x;
-      }
-      const buy = up + down ? (up / (up + down)) * 100 : 50;
-      return { buy, sell: 100 - buy };
-    });
-  },
-});
-
-// â”€â”€â”€ Menu config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Menu config ──────────────────────────────────────────────────────────────
 type Ind = { name: string; label: string; main: boolean; params?: number[] };
 const INDICATORS: Ind[] = [
   { name: 'MA',         label: 'Moving Average',    main: true, params: [5, 10, 30, 60] },
@@ -94,17 +49,22 @@ const INDICATORS: Ind[] = [
 const DEFAULT_ON = ['MA', 'DAILY_VWAP', 'VOL_ANOMALY'];
 
 const TOOLS = [
-  { id: 'cursor', icon: 'âœ›', title: 'Cursor',            overlay: null },
-  { id: 'seg',    icon: 'â•±', title: 'Trend line',        overlay: 'segment' },
-  { id: 'ray',    icon: 'â†—', title: 'Ray',               overlay: 'rayLine' },
-  { id: 'hor',    icon: 'â€•', title: 'Horizontal line',   overlay: 'horizontalStraightLine' },
-  { id: 'chan',   icon: 'â–¤', title: 'Parallel channel',  overlay: 'parallelStraightLine' },
-  { id: 'fib',    icon: 'â‰¡', title: 'Fib retracement',   overlay: 'fibonacciLine' },
-  { id: 'pchan',  icon: 'â‡•', title: 'Price channel',     overlay: 'priceChannelLine' },
-  { id: 'clear',  icon: 'ðŸ—‘', title: 'Remove drawings',   overlay: null },
+  { id: 'cursor', icon: '↖', title: 'Cursor',            overlay: null },
+  { id: 'seg',    icon: '╱', title: 'Trend line',        overlay: 'segment' },
+  { id: 'ray',    icon: '↗', title: 'Ray',               overlay: 'rayLine' },
+  { id: 'hor',    icon: '―', title: 'Horizontal line',   overlay: 'horizontalStraightLine' },
+  { id: 'chan',   icon: '▱', title: 'Parallel channel',  overlay: 'parallelStraightLine' },
+  { id: 'fib',    icon: '≋', title: 'Fib retracement',   overlay: 'fibonacciLine' },
+  { id: 'pchan',  icon: '↕', title: 'Price channel',     overlay: 'priceChannelLine' },
+  { id: 'clear',  icon: '×', title: 'Remove drawings',   overlay: null },
 ] as const;
 
 type Interval = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '1D' | '1W' | '1M';
+// Candle size, worded differently from the 1D / 5D / 1M *ranges* in the bottom bar so the two never look alike.
+const INTERVAL_LABELS: Record<Interval, string> = {
+  '1m': '1 min', '3m': '3 min', '5m': '5 min', '15m': '15 min', '30m': '30 min',
+  '1h': '1 hour', '2h': '2 hours', '1D': 'Daily', '1W': 'Weekly', '1M': 'Monthly',
+};
 type Period = { span: number; type: 'minute' | 'hour' | 'day' | 'week' | 'month' };
 const INTERVALS: { id: Interval; group: 'Minutes' | 'Hours' | 'Days'; minutes?: number; period: Period }[] = [
   { id: '1m',  group: 'Minutes', minutes: 1,   period: { span: 1,  type: 'minute' } },
@@ -123,9 +83,8 @@ const INTERVALS: { id: Interval; group: 'Minutes' | 'Hours' | 'Days'; minutes?: 
 const NPT_OFFSET_MS = 345 * 60_000;
 const NPT_SESSION_OPEN_MS = 11 * 60 * 60_000;
 const MAX_INTRADAY_DAYS = 60;
-const RANGES = [['1M', 30], ['3M', 90], ['6M', 180], ['YTD', -1], ['1Y', 365], ['All', 1e9]] as const;
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function toBars(prices: ChartPrice[]): KLineData[] {
   return prices.map((p) => {
     const [y, m, d] = p.date.split('-').map(Number);
@@ -222,7 +181,7 @@ function buildStyles(dark: boolean) {
   };
 }
 
-// â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
@@ -230,7 +189,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   const anomalyKey = (anomalyDates ?? []).join(',');
 
   const [interval, setIntervalMode] = useState<Interval>('1D');
-  const [range, setRange] = useState<(typeof RANGES)[number][0]>('All');
+  const [rangeChoice, setRange] = useState<RangeId | null>(null);
   const [tool, setTool] = useState<string>('cursor');
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<string[]>(DEFAULT_ON);
@@ -245,8 +204,12 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   const cfg = INTERVALS.find((i) => i.id === interval)!;
   const intraday = cfg.group !== 'Days';
-  const rangeSpec = RANGES.find((r) => r[0] === range)![1];
-  const rangeDays = rangeSpec === -1 ? 365 : rangeSpec;
+  // Ranges are measured against the real trading dates in `prices` (see chartRanges.ts).
+  const dailyDates = useMemo(() => [...new Set(prices.map((p) => p.date))].sort(), [prices]);
+  const range: RangeId = rangeChoice && rangeAvailable(dailyDates, rangeChoice) ? rangeChoice : defaultRange(dailyDates);
+  const rangeFrom = rangeStartFor(dailyDates, range);
+  const shownCount = rangeFrom ? dailyDates.filter((d) => d >= rangeFrom).length : 0;
+  const rangeDays = Math.max(1, rangeCalendarDays(dailyDates, rangeFrom));
 
   // Intraday: fetch 1-minute bars whenever the interval group, range or symbol changes.
   useEffect(() => {
@@ -263,11 +226,10 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   const bars = useMemo(() => {
     if (intraday) return aggregateIntraday(minuteBars, cfg.minutes!);
     const all = toBars(prices);
-    if (!all.length) return all;
-    const last = all[all.length - 1].timestamp;
-    const from = rangeSpec === -1 ? Date.UTC(new Date(last).getUTCFullYear(), 0, 1) : last - rangeSpec * 864e5;
+    if (!all.length || !rangeFrom) return all;
+    const from = Date.UTC(+rangeFrom.slice(0, 4), +rangeFrom.slice(5, 7) - 1, +rangeFrom.slice(8, 10));
     return aggregate(all.filter((b) => b.timestamp >= from), interval as '1D' | '1W' | '1M');
-  }, [prices, minuteBars, intraday, cfg, interval, rangeSpec]);
+  }, [prices, minuteBars, intraday, cfg, interval, rangeFrom]);
 
   const status = intraday
     ? !fetchMinuteBars ? 'Intraday data is not connected yet'
@@ -292,7 +254,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         { name, paneId: ind.main ? 'candle_pane' : undefined, calcParams: ind.params, extendData: name === 'VOL_ANOMALY' ? anomalyKey.split(',').filter(Boolean) : undefined } as any,
         ind.main,
       );
-      paneIds.current[name] = ind.main ? 'candle_pane' : (id as string);
+      paneIds.current[name] = paneOf(chart, id);
     }
 
     // Follow the app's light/dark switch (html[data-theme]).
@@ -370,7 +332,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         } as any,
         ind.main,
       );
-      paneIds.current[ind.name] = ind.main ? 'candle_pane' : (id as string);
+      paneIds.current[ind.name] = paneOf(chart, id);
     } else {
       chart.removeIndicator({ name: ind.name, paneId: paneIds.current[ind.name] } as any);
       delete paneIds.current[ind.name];
@@ -399,7 +361,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         <button className={btn(menuOpen)} onClick={() => setMenuOpen((o) => !o)}>Indicators</button>
         <span className="mx-1 h-4 w-px bg-bg-border" />
         <div className="relative">
-          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)}>{interval} â–¾</button>
+          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)} title="Candle size">{INTERVAL_LABELS[interval]} candles ▾</button>
           {ivOpen && (
             <div className="absolute left-0 top-8 z-20 min-w-[130px] rounded-lg border border-bg-border bg-bg-card p-1 shadow-lg">
               {(['Minutes', 'Hours', 'Days'] as const).map((g) => (
@@ -412,7 +374,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
                         title={disabled ? 'Needs an intraday data source' : undefined}
                         onClick={() => { setIntervalMode(i.id); setIvOpen(false); }}
                         className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-bg-elevated'} disabled:cursor-not-allowed disabled:opacity-40`}>
-                        {i.id}
+                        {INTERVAL_LABELS[i.id]}
                       </button>
                     );
                   })}
@@ -422,7 +384,10 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
           )}
         </div>
         {(['1D', '1W', '1M'] as const).map((i) => (
-          <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}>{i}</button>
+          <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}
+            title={`Each candle = 1 ${INTERVAL_LABELS[i] === 'Daily' ? 'day' : INTERVAL_LABELS[i] === 'Weekly' ? 'week' : 'month'}`}>
+            {INTERVAL_LABELS[i]}
+          </button>
         ))}
 
         {menuOpen && (
@@ -465,12 +430,8 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         </div>
       </div>
 
-      {/* Bottom bar: date ranges */}
-      <div className="flex items-center gap-1 border-t border-bg-border px-2 py-1">
-        {RANGES.map(([label]) => (
-          <button key={label} className={btn(range === label)} onClick={() => setRange(label)}>{label}</button>
-        ))}
-      </div>
+      {/* Bottom bar: date ranges, measured against the real trading dates */}
+      <RangeBar dates={dailyDates} value={range} onChange={setRange} shownFrom={rangeFrom} shownCount={shownCount} />
     </div>
   );
 }

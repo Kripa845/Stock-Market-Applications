@@ -700,7 +700,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
 
         # DB-level date filter — no Python-side slicing needed
         all_prices = list(
-            DailyPrice.objects.filter(company=company).order_by("date")
+            DailyPrice.objects.filter(company=company, source="crawled").order_by("date")
         )
         prices = [price for price in all_prices if price.date >= window_start]
         market_reaction = build_news_market_reaction(
@@ -876,7 +876,7 @@ class CrossCompanyAnalysisAPIView(APIView):
             # days from today, not a Python-side slice of arbitrary depth.
             prices = list(
                 DailyPrice.objects
-                .filter(company=c, date__gte=window_start)
+                .filter(company=c, source="crawled", date__gte=window_start)
                 .order_by("-date")
             )
             latest_price = float(prices[0].close) if prices else 0.0

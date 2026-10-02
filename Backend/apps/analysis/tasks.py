@@ -299,6 +299,7 @@ def _update_period_vwap(company):
 
     window_prices = DailyPrice.objects.filter(
         company=company,
+        source="crawled",
         date__gte=start_date,
         date__lte=end_date,
     )
