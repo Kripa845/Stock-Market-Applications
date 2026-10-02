@@ -38,6 +38,7 @@ from itemadapter import ItemAdapter
 
 from apps.crawler_runs.models import CrawlRun
 from apps.news.models import NewsArticle, RawArticle
+from apps.news.services.article_images import extract_image_url
 from apps.news.tasks import categorize_article_task
 from apps.companies.models import Company
 from apps.market_data.models import Broker, DailyPrice, FloorsheetTransaction
@@ -536,6 +537,10 @@ class NewsPipeline:
             "raw_html",
             "",
         )
+        # A spider may set image_url itself; otherwise take the lead image from the page.
+        image_url = adapter.get(
+            "image_url",
+        ) or extract_image_url(raw_html, url)
 
         if not headline:
             spider.logger.warning(
@@ -605,6 +610,7 @@ class NewsPipeline:
             content_hash,
             raw_html,
             http_status,
+            image_url,
         )
 
     def _save_article_sync(
@@ -620,6 +626,7 @@ class NewsPipeline:
         content_hash,
         raw_html,
         http_status,
+        image_url,
     ):
         try:
             with transaction.atomic():
@@ -634,6 +641,11 @@ class NewsPipeline:
                 if existing_article:
                     self.duplicate_url_count += 1
                     spider.news_duplicate_url += 1
+
+                    # Articles saved before images were scraped pick theirs up on a re-crawl.
+                    if image_url and not existing_article.image_url:
+                        existing_article.image_url = image_url
+                        existing_article.save(update_fields=["image_url", "updated_at"])
 
                     spider.logger.info(
                         "Duplicate article skipped by URL: %s",
@@ -705,6 +717,7 @@ class NewsPipeline:
                     headline=headline,
                     body=body,
                     published_at=published_at,
+                    image_url=image_url,
                     content_hash=content_hash,
                     data_provenance="crawled",
                 )
@@ -949,6 +962,10 @@ class TradingDataPipeline:
                         "high": high_price,
                         "low": low_price,
                         "close": close_price,
+                        # End-of-day source: the session's last traded price is its close.
+                        # prev_close / transactions are filled after the crawl by
+                        # apps.market_data.services.price_fields.derive_price_fields.
+                        "ltp": close_price,
                         "volume": volume,
                         "turnover": turnover,
                         "source": "crawled",

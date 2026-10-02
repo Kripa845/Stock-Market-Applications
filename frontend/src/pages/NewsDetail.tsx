@@ -17,6 +17,7 @@ import {
 import { format } from 'date-fns';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
+import NewsImage from '../components/common/NewsImage';
 import { newsApi } from '../api/news';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
@@ -235,6 +236,8 @@ newsApi.getNewsById(Number(id)),
             </a>
           </div>
         </div>
+
+        <NewsImage src={article.image_url} className="max-h-[420px] w-full rounded-lg" />
 
         {/* Article Body */}
         <div className="text-sm text-text-secondary leading-relaxed whitespace-pre-line">

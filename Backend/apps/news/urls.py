@@ -6,6 +6,7 @@ from .views import (
     NewsRecategorizeAPIView,
     NewsStatsAPIView,
     NewsTriggerCategorizeAPIView,
+    PublicLatestNewsAPIView,
 )
 
 urlpatterns = [
@@ -18,6 +19,11 @@ urlpatterns = [
         "stats/",
         NewsStatsAPIView.as_view(),
         name="news-stats",
+    ),
+    path(
+        "public/latest/",
+        PublicLatestNewsAPIView.as_view(),
+        name="news-public-latest",
     ),
     path(
         "corrections/",

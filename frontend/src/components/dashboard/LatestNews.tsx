@@ -5,6 +5,7 @@ import { Clock, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 import Badge from '../common/Badge';
+import NewsImage from '../common/NewsImage';
 import { newsApi } from '../../api/news';
 import type { NewsArticle, SentimentLabel } from '../../types';
 
@@ -108,51 +109,54 @@ export default function LatestNews() {
             <div
               key={article.id}
               onClick={() => navigate(`/news/${article.id}`)}
-              className="p-3 rounded-lg bg-bg-elevated border border-bg-border hover:border-accent/30 cursor-pointer transition-all group"
+              className="flex gap-3 p-3 rounded-lg bg-bg-elevated border border-bg-border hover:border-accent/30 cursor-pointer transition-all group"
             >
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium text-text-primary group-hover:text-accent-light transition-colors leading-snug line-clamp-2">
-                  {article.headline}
-                </p>
+              <NewsImage src={article.image_url} className="h-16 w-24 shrink-0 rounded-md" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-medium text-text-primary group-hover:text-accent-light transition-colors leading-snug line-clamp-2">
+                    {article.headline}
+                  </p>
 
-                <ExternalLink
-                  size={12}
-                  className="text-text-muted shrink-0 mt-0.5"
-                />
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-
-                {/* Company tags */}
-                {article.company_tags?.map((tag) => (
-                  <CompanyTag
-                    key={tag.id}
-                    symbol={tag.company_symbol ?? tag.symbol ?? ''}
+                  <ExternalLink
+                    size={12}
+                    className="text-text-muted shrink-0 mt-0.5"
                   />
-                ))}
+                </div>
 
-                {/* Sentiment */}
-                <SentimentBadge
-                  label={article.sentiment_label}
-                />
+                <div className="flex flex-wrap items-center gap-2 mt-2">
 
-                {/* Published time + source */}
-                <span className="text-xs text-text-muted ml-auto flex items-center gap-1">
-                  <Clock size={10} />
+                  {/* Company tags */}
+                  {article.company_tags?.map((tag) => (
+                    <CompanyTag
+                      key={tag.id}
+                      symbol={tag.company_symbol ?? tag.symbol ?? ''}
+                    />
+                  ))}
 
-                  {article.published_at
-                    ? formatDistanceToNow(
-                        new Date(article.published_at),
-                        { addSuffix: true }
-                      )
-                    : 'Unknown time'}
+                  {/* Sentiment */}
+                  <SentimentBadge
+                    label={article.sentiment_label}
+                  />
 
-                  <span className="text-bg-border">
-                    ·
+                  {/* Published time + source */}
+                  <span className="text-xs text-text-muted ml-auto flex items-center gap-1">
+                    <Clock size={10} />
+
+                    {article.published_at
+                      ? formatDistanceToNow(
+                          new Date(article.published_at),
+                          { addSuffix: true }
+                        )
+                      : 'Unknown time'}
+
+                    <span className="text-bg-border">
+                      ·
+                    </span>
+
+                    {article.source}
                   </span>
-
-                  {article.source}
-                </span>
+                </div>
               </div>
             </div>
           ))}

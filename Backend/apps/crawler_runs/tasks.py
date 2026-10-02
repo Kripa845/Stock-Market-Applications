@@ -44,6 +44,22 @@ CRAWL_HARD_TIME_LIMIT = 60 * 60   # 60 minutes  → kill worker if still alive
 
 
 # ---------------------------------------------------------------------------
+# Trading-day guard (used by scheduled market-data tasks)
+# Beat already fires these only on NEPSE trading weekdays; this also skips
+# admin-entered TradingHoliday dates.
+# ---------------------------------------------------------------------------
+
+def _market_closed_today(task_name: str):
+    from apps.market_data.services.trading_days import market_closed_reason
+
+    reason = market_closed_reason()
+    if reason:
+        logger.info("%s: skipping — %s.", task_name, reason)
+        return {"skipped": True, "reason": reason}
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Duplicate-run guard (used by scheduled tasks)
 # ---------------------------------------------------------------------------
 
@@ -335,9 +351,14 @@ def crawl_daily_prices():
     """
     Scheduled daily trading-data crawl.
 
-    Chains ``rebuild_all_analysis`` afterwards so VWAP / volume baseline /
-    pressure are recomputed immediately after fresh prices land.
+    Chains ``derive_price_fields_task`` (ltp / prev_close) and then
+    ``rebuild_all_analysis`` so VWAP / volume baseline / pressure are
+    recomputed immediately after fresh prices land.
     """
+    closed = _market_closed_today("crawl_daily_prices")
+    if closed:
+        return closed
+
     if _has_active_crawl(CrawlRun.CrawlType.TRADING):
         logger.info(
             "crawl_daily_prices: skipping — a trading crawl is already active."
@@ -354,9 +375,11 @@ def crawl_daily_prices():
         )
 
     from apps.analysis.tasks import rebuild_all_analysis
+    from apps.market_data.tasks import derive_price_fields_task
 
     task = chain(
         run_crawl.si(crawl_run.id),
+        derive_price_fields_task.si(),
         rebuild_all_analysis.si(),
     ).apply_async()
 
@@ -398,12 +421,21 @@ def crawl_brokers():
 
 
 # ---------------------------------------------------------------------------
-# Scheduled: daily floorsheet top-up (latest session only)
+# Scheduled: daily full floorsheet (latest session + missing trading days)
 # ---------------------------------------------------------------------------
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_floorsheet")
 def crawl_floorsheet():
-    """Scheduled daily floorsheet crawl (latest session only)."""
+    """
+    Scheduled daily floorsheet crawl in ``mode=full``: every trade for every
+    tracked company on the latest session, plus any recent trading day still
+    missing.  Chains ``derive_price_fields_task`` so DailyPrice.transactions
+    is filled from the new trades.
+    """
+    closed = _market_closed_today("crawl_floorsheet")
+    if closed:
+        return closed
+
     if _has_active_crawl(CrawlRun.CrawlType.FLOORSHEET):
         logger.info(
             "crawl_floorsheet: skipping — a floorsheet crawl is already active."
@@ -414,16 +446,18 @@ def crawl_floorsheet():
         crawl_run = CrawlRun.objects.create(
             crawl_type=CrawlRun.CrawlType.FLOORSHEET,
             source="floorsheet",
-            target="All tracked companies (latest session)",
+            target="All tracked companies (full, with backfill)",
             status=CrawlRun.Status.PENDING,
             sources=list(FLOORSHEET_SPIDERS),
-            metadata={"mode": "latest"},
+            metadata={"mode": "full"},
         )
 
-    task = run_crawl.apply_async(
-        args=[crawl_run.id],
-        kwargs={"spider_args": {"mode": "latest"}},
-    )
+    from apps.market_data.tasks import derive_price_fields_task
+
+    task = chain(
+        run_crawl.si(crawl_run.id, spider_args={"mode": "full"}),
+        derive_price_fields_task.si(),
+    ).apply_async()
 
     crawl_run.task_id = task.id
     crawl_run.status = CrawlRun.Status.RUNNING
@@ -435,7 +469,7 @@ def crawl_floorsheet():
         "crawl_run_id": crawl_run.id,
         "task_id": task.id,
         "type": "floorsheet",
-        "mode": "latest",
+        "mode": "full",
     }
 
 

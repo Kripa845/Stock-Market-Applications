@@ -17,6 +17,7 @@ from rest_framework.test import APIClient
 
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.indicators import REGISTRY, compute, registry_payload, resolve_params
 from apps.market_intelligence.indicators import core, custom, market, momentum
 from apps.market_intelligence.indicators import moving_averages as ma
@@ -37,7 +38,7 @@ VOLUME[30] = 0
 DATES = []
 _day = date(2025, 1, 5)
 while len(DATES) < ROWS:
-    if _day.weekday() not in (4, 5):  # NEPSE trades Sunday-Thursday
+    if is_trading_weekday(_day):  # NEPSE trades Monday-Friday
         DATES.append(_day)
     _day += timedelta(days=1)
 

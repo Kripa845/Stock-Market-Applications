@@ -632,7 +632,6 @@ html[data-theme="light"] .stroke-down {
   --l-border: rgba(255, 255, 255, 0.1);
   --l-border-strong: rgba(255, 255, 255, 0.28);
   --l-accent: #c4b5fd;
-  --l-pill-text: #ede9fe;
   --l-number: rgba(255, 255, 255, 0.06);
   --l-btn-bg: linear-gradient(to bottom, #ffffff, #e4e4e7);
   --l-btn-text: #0b0a12;
@@ -654,7 +653,6 @@ html[data-theme="light"] .landing {
   --l-border: rgba(17, 12, 46, 0.1);
   --l-border-strong: rgba(17, 12, 46, 0.24);
   --l-accent: #6d28d9;
-  --l-pill-text: #5b21b6;
   --l-number: rgba(17, 12, 46, 0.07);
   --l-btn-bg: linear-gradient(to bottom, #8b5cf6, #6d28d9);
   --l-btn-text: #ffffff;

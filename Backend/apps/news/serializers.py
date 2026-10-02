@@ -80,6 +80,7 @@ class NewsArticleSerializer(serializers.ModelSerializer):
             "headline",
             "body",
             "published_at",
+            "image_url",
             "language",
             "sentiment",
             "sentiment_label",
@@ -90,6 +91,24 @@ class NewsArticleSerializer(serializers.ModelSerializer):
             "corrections",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class PublicNewsSerializer(serializers.ModelSerializer):
+    """Landing-page headline card: no full body, tags or sentiment."""
+
+    EXCERPT_LENGTH = 180
+
+    excerpt = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NewsArticle
+        fields = ["id", "headline", "excerpt", "source", "url", "image_url", "published_at"]
+
+    def get_excerpt(self, obj):
+        body = " ".join((obj.body or "").split())
+        if len(body) <= self.EXCERPT_LENGTH:
+            return body
+        return body[: self.EXCERPT_LENGTH].rsplit(" ", 1)[0] + "…"
 
 
 class RecategorizeRequestSerializer(serializers.Serializer):

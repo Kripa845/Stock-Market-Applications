@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Users,
   ShieldCheck,
+  Gauge,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -49,6 +50,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Market Overview',
     icon: TrendingUp,
     to: '/market',
+  },
+  {
+    label: 'Tracked Companies',
+    icon: Gauge,
+    to: '/tracked',
   },
   {
     label: 'Companies',

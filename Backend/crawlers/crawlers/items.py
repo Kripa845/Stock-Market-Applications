@@ -9,6 +9,7 @@ class NewsItem(scrapy.Item):
     published_at = scrapy.Field()
     source = scrapy.Field()
     url = scrapy.Field()
+    image_url = scrapy.Field()
 
     raw_html = scrapy.Field()
     http_status = scrapy.Field()

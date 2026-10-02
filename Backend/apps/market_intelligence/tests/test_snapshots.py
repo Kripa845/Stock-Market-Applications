@@ -9,6 +9,7 @@ from django.conf import settings
 from apps.analysis.models import DailyAnalysis
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.models import MarketBreadthSnapshot, ProxyIndexSnapshot
 from apps.market_intelligence.services.snapshots import compute_market_snapshots
 from apps.market_intelligence.tasks import build_daily_market_intelligence
@@ -18,7 +19,7 @@ class MarketSnapshotTests(TestCase):
     def setUp(self):
         self.first = Company.objects.create(symbol="AAA", name="Alpha", sector="Banking")
         self.second = Company.objects.create(symbol="BBB", name="Beta", sector="Banking")
-        self.start = date(2025, 1, 5)  # Sunday, first NEPSE session in this fixture.
+        self.start = date(2025, 1, 6)  # Monday, first NEPSE session in this fixture (NEPSE trades Mon-Fri).
 
     def add_price(self, company, day, close, volume=100, turnover=1000):
         return DailyPrice.objects.create(
@@ -32,30 +33,39 @@ class MarketSnapshotTests(TestCase):
         days = []
         day = start
         while len(days) < count:
-            if day.weekday() not in (4, 5):
+            if is_trading_weekday(day):
                 days.append(day)
             day += timedelta(days=1)
         return days
 
     def test_weekends_and_duplicate_market_date_are_excluded(self):
-        sunday, monday, tuesday = self.start, self.start + timedelta(days=1), self.start + timedelta(days=2)
+        monday, tuesday, wednesday = self.start, self.start + timedelta(days=1), self.start + timedelta(days=2)
         for company in (self.first, self.second):
-            self.add_price(company, sunday, 100)
-            self.add_price(company, monday, 101)
-            self.add_price(company, tuesday, 101)  # repeated close and volume for all companies
-        friday, saturday = date(2025, 1, 10), date(2025, 1, 11)
+            self.add_price(company, monday, 100)
+            self.add_price(company, tuesday, 101)
+            self.add_price(company, wednesday, 101)  # repeated close and volume for all companies
+        saturday, sunday = date(2025, 1, 11), date(2025, 1, 12)
         for company in (self.first, self.second):
-            self.add_price(company, friday, 105)
-            self.add_price(company, saturday, 106)
+            self.add_price(company, saturday, 105)
+            self.add_price(company, sunday, 106)
 
         result = compute_market_snapshots(dry_run=True)
 
         self.assertEqual(result["sessions"], 2)
-        self.assertIn(tuesday, result["excluded_dates"])
-        self.assertIn("duplicate date", result["excluded_dates"][tuesday][0])
-        self.assertIn(friday, result["excluded_dates"])
+        self.assertIn(wednesday, result["excluded_dates"])
+        self.assertIn("duplicate date", result["excluded_dates"][wednesday][0])
         self.assertIn(saturday, result["excluded_dates"])
+        self.assertIn(sunday, result["excluded_dates"])
         self.assertEqual(DailyPrice.objects.count(), 10)  # source rows remain untouched
+
+    def test_friday_is_a_trading_session(self):
+        friday = date(2025, 1, 10)
+        self.add_price(self.first, friday, 100)
+
+        result = compute_market_snapshots(dry_run=True)
+
+        self.assertEqual(result["sessions"], 1)
+        self.assertNotIn(friday, result["excluded_dates"])
 
     @override_settings(MARKET_INTELLIGENCE_EXCLUDED_SESSIONS=["2025-01-06"])
     def test_manual_excluded_sessions_setting(self):

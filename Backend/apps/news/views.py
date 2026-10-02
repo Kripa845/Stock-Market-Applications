@@ -264,10 +264,14 @@
 #             qs = qs.filter(company_id=company_id)
 
 #         return qs
+from datetime import timedelta
+
 from django.db.models import Count, F, Q, Prefetch
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -278,6 +282,7 @@ from .models import ArticleCompanyTag, CategorizationCorrection, NewsArticle
 from .serializers import (
     CategorizationCorrectionSerializer,
     NewsArticleSerializer,
+    PublicNewsSerializer,
     RecategorizeRequestSerializer,
 )
 from .tasks import categorize_article_task
@@ -548,6 +553,43 @@ class NewsTriggerCategorizeAPIView(APIView):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+
+class PublicLatestNewsAPIView(APIView):
+    """
+    GET /api/news/public/latest/?limit=6
+
+    Unauthenticated, for the public landing page: the newest crawled headlines
+    with source link, image and a short excerpt -- never the full text, tags or
+    sentiment. Articles dated more than a day ahead (mis-parsed dates) are left
+    out so they cannot sit at the top indefinitely.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public"
+
+    DEFAULT_LIMIT = 6
+    MAX_LIMIT = 12
+
+    def get(self, request):
+        try:
+            limit = int(request.query_params.get("limit", self.DEFAULT_LIMIT))
+        except (TypeError, ValueError):
+            limit = self.DEFAULT_LIMIT
+        limit = max(1, min(limit, self.MAX_LIMIT))
+
+        articles = (
+            NewsArticle.objects
+            .filter(
+                data_provenance="crawled",
+                published_at__isnull=False,
+                published_at__lte=timezone.now() + timedelta(days=1),
+            )
+            .order_by("-published_at", "-id")
+            .only("id", "headline", "body", "source", "url", "image_url", "published_at")[:limit]
+        )
+        return Response(PublicNewsSerializer(articles, many=True).data)
 
 
 class NewsStatsAPIView(APIView):

@@ -12,7 +12,23 @@ export interface NewsQueryParams {
   confidence_max?: number;
 }
 
+/** Headline card for the public landing page (GET /news/public/latest/, no login needed). */
+export interface PublicNewsArticle {
+  id: number;
+  headline: string;
+  excerpt: string;
+  source: string;
+  url: string;
+  image_url: string;
+  published_at: string;
+}
+
 export const newsApi = {
+  getPublicLatest: (limit = 6) =>
+    apiClient
+      .get<PublicNewsArticle[]>('/news/public/latest/', { params: { limit } })
+      .then((response) => response.data),
+
   getNews: (params?: NewsQueryParams) =>
     apiClient
       .get<PaginatedResponse<NewsArticle>>('/news/', { params })

@@ -30,10 +30,13 @@ django.setup()
 
 
 from apps.companies.models import Company
+from apps.market_data.models import FloorsheetTransaction
+from apps.market_data.services.price_fields import SYNTHETIC_TRANSACTION_PREFIX
 from apps.market_data.services.trading_calendar import (
     DEFAULT_SAMPLE_OFFSETS,
     latest_trading_date,
     select_sample_dates,
+    trading_dates,
 )
 # Under ``scrapy crawl`` the Scrapy project root is on sys.path, so
 # ``crawlers`` means Backend/crawlers/crawlers. Imported from Django
@@ -71,9 +74,17 @@ class FloorsheetSpider(scrapy.Spider):
         The SAME sampled dates are used for every tracked company, so
         cross-company comparison on a sampled date is valid.
 
-    ``mode=latest`` (daily, scheduled)
-        Only the latest available trading session.  This is the nightly
-        top-up and is what the beat schedule runs.
+    ``mode=latest``
+        Only the latest available trading session.
+
+    ``mode=full`` (daily, scheduled)
+        Every trade for every tracked company: the latest session plus
+        each of the last ``backfill_sessions`` stored trading sessions
+        (default 60) that has no real floorsheet rows for that company
+        yet.  Dates are chosen PER COMPANY, so a gap left by a failed
+        request is filled on the next run.  The latest session is always
+        re-fetched in case its earlier crawl was partial; the unique key
+        makes that idempotent.  This is what the beat schedule runs.
 
     Neither mode ever deletes existing rows.  Persistence goes through
     ``update_or_create`` on ``(company, date, transaction_id)``, so
@@ -81,6 +92,8 @@ class FloorsheetSpider(scrapy.Spider):
 
     CLI::
 
+        scrapy crawl floorsheet -a mode=full
+        scrapy crawl floorsheet -a mode=full -a backfill_sessions=20
         scrapy crawl floorsheet -a mode=latest
         scrapy crawl floorsheet -a mode=sample
         scrapy crawl floorsheet -a mode=sample -a sample_offsets=0,3,6,9
@@ -110,6 +123,9 @@ class FloorsheetSpider(scrapy.Spider):
     # Safety limit on pages per company+date.
     MAX_PAGES_PER_DATE = 25
 
+    # mode=full: how many stored trading sessions back to check for gaps.
+    FULL_BACKFILL_SESSIONS = 60
+
     custom_settings = {
         "ROBOTSTXT_OBEY": True,
         "CONCURRENT_REQUESTS": 1,
@@ -129,10 +145,16 @@ class FloorsheetSpider(scrapy.Spider):
         floorsheet_date=None,
         sample_offsets=None,
         company_symbol=None,
+        backfill_sessions=None,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+
+        try:
+            self.backfill_sessions = int(backfill_sessions) if backfill_sessions else self.FULL_BACKFILL_SESSIONS
+        except (TypeError, ValueError):
+            self.backfill_sessions = self.FULL_BACKFILL_SESSIONS
 
         self.mode = str(mode or "latest").strip().lower()
 
@@ -195,6 +217,23 @@ class FloorsheetSpider(scrapy.Spider):
         latest = latest_trading_date()
         return [latest] if latest else []
 
+    def _full_mode_dates(self, company, sessions):
+        """
+        ``mode=full``: sessions this company still lacks real floorsheet
+        rows for, plus the latest session.  Oldest first.
+        """
+        if not sessions:
+            return []
+        collected = set(
+            FloorsheetTransaction.objects
+            .filter(company=company, date__in=sessions)
+            .exclude(transaction_id__startswith=SYNTHETIC_TRANSACTION_PREFIX)
+            .values_list("date", flat=True)
+            .distinct()
+        )
+        latest = max(sessions)
+        return sorted(day for day in sessions if day == latest or day not in collected)
+
     @staticmethod
     def _parse_date(value):
         if isinstance(value, date):
@@ -235,6 +274,47 @@ class FloorsheetSpider(scrapy.Spider):
     # Request generation
     # ------------------------------------------------------------------
 
+    def _company_request(self, company, target_dates):
+        symbol = str(company.symbol).strip().upper()
+        self.requested_companies += 1
+        company_url = f"https://www.sharesansar.com/company/{symbol.lower()}"
+        self.logger.info("Opening company page for %s: %s", symbol, company_url)
+        return scrapy.Request(
+            url=company_url,
+            callback=self.parse_company,
+            cb_kwargs={
+                "symbol": symbol,
+                "target_dates": target_dates,
+            },
+            errback=self.handle_error,
+            dont_filter=True,
+        )
+
+    def _full_mode_requests(self, companies):
+        sessions = trading_dates(limit=self.backfill_sessions)
+        if not sessions:
+            self.logger.error(
+                "No trading dates available for mode=full. Run the "
+                "trading_data crawler first."
+            )
+            return
+
+        planned = set()
+        for company in companies:
+            if not str(company.symbol).strip():
+                continue
+            target_dates = self._full_mode_dates(company, sessions)
+            self.logger.info(
+                "FLOORSHEET PLAN | mode=full | %s | dates=%s",
+                company.symbol,
+                ", ".join(day.isoformat() for day in target_dates),
+            )
+            planned.update(target_dates)
+            yield self._company_request(company, target_dates)
+
+        self.sampled_dates = sorted(planned)
+        self._record_sampled_dates()
+
     async def start(self):
         """Bridge Scrapy's async start hook to the Django-backed generator."""
         requests = await sync_to_async(list)(self.start_requests())
@@ -253,6 +333,10 @@ class FloorsheetSpider(scrapy.Spider):
 
         if not companies:
             self.logger.error("No active companies found in Company table.")
+            return
+
+        if self.mode == "full" and not self.floorsheet_date:
+            yield from self._full_mode_requests(companies)
             return
 
         target_dates = self._target_dates()

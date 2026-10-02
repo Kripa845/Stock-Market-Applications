@@ -9,6 +9,7 @@ from django.db import transaction
 
 from apps.analysis.models import DailyAnalysis
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.models import MarketBreadthSnapshot, ProxyIndexSnapshot
 from apps.market_intelligence.app_settings import MARKET_INTELLIGENCE_EXCLUDED_SESSIONS as DEFAULT_EXCLUDED_SESSIONS
 
@@ -43,7 +44,8 @@ def _configured_excluded_dates():
 def _trading_calendar(prices, manual_exclusions):
     """Return valid global sessions and a date-to-reasons exclusion mapping.
 
-    Friday (weekday 4) and Saturday (weekday 5) are excluded. A duplicate
+    Dates outside settings.NEPSE_TRADING_WEEKDAYS (Monday-Friday) are
+    excluded. A duplicate
     market-wide date is excluded only when every company represented on that
     date also has a row on the prior raw date, with unchanged close and either
     unchanged or zero volume. Rows themselves are never changed or deleted.
@@ -57,8 +59,8 @@ def _trading_calendar(prices, manual_exclusions):
 
     for day in raw_dates:
         reasons = []
-        if day.weekday() in (4, 5):
-            reasons.append("weekend (NEPSE closed Friday/Saturday)")
+        if not is_trading_weekday(day):
+            reasons.append(f"weekend (NEPSE does not trade on {day:%A})")
         if day in manual_exclusions:
             reasons.append("manual exclusion: MARKET_INTELLIGENCE_EXCLUDED_SESSIONS")
 
@@ -115,7 +117,7 @@ def compute_market_snapshots(dry_run=False):
     """Compute breadth and proxy snapshots for every valid DailyPrice date.
 
     A market session is a distinct valid date found in DailyPrice, after
-    excluding Fridays/Saturdays, configured manual exclusions and dates where
+    excluding non-trading weekdays, configured manual exclusions and dates where
     every represented company repeats its previous raw close and volume.
 
     DMA windows are the last N *global market-session dates*, including the
@@ -127,7 +129,9 @@ def compute_market_snapshots(dry_run=False):
     Daily breadth returns require rows on both adjacent valid market sessions.
     The proxy uses previous valid-session turnover weights and excludes a
     return when either stock-day is possible_corporate_action. Its base is
-    1000 on the first valid session, whose return remains null.
+    1000 on the first valid session, whose return remains null.  The
+    equal-weighted variant uses the same eligible companies and exclusions,
+    averaging their returns with equal weight.
     """
     prices = list(DailyPrice.objects.filter(source="crawled").order_by("date", "company_id", "pk"))
     manual_exclusions = _configured_excluded_dates()
@@ -164,6 +168,7 @@ def compute_market_snapshots(dry_run=False):
     breadth_rows = []
     proxy_rows = []
     last_valid_level = BASE_INDEX_LEVEL
+    last_equal_level = BASE_INDEX_LEVEL
     total_corporate_exclusions = 0
 
     for index, session_date in enumerate(sessions):
@@ -236,6 +241,7 @@ def compute_market_snapshots(dry_run=False):
 
         weighted_return = Decimal("0")
         total_weight = Decimal("0")
+        equal_return_sum = Decimal("0")
         eligible = 0
         if previous_date is not None:
             for company_id, current_row in current.items():
@@ -249,11 +255,21 @@ def compute_market_snapshots(dry_run=False):
                 current_close = _decimal(current_row.close)
                 if prior_close is None or prior_close <= 0 or prior_turnover is None or prior_turnover <= 0 or current_close is None:
                     continue
-                weighted_return += ((current_close - prior_close) / prior_close) * prior_turnover
+                stock_return = (current_close - prior_close) / prior_close
+                weighted_return += stock_return * prior_turnover
                 total_weight += prior_turnover
+                equal_return_sum += stock_return
                 eligible += 1
 
         return_pct = (weighted_return / total_weight * 100) if total_weight else None
+        equal_return_pct = (equal_return_sum / eligible * 100) if eligible else None
+        if equal_return_pct is not None:
+            last_equal_level *= Decimal("1") + equal_return_pct / 100
+            equal_level = last_equal_level
+        elif index == 0:
+            equal_level = BASE_INDEX_LEVEL
+        else:
+            equal_level = None
         if return_pct is not None:
             last_valid_level *= Decimal("1") + return_pct / 100
             level = last_valid_level
@@ -265,6 +281,8 @@ def compute_market_snapshots(dry_run=False):
             "date": session_date,
             "level": level,
             "daily_return_pct": return_pct,
+            "equal_weight_level": equal_level,
+            "equal_weight_return_pct": equal_return_pct,
             "eligible_company_count": eligible,
             "methodology_version": PROXY_METHODOLOGY_VERSION,
             "corporate_action_excluded_count": corporate_count,

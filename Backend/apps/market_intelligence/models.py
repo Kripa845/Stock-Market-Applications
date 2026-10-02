@@ -24,11 +24,19 @@ class MarketBreadthSnapshot(models.Model):
 
 
 class ProxyIndexSnapshot(models.Model):
-    """Turnover-weighted market proxy, versioned for future methodology changes."""
+    """"Tracked Basket" index over the tracked companies (not the NEPSE index).
+
+    ``level`` / ``daily_return_pct`` are the original turnover-weighted
+    variant (weights = previous session's turnover).  ``equal_weight_*`` is the
+    same basket with every eligible company weighted equally.  Both start at
+    1000 on the first valid session and skip the same corporate-action days.
+    """
 
     date = models.DateField(unique=True)
     level = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     daily_return_pct = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
+    equal_weight_level = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    equal_weight_return_pct = models.DecimalField(max_digits=12, decimal_places=6, null=True, blank=True)
     eligible_company_count = models.PositiveIntegerField(default=0)
     corporate_action_excluded_count = models.PositiveIntegerField(default=0)
     methodology_version = models.CharField(max_length=32, default="turnover-weighted-v1")

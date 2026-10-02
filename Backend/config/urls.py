@@ -9,6 +9,7 @@ urlpatterns = [
     # Companies & Market Data
     path("api/companies/", include("apps.companies.urls")),
     path("api/market-data/", include("apps.market_data.urls")),
+    path("api/market/", include("apps.market_data.market_urls")),
     path("api/floorsheet/", FloorsheetListAPIView.as_view(), name="floorsheet-api"),
 
     # News & Categorization

@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
+import NewsImage from '../components/common/NewsImage';
 import { newsApi } from '../api/news';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
@@ -205,6 +206,10 @@ export default function NewsPage() {
                   onClick={() => navigate(`/news/${article.id}`)}
                   className="card h-fit cursor-pointer hover:border-accent/40 transition-colors space-y-3"
                 >
+                  <NewsImage
+                    src={article.image_url}
+                    className="-mx-4 -mt-4 mb-1 aspect-[16/9] w-[calc(100%+2rem)] max-w-none rounded-t-md"
+                  />
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-semibold leading-snug text-text-primary line-clamp-2 hover:text-accent-light transition-colors">
                       {article.headline}

@@ -31,6 +31,7 @@ import RolesPermissionsPage from './pages/admin/RolesPermissionPage';
 
 import CrawlerStatusPage from './pages/CrawlerStatus';
 import MarketPage from './pages/Market';
+import TrackedCompaniesPage from './pages/TrackedCompanies';
 import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
 import NewsDetail from './pages/NewsDetail';
@@ -230,6 +231,17 @@ function AppRoutes() {
             }
           />
 
+
+          <Route
+            path="/tracked"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/tracked']}
+              >
+                <TrackedCompaniesPage />
+              </PermissionRoute>
+            }
+          />
 
           {/* -----------------------------------------------
               COMPANIES

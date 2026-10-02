@@ -154,6 +154,9 @@ class NewsArticle(models.Model):
     headline = models.TextField()
     body = models.TextField()
     published_at = models.DateTimeField(null=True, blank=True)
+    # Lead image on the source site (og:image or the first article image).
+    # Only the URL is stored; empty when the page had none.
+    image_url = models.URLField(max_length=1000, blank=True, default="")
     content_hash = models.CharField(max_length=64, db_index=True)
     language = models.CharField(max_length=20, default="unknown")
     # ------------------------------------------------------------------

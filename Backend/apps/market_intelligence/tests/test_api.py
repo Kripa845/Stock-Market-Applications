@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.models import CompanyTechnicalSnapshot
 from apps.market_intelligence.services.sector_rotation import compute_sector_rotation_snapshots
 from apps.market_intelligence.services.snapshots import compute_market_snapshots
@@ -22,11 +23,11 @@ class MarketIntelligenceApiTests(TestCase):
         self.client = APIClient()
         self.client.force_authenticate(self.user)
         first_day = date(2026, 9, 27)
-        while first_day.weekday() in (4, 5):
+        while not is_trading_weekday(first_day):
             first_day += timedelta(days=1)
         for offset in range(3):
             day = first_day + timedelta(days=offset)
-            if day.weekday() in (4, 5):
+            if not is_trading_weekday(day):
                 continue
             close = 100 + offset
             DailyPrice.objects.create(

@@ -72,6 +72,8 @@ export interface NewsArticle {
   source: string;
   url: string;
   published_at: string;
+  /** Lead image on the source portal; empty when the page had none. */
+  image_url?: string;
   sentiment: number | null;
   sentiment_label: SentimentLabel;
   is_processed: boolean;

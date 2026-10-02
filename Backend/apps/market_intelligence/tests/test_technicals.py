@@ -6,6 +6,7 @@ from django.test import TestCase
 
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.models import CompanyTechnicalSnapshot, SectorRotationSnapshot
 from apps.market_intelligence.services.sector_rotation import compute_sector_rotation_snapshots
 from apps.market_intelligence.services.technicals import _pattern_matches, compute_company_technical_snapshots
@@ -15,14 +16,14 @@ class TechnicalSnapshotTests(TestCase):
     def setUp(self):
         self.bank = Company.objects.create(symbol="BANK", name="Bank Co", sector="Banking")
         self.hydro = Company.objects.create(symbol="HYDRO", name="Hydro Co", sector="Hydropower")
-        self.start = date(2025, 1, 5)
+        self.start = date(2025, 1, 6)  # Monday (NEPSE trades Mon-Fri)
 
     @staticmethod
     def market_days(start, count):
         days = []
         day = start
         while len(days) < count:
-            if day.weekday() not in (4, 5):
+            if is_trading_weekday(day):
                 days.append(day)
             day += timedelta(days=1)
         return days

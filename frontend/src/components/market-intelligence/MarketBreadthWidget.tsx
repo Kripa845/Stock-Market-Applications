@@ -39,7 +39,7 @@ export default function MarketBreadthWidget() {
             ))}
           </div>
           <p className="text-[10px] text-text-muted">
-            Turnover-weighted index proxy: {data.proxy_index.level == null ? '—' : Number(data.proxy_index.level).toFixed(2)}
+            Tracked Basket (turnover-weighted): {data.proxy_index.level == null ? '—' : Number(data.proxy_index.level).toFixed(2)}
             {' · '}method {data.proxy_index.methodology_version}
             {' · '}excluded possible corporate actions: {data.corporate_action_excluded_count}
             {' · '}updated {new Date(data.computed_at).toLocaleString()}

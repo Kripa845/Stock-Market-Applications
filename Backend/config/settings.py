@@ -156,9 +156,11 @@ REST_FRAMEWORK = {
         "rest_framework.pagination.PageNumberPagination"
     ),
     "PAGE_SIZE": 20,
-    # Used by the login and registration views (throttle_scope = "auth").
+    # Used by the login and registration views (throttle_scope = "auth")
+    # and the unauthenticated landing-page endpoints (throttle_scope = "public").
     "DEFAULT_THROTTLE_RATES": {
         "auth": os.getenv("AUTH_THROTTLE_RATE", "10/min"),
+        "public": os.getenv("PUBLIC_THROTTLE_RATE", "60/min"),
     },
 }
 
@@ -216,6 +218,19 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1   # one task at a time per worker process
 
+# ---------------------------------------------------------------------------
+# NEPSE trading week
+#   The single source of truth for which weekdays the exchange trades
+#   (Python weekday numbers, Monday=0).  NEPSE trades Monday-Friday,
+#   11:00-15:00 Asia/Kathmandu.  Public holidays live in the admin-editable
+#   market_data.TradingHoliday table, not here.  Read through
+#   apps.market_data.services.trading_days rather than hardcoding weekdays.
+# ---------------------------------------------------------------------------
+NEPSE_TRADING_WEEKDAYS = (0, 1, 2, 3, 4)
+
+# Celery's crontab counts Sunday=0, Python's weekday() counts Monday=0.
+TRADING_DAYS_CRONTAB = ",".join(str((day + 1) % 7) for day in NEPSE_TRADING_WEEKDAYS)
+
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {
@@ -226,9 +241,10 @@ CELERY_BEAT_SCHEDULE = {
     },
 
     # ---- Trading prices ----
+    # Trading days only; the tasks also skip TradingHoliday dates.
     "crawl-daily-prices-evening": {
         "task": "apps.crawler_runs.tasks.crawl_daily_prices",
-        "schedule": crontab(minute=0, hour=18),
+        "schedule": crontab(minute=0, hour=18, day_of_week=TRADING_DAYS_CRONTAB),
     },
     "crawl-brokers-weekly": {
         "task": "apps.crawler_runs.tasks.crawl_brokers",
@@ -236,19 +252,17 @@ CELERY_BEAT_SCHEDULE = {
     },
 
     # ---- Floorsheet ----
+    # Full floorsheet for every tracked company: the latest session plus any
+    # trading day still missing (replaces the old weekly sampled crawl).
     "crawl-floorsheet-evening": {
         "task": "apps.crawler_runs.tasks.crawl_floorsheet",
-        "schedule": crontab(minute=15, hour=18),
-    },
-    "crawl-floorsheet-sample-weekly": {
-        "task": "apps.crawler_runs.tasks.crawl_floorsheet_sample",
-        "schedule": crontab(minute=30, hour=19, day_of_week=5),
+        "schedule": crontab(minute=15, hour=18, day_of_week=TRADING_DAYS_CRONTAB),
     },
 
     # ---- Analysis rebuild ----
     "rebuild-analysis-after-prices": {
         "task": "apps.analysis.tasks.rebuild_all_analysis",
-        "schedule": crontab(minute=45, hour=18),
+        "schedule": crontab(minute=45, hour=18, day_of_week=TRADING_DAYS_CRONTAB),
     },
     "build-market-intelligence-after-analysis": {
         "task": "apps.market_intelligence.tasks.build_daily_market_intelligence",

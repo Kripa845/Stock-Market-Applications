@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Activity, ArrowRight, BarChart3, Building2, Check, ChevronDown, FileSpreadsheet, LineChart, Newspaper,
-  Moon, Plus, Search, ShieldCheck, Sparkles, Sun, Users,
+  Moon, Plus, Search, ShieldCheck, Sun, Users,
 } from 'lucide-react';
 import { useTheme } from '../hooks/useTheme';
 import HeroIllustration from '../components/landing/HeroIllustration';
 import ParticleWave from '../components/landing/ParticleWave';
+import LandingNews from '../components/landing/LandingNews';
+import LandingTracked from '../components/landing/LandingTracked';
 
 // Public landing page with purple glows; follows the app's light / dark theme (colours in index.css .landing).
 // Every claim here describes something the app really does; there are no invented reviews or user counts.
@@ -51,20 +53,10 @@ const FAQS = [
 const btnPrimary = 'inline-flex items-center justify-center gap-2 rounded-md bg-[image:var(--l-btn-bg)] px-4 py-2 text-sm font-medium text-[color:var(--l-btn-text)] shadow-[0_1px_0_rgba(255,255,255,0.4)_inset,0_6px_20px_rgba(0,0,0,0.25)] transition hover:brightness-110';
 const btnGhost = 'inline-flex items-center justify-center gap-2 rounded-md border border-[color:var(--l-border)] bg-[var(--l-surface-solid)] px-4 py-2 text-sm font-medium text-[color:var(--l-text)] transition hover:border-[color:var(--l-border-strong)] hover:bg-[var(--l-surface-hover)]';
 
-function Pill({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/60 bg-violet-700/25 px-3 py-1 text-xs font-medium text-[color:var(--l-pill-text)] shadow-[0_0_16px_rgba(124,58,237,0.35)]">
-      <Sparkles size={12} className="text-[color:var(--l-accent)]" />
-      {children}
-    </span>
-  );
-}
-
-function SectionHeading({ pill, title, text }: { pill: string; title: string; text?: string }) {
+function SectionHeading({ title, text }: { title: string; text?: string }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <Pill>{pill}</Pill>
-      <h2 className="mt-4 text-3xl font-semibold tracking-tight text-[color:var(--l-text)] sm:text-4xl">{title}</h2>
+      <h2 className="text-3xl font-semibold tracking-tight text-[color:var(--l-text)] sm:text-4xl">{title}</h2>
       {text && <p className="mt-3 text-sm leading-relaxed text-[color:var(--l-muted)] sm:text-base">{text}</p>}
     </div>
   );
@@ -146,7 +138,7 @@ function Faq() {
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, toggleTheme] = useTheme();
-  const nav = [['Features', '#features'], ['How it works', '#how-it-works'], ['Access', '#access'], ['FAQ', '#faq']];
+  const nav = [['Features', '#features'], ['Tracked companies', '#tracked'], ['News', '#news'], ['How it works', '#how-it-works'], ['Access', '#access'], ['FAQ', '#faq']];
 
   return (
     <div className="landing min-h-screen overflow-x-hidden bg-[var(--l-bg)] font-sans text-[color:var(--l-text)] antialiased">
@@ -188,8 +180,7 @@ export default function LandingPage() {
       <section className="relative bg-[var(--l-bg)]">
         <div className="relative mx-auto grid max-w-6xl items-center gap-6 px-4 pt-14 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:pt-20">
           <div className="text-center lg:text-left">
-            <Pill>NEPSE research made simple</Pill>
-            <h1 className="mt-5 text-4xl font-medium leading-[1.12] tracking-tight text-[color:var(--l-text)] sm:text-5xl">
+            <h1 className="text-4xl font-medium leading-[1.12] tracking-tight text-[color:var(--l-text)] sm:text-5xl">
               Read the NEPSE Market Through Data, News and Behaviour.
             </h1>
             <p className="mx-auto mt-5 max-w-md text-[15px] leading-relaxed text-[color:var(--l-muted)] lg:mx-0">
@@ -220,7 +211,7 @@ export default function LandingPage() {
 
       {/* Features */}
       <section id="features" className="relative scroll-mt-20 px-4 py-20 sm:px-6">
-        <SectionHeading pill="Features" title="Powerful tools for smarter NEPSE research"
+        <SectionHeading title="Powerful tools for smarter NEPSE research"
           text="From a first look at a company to detailed technical work, everything is built on crawled market data." />
         <div className="mx-auto mt-12 grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map(({ icon: Icon, title, text }) => (
@@ -243,8 +234,7 @@ export default function LandingPage() {
       <section className="px-4 py-20 sm:px-6">
         <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
           <div>
-            <Pill>Research platform</Pill>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Research built on real market data</h2>
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Research built on real market data</h2>
             <ul className="mt-8 space-y-5">
               {POINTS.map((p) => (
                 <li key={p} className="flex gap-3 text-sm leading-relaxed text-[color:var(--l-text-2)]">
@@ -261,9 +251,21 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Tracked companies snapshot (hidden when there is no data) */}
+      <LandingTracked heading={
+        <SectionHeading title="Tracked companies at the close"
+          text="Every company StockScope follows, ranked by today's change, with the Tracked Basket index we build from them." />
+      } />
+
+      {/* Latest crawled news (hidden when there is none) */}
+      <LandingNews heading={
+        <SectionHeading title="What the NEPSE market is talking about"
+          text="The newest stories crawled from Nepali financial portals. Each one opens on the site that published it." />
+      } />
+
       {/* How it works */}
       <section id="how-it-works" className="scroll-mt-20 px-4 py-20 sm:px-6">
-        <SectionHeading pill="How it works" title="From a symbol to a decision in four steps" />
+        <SectionHeading title="From a symbol to a decision in four steps" />
         <div className="relative mx-auto mt-14 grid max-w-6xl gap-6 sm:grid-cols-2 lg:grid-cols-4">
           <div className="pointer-events-none absolute left-[12%] right-[12%] top-7 hidden h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent lg:block" aria-hidden />
           {STEPS.map(({ icon: Icon, title, text }, i) => (
@@ -283,7 +285,7 @@ export default function LandingPage() {
       <section id="access" className="relative scroll-mt-20 px-4 py-20 sm:px-6">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_80%_50%,rgba(124,58,237,0.15),transparent_55%)]" aria-hidden />
         <div className="relative">
-          <SectionHeading pill="Access" title="Choose your level of access"
+          <SectionHeading title="Choose your level of access"
             text="Register for free as a Viewer. Analyst and Admin access is granted by your organisation's administrator." />
           <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
             {ROLES.map((role) => (
@@ -316,7 +318,7 @@ export default function LandingPage() {
 
       {/* FAQ */}
       <section id="faq" className="scroll-mt-20 px-4 py-20 sm:px-6">
-        <SectionHeading pill="FAQ" title="Frequently asked questions"
+        <SectionHeading title="Frequently asked questions"
           text="How StockScope gets its data and what it can do for your research." />
         <Faq />
       </section>
@@ -327,8 +329,7 @@ export default function LandingPage() {
           <div className="pointer-events-none absolute -bottom-40 left-1/2 h-72 w-[140%] -translate-x-1/2 rounded-[100%] border-t border-violet-300/60 bg-violet-600/40 blur-[2px] shadow-[0_-20px_80px_rgba(139,92,246,0.7)]" aria-hidden />
           <div className="pointer-events-none absolute -bottom-24 left-1/2 h-48 w-[80%] -translate-x-1/2 rounded-full bg-fuchsia-500/30 blur-3xl" aria-hidden />
           <div className="relative">
-            <Pill>Get started</Pill>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">Start researching NEPSE today</h2>
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Start researching NEPSE today</h2>
             <p className="mx-auto mt-3 max-w-lg text-sm text-[color:var(--l-muted)]">
               Create a free account to explore companies, news and the market overview.
             </p>
