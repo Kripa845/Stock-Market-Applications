@@ -511,9 +511,11 @@ class TradingDataSpider(scrapy.Spider):
             )
             return None
 
+        # Optional: the source's own % change.  Never a reason to skip a row.
         return {
             "date": trading_date,
             **values,
+            "source_change_pct": parse_number(row.get("per_change")),
         }
 
     # ----------------------------------------------------------
@@ -774,6 +776,10 @@ class TradingDataSpider(scrapy.Spider):
                 close=str(row["close"]),
                 volume=str(row["volume"]),
                 turnover=str(row["turnover"]),
+                source_change_pct=(
+                    None if row.get("source_change_pct") is None
+                    else str(row["source_change_pct"])
+                ),
                 source=self.SOURCE,
             )
 

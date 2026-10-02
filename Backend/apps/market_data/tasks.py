@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @shared_task(name="apps.market_data.tasks.derive_price_fields_task")
 def derive_price_fields_task():
-    """Fill DailyPrice ltp / prev_close / transactions after a price or floorsheet crawl."""
+    """Fill DailyPrice.transactions from the floorsheet after a price or floorsheet crawl."""
     from apps.market_data.services.price_fields import derive_price_fields
 
     result = derive_price_fields()

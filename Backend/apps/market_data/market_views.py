@@ -27,7 +27,7 @@ from apps.users.company_access import get_accessible_company_ids, require_compan
 from apps.users.models import WatchlistItem
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
-from .services import market_stats
+from .services import market_stats, movers
 
 CACHE_SECONDS = 60
 SCOPE = "tracked_companies"
@@ -67,8 +67,23 @@ def _tracked_company(request, symbol):
     return company
 
 
-PUBLIC_MOVER_FIELDS = ("symbol", "name", "sector", "ltp", "prev_close", "change", "change_pct", "volume", "turnover", "sparkline")
+PUBLIC_MOVER_FIELDS = (
+    "symbol", "name", "sector", "close", "prev_close", "change", "change_pct",
+    "adjusted", "unadjusted", "volume", "turnover", "sparkline",
+)
+PUBLIC_SUMMARY_FIELDS = (
+    "tracked_count", "advanced", "declined", "unchanged", "excluded_counts",
+    "positive_circuit", "negative_circuit", "total_turnover", "total_traded_shares",
+)
 PUBLIC_BASKET_DAYS = 30
+PUBLIC_MOVERS_LIMIT = 5
+
+
+def _limit(request, default):
+    try:
+        return max(1, min(int(request.query_params.get("limit", default)), 50))
+    except ValueError:
+        return default
 
 
 class PublicTrackedSnapshotAPIView(APIView):
@@ -76,9 +91,10 @@ class PublicTrackedSnapshotAPIView(APIView):
     GET /api/market/public/snapshot/
 
     Unauthenticated, for the public landing page: the tracked companies'
-    latest summary, every tracked company's price / change / 7-close
-    sparkline, and the last 30 Tracked Basket levels.  Nothing else --
-    no brokers, signals, dividends, transactions or watchlists.
+    1-session summary, the top 5 tracked gainers and losers (same definition
+    as /api/market/movers/) with 7-close sparklines, and the last 30
+    Tracked Basket levels.  Nothing else -- no brokers, signals, dividends,
+    transactions or watchlists.
     """
     permission_classes = [AllowAny]
     authentication_classes = []
@@ -89,21 +105,19 @@ class PublicTrackedSnapshotAPIView(APIView):
         key = "market-api:public-snapshot"
         payload = cache.get(key)
         if payload is None:
-            movers = market_stats.ranked_by_change()
-            summary = market_stats.tracked_summary(movers["trade_date"])
+            result = movers.tracked_movers("1D", limit=PUBLIC_MOVERS_LIMIT)
+            summary = movers.tracked_summary(result["as_of"]) if result["as_of"] else {}
             payload = {
                 "scope": SCOPE,
                 "units": market_stats.UNITS,
-                "trade_date": movers["trade_date"],
-                "summary": {
-                    name: summary.get(name)
-                    for name in (
-                        "tracked_count", "advanced", "declined", "unchanged", "no_prev_close",
-                        "positive_circuit", "negative_circuit", "total_turnover", "total_traded_shares",
-                    )
-                },
-                "movers": [{name: row[name] for name in PUBLIC_MOVER_FIELDS} for row in movers["rows"]],
+                "as_of": result["as_of"],
+                "period_label": result["period_label"],
+                "summary": {name: summary.get(name) for name in PUBLIC_SUMMARY_FIELDS},
+                "gainers": [{name: row[name] for name in PUBLIC_MOVER_FIELDS} for row in result["gainers"]],
+                "losers": [{name: row[name] for name in PUBLIC_MOVER_FIELDS} for row in result["losers"]],
                 "basket": market_stats.basket_index(PUBLIC_BASKET_DAYS),
+                "provenance": result["provenance"],
+                "reason": result.get("reason"),
             }
             cache.set(key, payload, CACHE_SECONDS)
         return Response(payload)
@@ -119,14 +133,20 @@ class TrackedSummaryAPIView(APIView):
         if error:
             return error
         return _cached(request, lambda ids: {
-            "summary": market_stats.tracked_summary(trade_date, ids),
-            "circuit_threshold_pct": market_stats.CIRCUIT_THRESHOLD_PCT,
+            "summary": movers.tracked_summary(trade_date, ids),
+            "circuit_threshold_pct": movers.CIRCUIT_THRESHOLD_PCT,
+            "provenance": movers.provenance(),
             "note": market_stats.CORPORATE_ACTION_NOTE,
         })
 
 
 class TrackedMoversAPIView(APIView):
-    """GET /api/market/movers/?date=YYYY-MM-DD -- every tracked company ranked by change_pct."""
+    """
+    GET /api/market/movers/?period=1D|5S|20S&date=YYYY-MM-DD&limit=5
+
+    Tracked gainers and losers (definition: services.movers).  1W / 1M are
+    accepted as aliases of 5S / 20S (5 and 20 trading sessions).
+    """
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
@@ -134,8 +154,15 @@ class TrackedMoversAPIView(APIView):
         trade_date, error = _parse_date(request)
         if error:
             return error
+        period = movers.normalize_period(request.query_params.get("period"))
+        if period is None:
+            return Response(
+                {"detail": f"period must be one of {', '.join(movers.PERIODS)} (aliases 1W, 1M)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        limit = _limit(request, 5)
         return _cached(request, lambda ids: {
-            **market_stats.ranked_by_change(trade_date, ids),
+            **movers.tracked_movers(period, trade_date, ids, limit),
             "note": market_stats.CORPORATE_ACTION_NOTE,
         })
 
@@ -150,11 +177,8 @@ class TrackedTopAPIView(APIView):
         trade_date, error = _parse_date(request)
         if error:
             return error
-        try:
-            limit = max(1, min(int(request.query_params.get("limit", 10)), 50))
-        except ValueError:
-            limit = 10
-        return _cached(request, lambda ids: market_stats.top_by(self.metric, trade_date, ids, limit))
+        limit = _limit(request, 10)
+        return _cached(request, lambda ids: movers.top_by(self.metric, trade_date, ids, limit))
 
 
 class CompanyBrokerActivityAPIView(APIView):
@@ -234,8 +258,28 @@ class WatchlistAPIView(APIView):
             items = items.filter(company_id__in=accessible_ids)
         return items
 
+    def _rows(self, items):
+        """Each saved company with its 1-session change from services.movers (any bucket)."""
+        items = list(items.select_related("company").order_by("-created_at"))
+        as_of, by_company = movers.company_rows([item.company_id for item in items])
+        rows = []
+        for item in items:
+            row = by_company.get(item.company_id) or {
+                "company_id": item.company_id, "symbol": item.company.symbol, "name": item.company.name,
+                "bucket": "not_tracked",
+            }
+            rows.append({**row, "watchlist_id": item.id, "created_at": item.created_at})
+        return as_of, rows
+
     def get(self, request):
-        return Response({"scope": SCOPE, "units": market_stats.UNITS, "rows": market_stats.watchlist_rows(self._items(request))})
+        as_of, rows = self._rows(self._items(request))
+        return Response({
+            "scope": SCOPE,
+            "units": market_stats.UNITS,
+            "as_of": as_of,
+            "rows": rows,
+            "provenance": movers.provenance(),
+        })
 
     def post(self, request):
         symbol = str(request.data.get("symbol", "")).strip()
@@ -243,7 +287,7 @@ class WatchlistAPIView(APIView):
             return Response({"detail": "symbol is required."}, status=status.HTTP_400_BAD_REQUEST)
         company = _tracked_company(request, symbol)
         _, created = WatchlistItem.objects.get_or_create(user=request.user, company=company)
-        rows = market_stats.watchlist_rows(self._items(request).filter(company=company))
+        _, rows = self._rows(self._items(request).filter(company=company))
         return Response(rows[0], status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
     def delete(self, request, symbol=None):

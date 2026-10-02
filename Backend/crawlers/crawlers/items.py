@@ -29,6 +29,9 @@ class DailyTradingDataItem(scrapy.Item):
     volume = scrapy.Field()
     turnover = scrapy.Field()
 
+    # ShareSansar "% change" (per_change), optional.
+    source_change_pct = scrapy.Field()
+
     source = scrapy.Field()
 
 

@@ -35,11 +35,12 @@ const ARC_COINS = (() => {
 const sparkle = (x: number, y: number, s: number) =>
   `M${x} ${y - s} Q${x} ${y} ${x + s} ${y} Q${x} ${y} ${x} ${y + s} Q${x} ${y} ${x - s} ${y} Q${x} ${y} ${x} ${y - s}Z`;
 
-// Small portfolio chart on the phone screen.
-const CHART = [62, 58, 64, 60, 70, 66, 74, 71, 80, 77, 88];
+// Decorative curve on the phone screen: an abstract shape in SVG units, NOT prices or market data.
+// The illustration deliberately shows no figures (no amounts, no % changes).
+const CURVE_SHAPE = [62, 58, 64, 60, 70, 66, 74, 71, 80, 77, 88];
 
 export default function HeroIllustration({ className = '' }: { className?: string }) {
-  const chartPts = CHART.map((v, i) => `${-42 + i * 8.4},${-4 - (v - 55) * 1.3}`);
+  const chartPts = CURVE_SHAPE.map((v, i) => `${-42 + i * 8.4},${-4 - (v - 55) * 1.3}`);
   return (
     <svg viewBox="0 0 580 480" className={className} aria-hidden>
       <defs>
@@ -104,10 +105,10 @@ export default function HeroIllustration({ className = '' }: { className?: strin
         <rect x="-64" y="-122" width="128" height="240" rx="20" fill={INK} stroke={EDGE} strokeWidth="1.5" />
         <rect x="-55" y="-111" width="110" height="218" rx="13" fill="#faf9ff" />
         <rect x="-16" y="-106" width="32" height="6" rx="3" fill={INK} />
-        <text x="-44" y="-80" fontSize="11" fontWeight="800" fill={INK} fontFamily="inherit">Portfolio</text>
-        <text x="-44" y="-62" fontSize="15" fontWeight="800" fill={INK} fontFamily="inherit">Rs 1,24,560</text>
-        <rect x="-44" y="-54" width="40" height="14" rx="7" fill={LIME} />
-        <text x="-24" y="-44" textAnchor="middle" fontSize="8.5" fontWeight="800" fill={INK} fontFamily="inherit">+2.4%</text>
+        {/* Placeholder bars instead of numbers: this is an illustration, not data. */}
+        <rect x="-44" y="-88" width="44" height="7" rx="3.5" fill="#c4b5fd" />
+        <rect x="-44" y="-74" width="70" height="11" rx="5.5" fill={INK} opacity="0.85" />
+        <rect x="-44" y="-56" width="30" height="12" rx="6" fill={LIME} stroke={INK} strokeWidth="1" />
         <path d={`M${chartPts[0]} L${chartPts.join(' L')} L42,16 L-42,16 Z`} fill="url(#hero-chart)" />
         <polyline points={chartPts.join(' ')} fill="none" stroke={VIOLET_DARK} strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
         {[[-38, 44, 54, 30, 1], [-26, 36, 50, 26, 1], [-14, 42, 60, 30, 0], [-2, 30, 44, 22, 1], [10, 26, 40, 18, 1], [22, 30, 50, 22, 0], [34, 20, 36, 12, 1]].map(([x, top, bot, h, up], i) => (

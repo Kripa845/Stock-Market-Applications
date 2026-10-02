@@ -13,8 +13,8 @@ import {
 } from '../components/market/format';
 import {
   marketApi,
-  type BasketIndex, type BrokerWindow, type DividendRow, type Signals, type TopMetric,
-  type TrackedRow, type TrackedSummary, type WatchlistRow,
+  type BasketIndex, type BrokerWindow, type DividendRow, type ExclusionReason, type MoverPeriod,
+  type MoversResponse, type Signals, type TopMetric, type TrackedRow, type TrackedSummary, type WatchlistRow,
 } from '../api/market';
 import type { NewsArticle } from '../types';
 import { useAuth } from '../contexts/AuthContext';
@@ -49,10 +49,14 @@ function SummaryTiles({ summary }: { summary: TrackedSummary }) {
     : '—';
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-      <Tile label="Tracked traded" value={summary.tracked_count} />
+      <Tile label="Tracked companies" value={summary.tracked_count} />
       <Tile label="Advanced" value={summary.advanced} tone="text-up" />
       <Tile label="Declined" value={summary.declined} tone="text-down" />
-      <Tile label="Unchanged" value={summary.unchanged} hint={`${summary.no_prev_close} without a previous close`} />
+      <Tile
+        label="Unchanged / not ranked"
+        value={`${summary.unchanged} / ${Object.values(summary.excluded_counts).reduce((a, b) => a + b, 0)}`}
+        hint="Not ranked: did not trade, missing previous session, previous close 0, or possible corporate action"
+      />
       <Tile label="Circuit ↑ / ↓" value={`${summary.positive_circuit} / ${summary.negative_circuit}`} hint="|change %| ≥ 9.9" />
       <Tile label="Turnover" value={`Rs ${formatNprCompact(summary.total_turnover)}`} />
       <Tile label="Shares traded" value={formatCount(summary.total_traded_shares)} />
@@ -65,84 +69,219 @@ function SummaryTiles({ summary }: { summary: TrackedSummary }) {
   );
 }
 
-function MoversTable({ rows, selected, onSelect, watched, onToggleWatch }: {
+const REASON_LABELS: Record<ExclusionReason, string> = {
+  not_traded: 'Did not trade',
+  missing_previous_session: 'No row on the comparison session',
+  prev_close_zero: 'Previous close is 0',
+  possible_corporate_action: 'Possible corporate action (>10%, no source % change)',
+};
+
+const PERIOD_TABS: { period: MoverPeriod; label: string }[] = [
+  { period: '1D', label: '1 session' },
+  { period: '5S', label: '5 sessions' },
+  { period: '20S', label: '20 sessions' },
+];
+
+function BasisBadge({ row }: { row: TrackedRow }) {
+  if (row.adjusted) {
+    return (
+      <span
+        className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] text-sky-400"
+        title={`ShareSansar's % change, measured against the exchange's adjusted previous close. Close-to-close: ${formatPct(row.close_to_close_change_pct)} (stored close ${formatPrice(row.raw_prev_close)}).`}
+      >
+        Adjusted
+      </span>
+    );
+  }
+  if (row.unadjusted) {
+    return (
+      <span
+        className="rounded bg-bg-elevated px-1.5 py-0.5 text-[10px] text-text-muted"
+        title="No source % change stored for the whole period; this is the plain close-to-close change and is not adjusted for bonus or right shares."
+      >
+        Unadjusted
+      </span>
+    );
+  }
+  return null;
+}
+
+function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onToggleWatch }: {
+  title: string;
   rows: TrackedRow[];
-  selected: string | null;
+  total: number;
+  tone: 'up' | 'down';
   onSelect: (symbol: string) => void;
+  selected: string | null;
   watched: Set<string> | null;
   onToggleWatch: (symbol: string) => void;
 }) {
   return (
     <div className="card overflow-x-auto">
-      <h2 className="mb-3 text-sm font-semibold text-text-primary">All tracked companies by change</h2>
-      <table className="w-full min-w-[720px] text-sm">
-        <thead>
-          <tr className="border-b border-bg-border text-text-secondary">
-            {watched && <th className="w-8" />}
-            <th className="py-2 text-left font-medium">Company</th>
-            <th className="py-2 text-center font-medium">Last 7 closes</th>
-            <th className="py-2 text-right font-medium">LTP</th>
-            <th className="py-2 text-right font-medium">Prev close</th>
-            <th className="py-2 text-right font-medium">Change</th>
-            <th className="py-2 text-right font-medium">Volume</th>
-            <th className="py-2 text-right font-medium">Turnover</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            const tone = changeTone(row.change_pct);
-            const isWatched = watched?.has(row.symbol) ?? false;
-            return (
-              <tr
-                key={row.symbol}
-                onClick={() => onSelect(row.symbol)}
-                className={`table-row cursor-pointer ${selected === row.symbol ? 'bg-accent/5' : ''}`}
-              >
-                {watched && (
-                  <td className="py-2" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => onToggleWatch(row.symbol)}
-                      title={isWatched ? 'Remove from my watchlist' : 'Add to my watchlist'}
-                      aria-pressed={isWatched}
-                      className="rounded p-1 text-text-muted hover:text-yellow-400"
-                    >
-                      <Star size={14} className={isWatched ? 'fill-yellow-400 text-yellow-400' : ''} />
-                    </button>
-                  </td>
-                )}
-                <td className="py-2">
-                  <div className="flex items-center gap-2">
-                    <CompanyLogo symbol={row.symbol} name={row.name} size="sm" />
-                    <span>
-                      <span className="block font-mono font-semibold text-accent-light">{row.symbol}</span>
-                      <span className="block text-xs text-text-muted">{row.sector}</span>
-                    </span>
-                    {row.book_closure_in_window && (
-                      <span
-                        className="rounded bg-yellow-500/10 px-1.5 py-0.5 text-[10px] text-yellow-400"
-                        title="A recorded book closure falls in this session; the change may be a price adjustment, not trading."
-                      >
-                        Book closure
+      <div className="mb-3 flex items-baseline justify-between">
+        <h3 className={`text-sm font-semibold ${tone === 'up' ? 'text-up' : 'text-down'}`}>{title}</h3>
+        <span className="text-xs text-text-muted">{total} {total === 1 ? 'company' : 'companies'}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="py-6 text-center text-xs text-text-muted">No tracked company {tone === 'up' ? 'rose' : 'fell'} in this period.</p>
+      ) : (
+        <table className="w-full min-w-[560px] text-sm">
+          <thead>
+            <tr className="border-b border-bg-border text-text-secondary">
+              {watched && <th className="w-7" />}
+              <th className="py-2 text-left font-medium">Company</th>
+              <th className="py-2 text-center font-medium">Last 7 closes</th>
+              <th className="py-2 text-right font-medium">Close</th>
+              <th className="py-2 text-right font-medium">Prev close</th>
+              <th className="py-2 text-right font-medium">Change</th>
+              <th className="py-2 text-right font-medium">Turnover</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const isWatched = watched?.has(row.symbol) ?? false;
+              return (
+                <tr key={row.symbol} onClick={() => onSelect(row.symbol)}
+                  className={`table-row cursor-pointer ${selected === row.symbol ? 'bg-accent/5' : ''}`}>
+                  {watched && (
+                    <td className="py-2" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => onToggleWatch(row.symbol)} aria-pressed={isWatched}
+                        title={isWatched ? 'Remove from my watchlist' : 'Add to my watchlist'}
+                        className="rounded p-1 text-text-muted hover:text-yellow-400">
+                        <Star size={14} className={isWatched ? 'fill-yellow-400 text-yellow-400' : ''} />
+                      </button>
+                    </td>
+                  )}
+                  <td className="py-2">
+                    <div className="flex items-center gap-2">
+                      <CompanyLogo symbol={row.symbol} name={row.name} size="sm" />
+                      <span>
+                        <span className="block font-mono font-semibold text-accent-light">{row.symbol}</span>
+                        <span className="block text-xs text-text-muted">{row.sector}</span>
                       </span>
-                    )}
-                  </div>
-                </td>
-                <td className="py-2">
-                  <div className="flex justify-center">
-                    <Sparkline data={(row.sparkline ?? []).map((p) => Number(p.close))} width={90} height={26} positive={tone !== 'down'} />
-                  </div>
-                </td>
-                <td className="py-2 text-right font-mono font-semibold text-text-primary">{formatPrice(row.ltp)}</td>
-                <td className="py-2 text-right font-mono text-text-secondary">{formatPrice(row.prev_close)}</td>
-                <td className="py-2 text-right"><Change pct={row.change_pct} /></td>
-                <td className="py-2 text-right font-mono">{formatCount(row.volume)}</td>
-                <td className="py-2 text-right font-mono">{formatNprCompact(row.turnover)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    </div>
+                  </td>
+                  <td className="py-2">
+                    <div className="flex justify-center">
+                      <Sparkline data={(row.sparkline ?? []).map((p) => Number(p.close))} width={84} height={26} positive={tone === 'up'} />
+                    </div>
+                  </td>
+                  <td className="py-2 text-right font-mono font-semibold text-text-primary">{formatPrice(row.close)}</td>
+                  <td className="py-2 text-right font-mono text-text-secondary">{formatPrice(row.prev_close)}</td>
+                  <td className="py-2 text-right">
+                    <div className="flex flex-col items-end gap-0.5"><Change pct={row.change_pct} /><BasisBadge row={row} /></div>
+                  </td>
+                  <td className="py-2 text-right font-mono">{formatNprCompact(row.turnover)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
     </div>
+  );
+}
+
+function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }: {
+  selected: string | null;
+  onSelect: (symbol: string) => void;
+  watched: Set<string> | null;
+  onToggleWatch: (symbol: string) => void;
+  onLoaded: (firstSymbol: string | null) => void;
+}) {
+  const [period, setPeriod] = useState<MoverPeriod>('1D');
+  const [data, setData] = useState<MoversResponse | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  useEffect(() => {
+    let cancelled = false;
+    setState('loading');
+    setData(null); // never show the previous period's (or stale) numbers while loading
+    marketApi.movers(period, 10)
+      .then((response) => {
+        if (cancelled) return;
+        setData(response);
+        setState('ready');
+        onLoaded(response.gainers[0]?.symbol ?? response.losers[0]?.symbol ?? null);
+      })
+      .catch(() => { if (!cancelled) setState('error'); });
+    return () => { cancelled = true; };
+  }, [period, onLoaded]);
+
+  const crawl = data?.provenance.last_price_crawl;
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold text-text-primary">Tracked gainers and losers</h2>
+          <p className="text-xs text-text-muted">
+            {data?.as_of
+              ? <>As of {formatTradeDate(data.as_of)}{data.base_date ? <> vs {formatTradeDate(data.base_date)}</> : null} · tracked companies only</>
+              : 'Tracked companies only'}
+          </p>
+        </div>
+        <div className="flex gap-1 rounded-lg bg-bg-elevated p-0.5 text-xs">
+          {PERIOD_TABS.map((tab) => (
+            <button key={tab.period} onClick={() => setPeriod(tab.period)}
+              className={`rounded-md px-2.5 py-1 ${period === tab.period ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {state === 'loading' && <div className="card py-10 text-center text-sm text-text-muted">Loading tracked movers…</div>}
+      {state === 'error' && (
+        <div className="card flex items-center justify-center gap-2 py-10 text-sm text-down">
+          <AlertTriangle size={14} /> Could not load tracked movers. No older data is shown.
+        </div>
+      )}
+      {state === 'ready' && data && !data.as_of && (
+        <EmptyState title="No crawled prices yet" description={`${data.reason ?? ''}. ${data.action ?? ''}`} />
+      )}
+      {state === 'ready' && data?.as_of && (
+        <>
+          {data.reason && (
+            <p className="flex items-center gap-1 text-xs text-yellow-400"><Info size={12} />{data.reason}</p>
+          )}
+          <div className="grid gap-4 2xl:grid-cols-2">
+            <MoverTable title="Tracked gainers" rows={data.gainers} total={data.gainers_count ?? data.gainers.length} tone="up"
+              onSelect={onSelect} selected={selected} watched={watched} onToggleWatch={onToggleWatch} />
+            <MoverTable title="Tracked losers" rows={data.losers} total={data.losers_count ?? data.losers.length} tone="down"
+              onSelect={onSelect} selected={selected} watched={watched} onToggleWatch={onToggleWatch} />
+          </div>
+          {(data.unchanged.length > 0 || data.excluded.length > 0) && (
+            <div className="card space-y-2 text-xs">
+              {data.unchanged.length > 0 && (
+                <p className="text-text-secondary">
+                  <span className="font-medium text-text-primary">Unchanged:</span>{' '}
+                  {data.unchanged.map((row) => row.symbol).join(', ')}
+                </p>
+              )}
+              {data.excluded.length > 0 && (
+                <div>
+                  <span className="font-medium text-text-primary">Not ranked:</span>
+                  <ul className="mt-1 space-y-0.5">
+                    {data.excluded.map((row) => (
+                      <li key={row.symbol} className="text-text-secondary">
+                        <span className="font-mono text-accent-light">{row.symbol}</span> — {REASON_LABELS[row.bucket as ExclusionReason]}
+                        {row.close_to_close_change_pct !== null && row.bucket === 'possible_corporate_action'
+                          ? ` (${formatPct(row.close_to_close_change_pct)} close-to-close)` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+          <p className="text-[11px] text-text-muted">
+            Source: {data.provenance.table} (source = {data.provenance.price_source}); change from {data.provenance.change_source}.
+            {' '}Latest crawled trade date: {formatTradeDate(data.provenance.latest_crawled_trade_date)}.
+            {crawl?.completed_at ? ` Last price crawl #${crawl.id} finished ${format(new Date(crawl.completed_at), 'MMM d, yyyy h:mm a')}.` : ' No completed price crawl recorded.'}
+          </p>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -210,12 +349,12 @@ function SignalsCard({ signals }: { signals: Signals }) {
     {
       label: '5-day MA',
       value: formatPrice(ma.ma5.value),
-      note: ma.ma5.value === null ? needs(ma.ma5.sessions, 5) : `LTP ${formatPct(ma.ltp_vs_ma5_pct)}`,
+      note: ma.ma5.value === null ? needs(ma.ma5.sessions, 5) : `Close ${formatPct(ma.close_vs_ma5_pct)}`,
     },
     {
       label: '20-day MA',
       value: formatPrice(ma.ma20.value),
-      note: ma.ma20.value === null ? needs(ma.ma20.sessions, 20) : `LTP ${formatPct(ma.ltp_vs_ma20_pct)}`,
+      note: ma.ma20.value === null ? needs(ma.ma20.sessions, 20) : `Close ${formatPct(ma.close_vs_ma20_pct)}`,
     },
     {
       label: '52-week high',
@@ -439,8 +578,12 @@ function WatchlistCard({ rows, canRemove, onRemove }: { rows: WatchlistRow[]; ca
           {rows.map((row) => (
             <li key={row.symbol} className="flex items-center gap-3 py-2 text-sm">
               <span className="w-16 font-mono font-semibold text-accent-light">{row.symbol}</span>
-              <span className="flex-1 text-right font-mono text-text-primary">{formatPrice(row.ltp)}</span>
-              <span className="w-20 text-right text-xs"><Change pct={row.change_pct} /></span>
+              <span className="flex-1 text-right font-mono text-text-primary">{formatPrice(row.close)}</span>
+              <span className="w-20 text-right text-xs">
+                {row.bucket === 'gainer' || row.bucket === 'loser' || row.bucket === 'unchanged'
+                  ? <Change pct={row.change_pct ?? null} />
+                  : <span className="text-text-muted" title={row.bucket}>not ranked</span>}
+              </span>
               {canRemove && (
                 <button onClick={() => onRemove(row.symbol)} title="Remove" className="text-text-muted hover:text-down">
                   <Star size={13} className="fill-yellow-400 text-yellow-400" />
@@ -461,13 +604,13 @@ export default function TrackedCompaniesPage() {
   const canRemove = hasPermission('remove_watchlist');
 
   const [summary, setSummary] = useState<TrackedSummary | null>(null);
-  const [movers, setMovers] = useState<TrackedRow[]>([]);
   const [basket, setBasket] = useState<BasketIndex | null>(null);
   const [dividends, setDividends] = useState<DividendRow[] | null>(null);
   const [watchlist, setWatchlist] = useState<WatchlistRow[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const loadWatchlist = useCallback(() => {
     if (!canViewWatchlist) return;
@@ -477,22 +620,24 @@ export default function TrackedCompaniesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const [summaryRes, moversRes, basketRes, dividendsRes] = await Promise.allSettled([
-      marketApi.summary(), marketApi.movers(), marketApi.basket(60), marketApi.dividends(),
+    setSummary(null);
+    const [summaryRes, basketRes, dividendsRes] = await Promise.allSettled([
+      marketApi.summary(), marketApi.basket(60), marketApi.dividends(),
     ]);
-    if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value.summary);
-    if (moversRes.status === 'fulfilled') {
-      setMovers(moversRes.value.rows);
-      setSelected((current) => current ?? moversRes.value.rows[0]?.symbol ?? null);
-    }
-    if (basketRes.status === 'fulfilled') setBasket(basketRes.value);
-    if (dividendsRes.status === 'fulfilled') setDividends(dividendsRes.value.rows);
-    if (summaryRes.status === 'rejected' && moversRes.status === 'rejected') setError('Unable to load tracked company data.');
+    setSummary(summaryRes.status === 'fulfilled' ? summaryRes.value.summary : null);
+    setBasket(basketRes.status === 'fulfilled' ? basketRes.value : null);
+    setDividends(dividendsRes.status === 'fulfilled' ? dividendsRes.value.rows : null);
+    if (summaryRes.status === 'rejected') setError('Unable to load the tracked companies summary.');
     loadWatchlist();
+    setReloadKey((key) => key + 1);
     setLoading(false);
   }, [loadWatchlist]);
 
   useEffect(() => { load(); }, [load]);
+
+  const onMoversLoaded = useCallback((first: string | null) => {
+    setSelected((current) => current ?? first);
+  }, []);
 
   const watched = canViewWatchlist && watchlist ? new Set(watchlist.map((row) => row.symbol)) : null;
 
@@ -525,34 +670,33 @@ export default function TrackedCompaniesPage() {
       />
       {error && <div className="flex items-center gap-2 text-sm text-down"><AlertTriangle size={14} />{error}</div>}
       {loading && !summary && <p className="text-text-secondary">Loading tracked companies…</p>}
-      {!loading && !error && movers.length === 0 && (
-        <EmptyState title="No tracked prices yet" description="Run the price crawler to populate the tracked companies." />
+      {!loading && summary && !summary.trade_date && (
+        <EmptyState title="No crawled prices yet" description={`${summary.reason ?? ''}. ${summary.action ?? ''}`} />
       )}
 
-      {summary && summary.trade_date && <SummaryTiles summary={summary} />}
+      {summary?.trade_date && <SummaryTiles summary={summary} />}
 
-      {movers.length > 0 && (
-        <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-          <MoversTable
-            rows={movers}
-            selected={selected}
-            onSelect={setSelected}
-            watched={canAdd || canRemove ? watched : null}
-            onToggleWatch={toggleWatch}
-          />
-          <div className="space-y-4">
-            {basket && (
-              <div className="card">
-                <h2 className="text-sm font-semibold text-text-primary">{basket.label}</h2>
-                <p className="mb-3 text-[11px] text-text-muted">Index of the tracked companies, base 1000. Not the NEPSE index.</p>
-                <BasketChart rows={basket.rows} height={130} />
-              </div>
-            )}
-            <TopLists />
-            {canViewWatchlist && watchlist && <WatchlistCard rows={watchlist} canRemove={canRemove} onRemove={toggleWatch} />}
-          </div>
+      <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+        <MoversSection
+          key={reloadKey}
+          selected={selected}
+          onSelect={setSelected}
+          watched={canAdd || canRemove ? watched : null}
+          onToggleWatch={toggleWatch}
+          onLoaded={onMoversLoaded}
+        />
+        <div className="space-y-4">
+          {basket && (
+            <div className="card">
+              <h2 className="text-sm font-semibold text-text-primary">{basket.label}</h2>
+              <p className="mb-3 text-[11px] text-text-muted">Index of the tracked companies, base 1000. Not the NEPSE index.</p>
+              <BasketChart rows={basket.rows} height={130} />
+            </div>
+          )}
+          <TopLists key={reloadKey} />
+          {canViewWatchlist && watchlist && <WatchlistCard rows={watchlist} canRemove={canRemove} onRemove={toggleWatch} />}
         </div>
-      )}
+      </div>
 
       {selected && <CompanyDetail symbol={selected} />}
 

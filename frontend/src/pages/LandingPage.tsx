@@ -254,7 +254,7 @@ export default function LandingPage() {
       {/* Tracked companies snapshot (hidden when there is no data) */}
       <LandingTracked heading={
         <SectionHeading title="Tracked companies at the close"
-          text="Every company StockScope follows, ranked by today's change, with the Tracked Basket index we build from them." />
+          text="The biggest gainers and losers among the companies StockScope follows, with the Tracked Basket index we build from them." />
       } />
 
       {/* Latest crawled news (hidden when there is none) */}

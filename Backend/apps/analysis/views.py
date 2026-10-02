@@ -15,6 +15,7 @@ from .services.brokers import (
     build_top_stock_by_broker,   # add this line
     sampled_floorsheet_dates,
 )
+from apps.market_data.services.price_source import with_crawled_price
 from apps.companies.models import Company
 from apps.users.company_access import (
     filter_company_queryset,
@@ -39,7 +40,7 @@ class DailyAnalysisListAPIView(generics.ListAPIView):
     serializer_class = DailyAnalysisSerializer
 
     def get_queryset(self):
-        qs = DailyAnalysis.objects.select_related("company").all()
+        qs = with_crawled_price(DailyAnalysis.objects.select_related("company").all())
         qs = filter_company_queryset(qs, self.request.user)
         company_id = self.request.query_params.get("company_id")
         if company_id:
@@ -906,8 +907,7 @@ class CrossCompanyAnalysisAPIView(APIView):
             # cross-company view can never disagree with the per-company
             # view about the same trading day.
             latest_analysis = (
-                DailyAnalysis.objects
-                .filter(company=c)
+                with_crawled_price(DailyAnalysis.objects.filter(company=c))
                 .order_by("-date")
                 .first()
             )

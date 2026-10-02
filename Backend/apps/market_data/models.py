@@ -14,16 +14,16 @@ class DailyPrice(models.Model):
     
     turnover=models.DecimalField(max_digits=18,decimal_places=2)
 
-    # End-of-day fields for change calculations.  Raw numbers only.
-    #   ltp         last traded price; the source is end-of-day, so it equals close.
-    #   prev_close  the company's close on its previous stored trading day
-    #               (not adjusted for bonus/right/dividend book closures).
-    #   transactions number of floorsheet trades that day; NULL until the
-    #               floorsheet for that company-day has been crawled.
-    # Filled by services.price_fields.derive_price_fields.
-    ltp = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
-    prev_close = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    # Number of floorsheet trades that day; NULL until the floorsheet for that
+    # company-day has been crawled.  Filled by services.price_fields.
+    # (Previous close is never stored: services.movers derives it from the
+    # trading calendar, so there is one definition everywhere.)
     transactions = models.PositiveIntegerField(null=True, blank=True)
+    # ShareSansar's own "% change" (``per_change``) for the session, as published.
+    # It is measured against the exchange's previous close, which is ADJUSTED for
+    # bonus / right shares, so it can differ from close(t) vs close(t-1) of our
+    # rows on a book-closure day.  NULL for rows crawled before this field existed.
+    source_change_pct = models.DecimalField(max_digits=9, decimal_places=4, null=True, blank=True)
 
     class Meta:
      ordering = ['-date']

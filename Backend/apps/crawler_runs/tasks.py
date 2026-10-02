@@ -351,7 +351,7 @@ def crawl_daily_prices():
     """
     Scheduled daily trading-data crawl.
 
-    Chains ``derive_price_fields_task`` (ltp / prev_close) and then
+    Chains ``derive_price_fields_task`` (transactions) and then
     ``rebuild_all_analysis`` so VWAP / volume baseline / pressure are
     recomputed immediately after fresh prices land.
     """

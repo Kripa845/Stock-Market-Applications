@@ -6,20 +6,13 @@ and only crawled prices (``DailyPrice.source == "crawled"``).  Nothing here
 describes the whole NEPSE market; callers must label results
 "Tracked companies".
 
-Definitions (all computed in SQL through annotations / aggregates):
-
-  change      = ltp - prev_close
-  change_pct  = (ltp - prev_close) * 100 / prev_close
-                NULL when prev_close is NULL or 0 (or ltp is NULL); such rows
-                are counted as ``no_prev_close``, never as unchanged.
-  circuit     = abs(change_pct) >= CIRCUIT_THRESHOLD_PCT (9.9).  A tolerance,
-                not an exact 10%, because the exchange rounds the circuit
-                price to the tick size (e.g. -10.19% is a lower circuit).
-  trade_date  = defaults to the latest date with tracked crawled prices.
+Session change, movers, the summary and top lists live in services.movers
+(one definition everywhere).  This module holds the scope helpers, broker
+activity, price signals, the Tracked Basket and dividends.
 
 Python is used only to arrange already-aggregated rows into the response
-(sparkline grouping, merging the buy-side and sell-side broker tables);
-no per-trade or per-price arithmetic happens in Python loops.
+(merging the buy-side and sell-side broker tables); no per-trade or
+per-price arithmetic happens in Python loops.
 """
 
 from collections import defaultdict
@@ -28,23 +21,15 @@ from decimal import Decimal
 
 from django.db.models import (
     Avg,
-    Case,
     Count,
     DecimalField,
-    Exists,
     ExpressionWrapper,
     F,
     Max,
     Min,
-    OuterRef,
-    Q,
-    Subquery,
     Sum,
-    Value,
-    When,
-    Window,
 )
-from django.db.models.functions import RowNumber, Trim
+from django.db.models.functions import Trim
 
 from apps.companies.models import Company
 from apps.market_data.models import Broker, DailyPrice, DividendAnnouncement
@@ -53,18 +38,15 @@ from apps.market_intelligence.models import ProxyIndexSnapshot
 
 
 PRICE_SOURCE = "crawled"
-CIRCUIT_THRESHOLD_PCT = Decimal("9.9")
-SPARKLINE_SESSIONS = 7
 BROKER_WINDOWS = (5, 20)
 CONCENTRATION_TOP_N = 5
 
 CORPORATE_ACTION_NOTE = (
-    "prev_close is the previous stored close and is NOT adjusted for bonus, "
-    "right or cash-dividend book closures. On the first session after a book "
-    "closure the change can reflect the exchange's price adjustment rather "
-    "than trading. Rows where a recorded DividendAnnouncement book closure "
-    "falls after the previous session and on or before trade_date are marked "
-    "book_closure_in_window=true."
+    "change_pct uses ShareSansar's published % change when stored; it is measured against the "
+    "exchange's adjusted previous close, so bonus / right book closures do not show as drops "
+    "(rows marked adjusted=true). Without it the change is close-to-close (unadjusted=true), and "
+    "a close-to-close move beyond 10% is excluded as a possible corporate action because no "
+    "corporate-action data is stored."
 )
 
 UNITS = {
@@ -97,152 +79,6 @@ def tracked_prices(company_ids=None):
         source=PRICE_SOURCE,
         company__in=tracked_companies(company_ids),
     )
-
-
-def latest_trade_date(company_ids=None):
-    return tracked_prices(company_ids).aggregate(day=Max("date"))["day"]
-
-
-def previous_trade_date(trade_date, company_ids=None):
-    return tracked_prices(company_ids).filter(date__lt=trade_date).aggregate(day=Max("date"))["day"]
-
-
-def with_change(prices):
-    """Annotate ``change`` and ``change_pct`` (NULL without a usable prev_close)."""
-    has_reference = Q(prev_close__gt=0, ltp__isnull=False)
-    return prices.annotate(
-        change=Case(
-            When(has_reference, then=ExpressionWrapper(F("ltp") - F("prev_close"), output_field=PCT_FIELD)),
-            default=Value(None),
-            output_field=PCT_FIELD,
-        ),
-        change_pct=Case(
-            When(
-                has_reference,
-                then=ExpressionWrapper(
-                    (F("ltp") - F("prev_close")) * Value(100) / F("prev_close"),
-                    output_field=PCT_FIELD,
-                ),
-            ),
-            default=Value(None),
-            output_field=PCT_FIELD,
-        ),
-    )
-
-
-PRICE_ROW_FIELDS = (
-    "company_id", "symbol", "name", "sector", "date",
-    "ltp", "prev_close", "change", "change_pct",
-    "open", "high", "low", "close", "volume", "turnover", "transactions",
-)
-
-
-def _price_rows(trade_date, company_ids):
-    return with_change(tracked_prices(company_ids).filter(date=trade_date)).annotate(
-        symbol=F("company__symbol"),
-        name=F("company__name"),
-        sector=F("company__sector"),
-    )
-
-
-# ----------------------------------------------------------------------
-# Movers / rankings
-# ----------------------------------------------------------------------
-
-def ranked_by_change(trade_date=None, company_ids=None):
-    """Every tracked company on ``trade_date`` by change_pct (NULLs last), with a 7-close sparkline."""
-    trade_date = trade_date or latest_trade_date(company_ids)
-    if trade_date is None:
-        return {"trade_date": None, "rows": []}
-
-    previous_date = previous_trade_date(trade_date, company_ids)
-    if previous_date is not None:
-        book_closure = Exists(
-            DividendAnnouncement.objects.filter(
-                company=OuterRef("company"),
-                book_closure_date__gt=previous_date,
-                book_closure_date__lte=trade_date,
-            )
-        )
-    else:
-        book_closure = Value(False)
-
-    rows = list(
-        _price_rows(trade_date, company_ids)
-        .annotate(book_closure_in_window=book_closure)
-        .order_by(F("change_pct").desc(nulls_last=True), "company__symbol")
-        .values(*PRICE_ROW_FIELDS, "book_closure_in_window")
-    )
-
-    recent_closes = (
-        tracked_prices(company_ids)
-        .filter(date__lte=trade_date, company_id__in=[row["company_id"] for row in rows])
-        .annotate(position=Window(RowNumber(), partition_by=[F("company_id")], order_by=F("date").desc()))
-        .filter(position__lte=SPARKLINE_SESSIONS)
-        .order_by("company_id", "date")
-        .values_list("company_id", "date", "close")
-    )
-    sparklines = defaultdict(list)
-    for company_id, day, close in recent_closes:
-        sparklines[company_id].append({"date": day, "close": close})
-    for row in rows:
-        row["sparkline"] = sparklines[row["company_id"]]
-
-    return {"trade_date": trade_date, "previous_trade_date": previous_date, "rows": rows}
-
-
-TOP_FIELDS = {
-    "turnover": "turnover",
-    "volume": "volume",
-    "transactions": "transactions",
-}
-
-
-def top_by(metric, trade_date=None, company_ids=None, limit=10):
-    """Tracked companies on ``trade_date`` by turnover / volume / transactions, descending (NULLs last)."""
-    field = TOP_FIELDS[metric]
-    trade_date = trade_date or latest_trade_date(company_ids)
-    if trade_date is None:
-        return {"trade_date": None, "metric": metric, "rows": []}
-    rows = list(
-        _price_rows(trade_date, company_ids)
-        .order_by(F(field).desc(nulls_last=True), "company__symbol")
-        .values(*PRICE_ROW_FIELDS)[:limit]
-    )
-    return {"trade_date": trade_date, "metric": metric, "rows": rows}
-
-
-# ----------------------------------------------------------------------
-# Summary
-# ----------------------------------------------------------------------
-
-def tracked_summary(trade_date=None, company_ids=None):
-    """
-    One ``aggregate()`` over the tracked companies' rows for ``trade_date``.
-
-    advanced + declined + unchanged + no_prev_close == tracked_count, where
-    tracked_count is the number of tracked companies with a crawled price on
-    that date.  ``total_transactions`` sums only rows whose floorsheet has been
-    crawled; ``transactions_reported`` says how many that is.
-    """
-    trade_date = trade_date or latest_trade_date(company_ids)
-    if trade_date is None:
-        return {"trade_date": None}
-
-    totals = with_change(tracked_prices(company_ids).filter(date=trade_date)).aggregate(
-        tracked_count=Count("id"),
-        advanced=Count("id", filter=Q(change__gt=0)),
-        declined=Count("id", filter=Q(change__lt=0)),
-        unchanged=Count("id", filter=Q(change=0)),
-        no_prev_close=Count("id", filter=Q(change__isnull=True)),
-        positive_circuit=Count("id", filter=Q(change_pct__gte=CIRCUIT_THRESHOLD_PCT)),
-        negative_circuit=Count("id", filter=Q(change_pct__lte=-CIRCUIT_THRESHOLD_PCT)),
-        total_turnover=Sum("turnover"),
-        total_traded_shares=Sum("volume"),
-        total_transactions=Sum("transactions"),
-        transactions_reported=Count("transactions"),
-    )
-    return {"trade_date": trade_date, **totals}
 
 
 # ----------------------------------------------------------------------
@@ -393,7 +229,7 @@ def signals(company_id, anchor_date=None):
         first_date=Min("date"),
     )
 
-    price = latest.ltp if latest.ltp is not None else latest.close
+    price = latest.close
     average_volume = volume_average["value"]
 
     def pct(numerator, denominator):
@@ -402,7 +238,7 @@ def signals(company_id, anchor_date=None):
     return {
         "symbol": latest.company.symbol,
         "trade_date": latest.date,
-        "ltp": price,
+        "close": price,
         "volume": latest.volume,
         "volume_vs_20d_avg": {
             "average_volume": average_volume,
@@ -413,8 +249,8 @@ def signals(company_id, anchor_date=None):
         "moving_averages": {
             "ma5": ma5,
             "ma20": ma20,
-            "ltp_vs_ma5_pct": pct(price - ma5["value"], ma5["value"]) if ma5["value"] else None,
-            "ltp_vs_ma20_pct": pct(price - ma20["value"], ma20["value"]) if ma20["value"] else None,
+            "close_vs_ma5_pct": pct(price - ma5["value"], ma5["value"]) if ma5["value"] else None,
+            "close_vs_ma20_pct": pct(price - ma20["value"], ma20["value"]) if ma20["value"] else None,
         },
         "range_52w": {
             **range_52w,
@@ -459,20 +295,3 @@ def dividend_rows(company_ids=None):
         .order_by(F("book_closure_date").desc(nulls_last=True), "company__symbol")
         .values("id", "company_id", "symbol", "name", "fiscal_year", "bonus_pct", "cash_pct", "total_pct", "book_closure_date")
     )
-
-
-def watchlist_rows(items):
-    """Annotate a WatchlistItem queryset with each company's latest crawled price and change."""
-    latest = DailyPrice.objects.filter(company=OuterRef("company"), source=PRICE_SOURCE).order_by("-date")
-    rows = items.annotate(
-        symbol=F("company__symbol"),
-        name=F("company__name"),
-        trade_date=Subquery(latest.values("date")[:1]),
-        ltp=Subquery(latest.values("ltp")[:1]),
-        prev_close=Subquery(latest.values("prev_close")[:1]),
-    )
-    rows = with_change(rows)
-    return list(rows.values(
-        "id", "company_id", "symbol", "name", "trade_date",
-        "ltp", "prev_close", "change", "change_pct", "created_at",
-    ))

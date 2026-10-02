@@ -1,5 +1,5 @@
 """
-Fill DailyPrice.ltp, prev_close and transactions for rows already stored.
+Fill DailyPrice.transactions (floorsheet trade count) for rows already stored.
 Usage:
     python manage.py backfill_price_fields
     python manage.py backfill_price_fields --source unverified
@@ -11,7 +11,7 @@ from apps.market_data.services.price_fields import derive_price_fields
 
 
 class Command(BaseCommand):
-    help = "Backfill ltp (= close), prev_close (previous stored close) and transactions (floorsheet trade count)"
+    help = "Backfill DailyPrice.transactions from the stored floorsheet"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -23,8 +23,5 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         result = derive_price_fields(source=options["source"])
         self.stdout.write(
-            self.style.SUCCESS(
-                "ltp filled: {ltp_filled} | prev_close recomputed: {prev_close_rows} | "
-                "transactions filled: {transactions_filled}".format(**result)
-            )
+            self.style.SUCCESS("transactions filled: {transactions_filled}".format(**result))
         )

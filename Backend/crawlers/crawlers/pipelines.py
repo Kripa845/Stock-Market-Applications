@@ -912,6 +912,21 @@ class TradingDataPipeline:
             )
             return item
 
+        # Optional source "% change": an unparseable value is logged and
+        # skipped, it never rejects the row.
+        source_change_pct = None
+        raw_change = item.get("source_change_pct")
+        if raw_change not in (None, ""):
+            try:
+                source_change_pct = Decimal(str(raw_change).replace(",", "").strip())
+            except (InvalidOperation, ValueError):
+                spider.logger.warning(
+                    "Invalid source_change_pct %r for %s on %s; stored as NULL.",
+                    raw_change,
+                    symbol,
+                    trading_date,
+                )
+
         if any(
             value < 0
             for value in (
@@ -952,24 +967,26 @@ class TradingDataPipeline:
             )
             return item
 
+        defaults = {
+            "open": open_price,
+            "high": high_price,
+            "low": low_price,
+            "close": close_price,
+            "volume": volume,
+            "turnover": turnover,
+            "source": "crawled",
+        }
+        # Only ever set, never cleared: a later crawl without the column
+        # keeps the value already stored.
+        if source_change_pct is not None:
+            defaults["source_change_pct"] = source_change_pct
+
         try:
             _, created = (
                 DailyPrice.objects.update_or_create(
                     company=company,
                     date=trading_date,
-                    defaults={
-                        "open": open_price,
-                        "high": high_price,
-                        "low": low_price,
-                        "close": close_price,
-                        # End-of-day source: the session's last traded price is its close.
-                        # prev_close / transactions are filled after the crawl by
-                        # apps.market_data.services.price_fields.derive_price_fields.
-                        "ltp": close_price,
-                        "volume": volume,
-                        "turnover": turnover,
-                        "source": "crawled",
-                    },
+                    defaults=defaults,
                 )
             )
 

@@ -69,7 +69,7 @@ class TrackedMarketFixture(TestCase):
 
 class DerivePriceFieldsTests(TrackedMarketFixture):
 
-    def test_ltp_prev_close_and_transactions(self):
+    def test_transactions_counted_from_real_floorsheet(self):
         gain = self.companies["GAIN"]
         self.add_trade(gain, TUESDAY, "1", "10", "20", 5, 105)
         self.add_trade(gain, TUESDAY, "2", "10", "30", 5, 105)
@@ -77,101 +77,18 @@ class DerivePriceFieldsTests(TrackedMarketFixture):
 
         derive_price_fields()
 
-        tuesday = DailyPrice.objects.get(company=gain, date=TUESDAY)
-        monday = DailyPrice.objects.get(company=gain, date=MONDAY)
-        self.assertEqual(tuesday.ltp, Decimal("105"))
-        self.assertEqual(tuesday.prev_close, Decimal("100"))
-        self.assertEqual(tuesday.transactions, 2)
-        self.assertIsNone(monday.prev_close)
-        self.assertIsNone(monday.transactions)  # no floorsheet crawled: NULL, never 0
-
-    def test_prev_close_recomputed_after_gap_filled(self):
-        derive_price_fields()
-        lose = self.companies["LOSE"]
-        wednesday = TUESDAY + timedelta(days=1)
-        thursday = TUESDAY + timedelta(days=2)
-        self.add_price(lose, thursday, 180)
-        derive_price_fields()
-        self.assertEqual(DailyPrice.objects.get(company=lose, date=thursday).prev_close, Decimal("190"))
-
-        self.add_price(lose, wednesday, 185)  # back-filled missing session
-        derive_price_fields()
-        self.assertEqual(DailyPrice.objects.get(company=lose, date=thursday).prev_close, Decimal("185"))
+        self.assertEqual(DailyPrice.objects.get(company=gain, date=TUESDAY).transactions, 2)
+        self.assertIsNone(DailyPrice.objects.get(company=gain, date=MONDAY).transactions)  # NULL, never 0
 
 
-class MarketStatsTests(TrackedMarketFixture):
+class DividendRowsTests(TrackedMarketFixture):
 
-    def setUp(self):
-        super().setUp()
-        derive_price_fields()
-
-    def rows_by_symbol(self):
-        return {row["symbol"]: row for row in market_stats.ranked_by_change(TUESDAY)["rows"]}
-
-    def test_gainer_loser_unchanged(self):
-        rows = self.rows_by_symbol()
-        self.assertEqual(rows["GAIN"]["change"], Decimal("5"))
-        self.assertAlmostEqual(rows["GAIN"]["change_pct"], Decimal("5"), places=4)
-        self.assertAlmostEqual(rows["LOSE"]["change_pct"], Decimal("-5"), places=4)
-        self.assertEqual(rows["FLAT"]["change"], Decimal("0"))
-
-    def test_prev_close_zero_and_missing_have_no_change(self):
-        rows = self.rows_by_symbol()
-        for symbol in ("ZERO", "NOPREV"):
-            self.assertIsNone(rows[symbol]["change"])
-            self.assertIsNone(rows[symbol]["change_pct"])
-
-    def test_ranked_by_change_pct_with_nulls_last_and_untracked_excluded(self):
-        symbols = [row["symbol"] for row in market_stats.ranked_by_change(TUESDAY)["rows"]]
-        self.assertEqual(symbols[:5], ["UPC", "GAIN", "FLAT", "LOSE", "CIRC"])
-        self.assertEqual(set(symbols[5:]), {"ZERO", "NOPREV"})
-        self.assertNotIn("OUT", symbols)
-
-    def test_sparkline_has_recent_closes_oldest_first(self):
-        spark = self.rows_by_symbol()["GAIN"]["sparkline"]
-        self.assertEqual([point["close"] for point in spark], [Decimal("100"), Decimal("105")])
-
-    def test_summary_buckets_and_circuits(self):
-        summary = market_stats.tracked_summary(TUESDAY)
-
-        self.assertEqual(summary["tracked_count"], 7)
-        self.assertEqual(summary["advanced"], 2)        # GAIN, UPC
-        self.assertEqual(summary["declined"], 2)        # LOSE, CIRC
-        self.assertEqual(summary["unchanged"], 1)       # FLAT
-        self.assertEqual(summary["no_prev_close"], 2)   # ZERO, NOPREV
-        self.assertEqual(summary["positive_circuit"], 1)  # UPC at +9.9%
-        self.assertEqual(summary["negative_circuit"], 1)  # CIRC at -10.19%
-        self.assertEqual(
-            summary["advanced"] + summary["declined"] + summary["unchanged"] + summary["no_prev_close"],
-            summary["tracked_count"],
-        )
-
-    def test_summary_defaults_to_latest_date(self):
-        self.assertEqual(market_stats.tracked_summary()["trade_date"], TUESDAY)
-
-    def test_summary_respects_company_access(self):
-        ids = [self.companies["GAIN"].id, self.companies["LOSE"].id]
-        summary = market_stats.tracked_summary(TUESDAY, ids)
-        self.assertEqual(summary["tracked_count"], 2)
-
-    def test_top_transactions_nulls_last(self):
-        self.add_trade(self.companies["LOSE"], TUESDAY, "1", "1", "2", 10, 190)
-        derive_price_fields()
-        rows = market_stats.top_by("transactions", TUESDAY)["rows"]
-        self.assertEqual(rows[0]["symbol"], "LOSE")
-        self.assertEqual(rows[0]["transactions"], 1)
-        self.assertTrue(all(row["transactions"] is None for row in rows[1:]))
-
-    def test_book_closure_flag(self):
+    def test_total_pct(self):
         DividendAnnouncement.objects.create(
             company=self.companies["LOSE"], fiscal_year="2082/83",
             bonus_pct=10, cash_pct=Decimal("0.5263"), book_closure_date=TUESDAY,
         )
-        rows = self.rows_by_symbol()
-        self.assertTrue(rows["LOSE"]["book_closure_in_window"])
-        self.assertFalse(rows["GAIN"]["book_closure_in_window"])
-        dividend = market_stats.dividend_rows()[0]
-        self.assertEqual(dividend["total_pct"], Decimal("10.5263"))
+        self.assertEqual(market_stats.dividend_rows()[0]["total_pct"], Decimal("10.5263"))
 
 
 class BrokerActivityTests(TrackedMarketFixture):
@@ -292,6 +209,7 @@ class MarketApiTests(TrackedMarketFixture):
         self.assertEqual(response.data["scope"], "tracked_companies")
         self.assertEqual(response.data["summary"]["tracked_count"], 7)
         self.assertEqual(response.data["units"]["turnover"], "NPR")
+        self.assertEqual(response.data["provenance"]["price_source"], "crawled")
 
     def test_bad_date_is_400(self):
         self.assertEqual(self.client.get("/api/market/movers/", {"date": "2026-13-01"}).status_code, 400)
@@ -310,7 +228,8 @@ class MarketApiTests(TrackedMarketFixture):
 
         rows = self.client.get("/api/market/watchlist/").data["rows"]
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["ltp"], Decimal("105"))
+        self.assertEqual(rows[0]["close"], Decimal("105"))
+        self.assertEqual(rows[0]["bucket"], "gainer")
         self.assertAlmostEqual(rows[0]["change_pct"], Decimal("5"), places=4)
 
         self.assertEqual(self.client.delete("/api/market/watchlist/GAIN/").status_code, 204)
@@ -334,15 +253,15 @@ class PublicSnapshotTests(TrackedMarketFixture):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["scope"], "tracked_companies")
-        self.assertEqual(response.data["trade_date"], TUESDAY)
+        self.assertEqual(response.data["as_of"], TUESDAY)
         self.assertEqual(response.data["summary"]["tracked_count"], 7)
         self.assertNotIn("total_transactions", response.data["summary"])
-        mover = response.data["movers"][0]
-        self.assertEqual(mover["symbol"], "UPC")
+        self.assertEqual([row["symbol"] for row in response.data["gainers"]], ["UPC", "GAIN"])
+        self.assertEqual([row["symbol"] for row in response.data["losers"]], ["LOSE"])  # CIRC is excluded
         self.assertEqual(
-            set(mover),
-            {"symbol", "name", "sector", "ltp", "prev_close", "change", "change_pct", "volume", "turnover", "sparkline"},
+            set(response.data["gainers"][0]),
+            {"symbol", "name", "sector", "close", "prev_close", "change", "change_pct",
+             "adjusted", "unadjusted", "volume", "turnover", "sparkline"},
         )
         self.assertEqual(response.data["basket"]["label"], "Tracked Basket")
-        self.assertNotIn("OUT", [row["symbol"] for row in response.data["movers"]])
-
+        self.assertEqual(response.data["provenance"]["price_source"], "crawled")

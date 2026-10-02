@@ -44,6 +44,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.negotiation import DefaultContentNegotiation
 
+from apps.market_data.services.price_source import with_crawled_price
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle
@@ -1012,7 +1013,7 @@ class ExportReportAPIView(APIView):
             result["floorsheet"] = None
 
         # ── Analysis metrics (from DailyAnalysis) ────────────────────
-        analysis_qs = DailyAnalysis.objects.all()
+        analysis_qs = with_crawled_price(DailyAnalysis.objects.all())
         analysis_qs = analysis_qs.filter(company__in=companies)
         if date_from:
             analysis_qs = analysis_qs.filter(date__gte=date_from)
