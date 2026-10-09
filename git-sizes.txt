@@ -1,1 +1,0 @@
-6573 Backend/apps/companies/management/commands/seed_companies.py 
