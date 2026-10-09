@@ -37,7 +37,7 @@ os.environ.setdefault(
 django.setup()
 
 
-from apps.companies.models import Company
+from apps.companies.selection import select_crawl_companies
 # Under ``scrapy crawl`` the Scrapy project root is on sys.path, so
 # ``crawlers`` means Backend/crawlers/crawlers. Imported from Django
 # (tests, management commands) ``crawlers`` means Backend/crawlers
@@ -217,8 +217,12 @@ class TradingDataSpider(scrapy.Spider):
         "COOKIES_ENABLED": True,
     }
 
-    def __init__(self, window_days=None, max_pages=None, *args, **kwargs):
+    def __init__(self, window_days=None, max_pages=None, symbols=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Optional comma-separated symbols (``-a symbols=MNBBL,GUFL``), resolved
+        # against the active + tracked companies in the database.
+        self.symbols = symbols
 
         if window_days is not None:
             try:
@@ -251,18 +255,22 @@ class TradingDataSpider(scrapy.Spider):
             yield request
 
     def start_requests(self):
-        companies = Company.objects.filter(
-            is_active=True
-        ).order_by("symbol")
+        companies, unknown = select_crawl_companies(self.symbols)
+
+        for symbol in unknown:
+            self.logger.error(
+                "Symbol %s is not an active, tracked company in the database; not crawled.",
+                symbol,
+            )
 
         if not companies.exists():
             self.logger.error(
-                "No active companies found in Company table."
+                "No active, tracked companies to crawl."
             )
             return
 
         self.logger.info(
-            "Found %s active companies to crawl "
+            "Found %s active, tracked companies to crawl "
             "(window=%s days, page_size=%s, max_pages=%s).",
             companies.count(),
             self.WINDOW_DAYS,

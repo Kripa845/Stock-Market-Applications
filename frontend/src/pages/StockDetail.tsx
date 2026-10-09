@@ -458,16 +458,19 @@ function CorrelationPanel({ c }: { c: NewsPriceCorrelation }) {
                   <td className="py-2 font-mono text-text-secondary">{d.date}</td>
                   <td className="py-2 text-right"><Badge variant="purple">{d.news_count}</Badge></td>
                   <td className={clsx('py-2 text-right font-mono',
-                    d.sentiment_score > 0.1 ? 'text-up' : d.sentiment_score < -0.1 ? 'text-down' : 'text-text-secondary',
+                    d.sentiment_score === null ? 'text-text-muted'
+                      : d.sentiment_score > 0.1 ? 'text-up' : d.sentiment_score < -0.1 ? 'text-down' : 'text-text-secondary',
                   )}>
-                    {d.sentiment_score >= 0 ? '+' : ''}{d.sentiment_score.toFixed(3)}
+                    {d.sentiment_score === null ? '—' : `${d.sentiment_score >= 0 ? '+' : ''}${d.sentiment_score.toFixed(3)}`}
                   </td>
                   <td className={clsx('py-2 text-right font-mono',
-                    d.price_change_pct > 0 ? 'text-up' : d.price_change_pct < 0 ? 'text-down' : 'text-text-secondary',
+                    d.price_change_pct === null ? 'text-text-muted'
+                      : d.price_change_pct > 0 ? 'text-up' : d.price_change_pct < 0 ? 'text-down' : 'text-text-secondary',
                   )}>
                     <span className="flex items-center justify-end gap-1">
-                      {d.price_change_pct > 0 ? <ArrowUp size={9} /> : d.price_change_pct < 0 ? <ArrowDown size={9} /> : null}
-                      {d.price_change_pct >= 0 ? '+' : ''}{d.price_change_pct.toFixed(2)}%
+                      {d.price_change_pct !== null && d.price_change_pct > 0 && <ArrowUp size={9} />}
+                      {d.price_change_pct !== null && d.price_change_pct < 0 && <ArrowDown size={9} />}
+                      {d.price_change_pct === null ? '—' : `${d.price_change_pct >= 0 ? '+' : ''}${d.price_change_pct.toFixed(2)}%`}
                     </span>
                   </td>
                   <td className="py-2 text-right font-mono text-text-secondary">{fmt(d.volume)}</td>

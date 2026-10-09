@@ -9,15 +9,15 @@ import HeroIllustration from '../components/landing/HeroIllustration';
 import ParticleWave from '../components/landing/ParticleWave';
 import LandingNews from '../components/landing/LandingNews';
 import LandingTracked from '../components/landing/LandingTracked';
+import BasketPreview from '../components/landing/BasketPreview';
 
 // Public landing page with purple glows; follows the app's light / dark theme (colours in index.css .landing).
 // Every claim here describes something the app really does; there are no invented reviews or user counts.
 
-const SOURCES = ['Sharesansar', 'Merolagani', 'Bizmandu', 'Arthakhabar', 'FiscalNepal', 'NepseAlpha'];
 
 const FEATURES = [
   { icon: LineChart, title: 'Technical Indicators', text: '110 indicators — moving averages, oscillators, trend, volatility and volume — calculated from crawled NEPSE prices.' },
-  { icon: Newspaper, title: 'News Intelligence', text: 'Financial news from six Nepali portals, tagged to companies automatically and scored for sentiment.' },
+  { icon: Newspaper, title: 'News Intelligence', text: 'Financial news from four Nepali portals, tagged to companies automatically and scored for sentiment.' },
   { icon: Building2, title: 'Company Analysis', text: 'Price action, VWAP, volume anomalies and news reaction for every tracked company in one view.' },
   { icon: BarChart3, title: 'Broker Analysis', text: 'Floorsheet-based broker activity: who is buying, who is selling and how concentrated it is.' },
 ];
@@ -43,7 +43,7 @@ const ROLES = [
 ];
 
 const FAQS = [
-  { q: 'Where does the data come from?', a: 'StockScope crawls public NEPSE price and floorsheet data plus news from Sharesansar, Merolagani, Bizmandu, Arthakhabar, FiscalNepal and NepseAlpha. Only crawled data is shown on charts.' },
+  { q: 'Where does the data come from?', a: 'StockScope crawls public NEPSE price and floorsheet data from Sharesansar, plus news from Sharesansar, Merolagani, FiscalNepal and Arthakhabar. Only crawled data is shown on charts.' },
   { q: 'How current is the data?', a: 'Daily prices and floorsheets are collected after each trading session, and news is crawled every hour. Every chart shows the exact date range it covers.' },
   { q: 'How are the indicators calculated?', a: 'On the server, from crawled daily prices, using the standard published formulas. Each one is tested against an independent reference calculation, and a line only starts once there are enough trading sessions for its period.' },
   { q: 'Who can see what?', a: 'Access is role-based. Anyone can register as a Viewer; Analyst and Admin access, and access to individual companies, is granted by an administrator.' },
@@ -58,54 +58,6 @@ function SectionHeading({ title, text }: { title: string; text?: string }) {
     <div className="mx-auto max-w-2xl text-center">
       <h2 className="text-3xl font-semibold tracking-tight text-[color:var(--l-text)] sm:text-4xl">{title}</h2>
       {text && <p className="mt-3 text-sm leading-relaxed text-[color:var(--l-muted)] sm:text-base">{text}</p>}
-    </div>
-  );
-}
-
-// Illustrative product preview: a stylised candlestick chart with an indicator line (not live data).
-function ChartPreview() {
-  const candles = Array.from({ length: 26 }, (_, i) => {
-    const base = 120 - i * 2.2 - Math.sin(i / 2.3) * 14;
-    const open = base + Math.sin(i * 1.7) * 6;
-    const close = base - Math.cos(i * 1.3) * 6;
-    return { x: 18 + i * 17, open, close, high: Math.min(open, close) - 6 - (i % 3) * 2, low: Math.max(open, close) + 6 + (i % 4) };
-  });
-  const line = candles.map((c, i) => `${i ? 'L' : 'M'}${c.x},${(c.open + c.close) / 2 + 4}`).join(' ');
-  return (
-    <div className="relative">
-      <div className="absolute -inset-6 rounded-3xl bg-violet-600/25 blur-3xl" aria-hidden />
-      <div className="relative overflow-hidden rounded-2xl border border-violet-400/25 bg-[#0e0b1a]/90 shadow-2xl">
-        <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" /><span className="h-2.5 w-2.5 rounded-full bg-amber-300/70" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
-          <span className="ml-3 text-xs font-medium text-zinc-300">Company Analysis</span>
-          <span className="ml-auto rounded-md bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-200">Daily candles</span>
-        </div>
-        <div className="flex flex-wrap gap-2 px-4 pt-3">
-          {['EMA 20', 'Bollinger 20, 2', 'RSI 14', 'MACD'].map((t) => (
-            <span key={t} className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-0.5 text-[10px] text-zinc-300">{t}</span>
-          ))}
-        </div>
-        <svg viewBox="0 0 470 190" className="w-full" role="img" aria-label="Illustration of a candlestick chart with an EMA line">
-          {[40, 80, 120, 160].map((y) => <line key={y} x1="0" x2="470" y1={y} y2={y} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 4" />)}
-          {candles.map((c, i) => {
-            const up = c.close < c.open;
-            const color = up ? '#34d399' : '#f87171';
-            return (
-              <g key={i}>
-                <line x1={c.x} x2={c.x} y1={c.high} y2={c.low} stroke={color} strokeWidth="1.2" />
-                <rect x={c.x - 5} y={Math.min(c.open, c.close)} width="10" height={Math.max(2, Math.abs(c.open - c.close))} rx="1.5" fill={color} />
-              </g>
-            );
-          })}
-          <path d={line} fill="none" stroke="#f59e0b" strokeWidth="2" />
-        </svg>
-        <svg viewBox="0 0 470 54" className="w-full border-t border-white/5" aria-hidden>
-          <line x1="0" x2="470" y1="14" y2="14" stroke="rgba(255,255,255,0.15)" strokeDasharray="3 4" />
-          <line x1="0" x2="470" y1="42" y2="42" stroke="rgba(255,255,255,0.15)" strokeDasharray="3 4" />
-          <path d={candles.map((c, i) => `${i ? 'L' : 'M'}${c.x},${28 + Math.sin(i / 1.8) * 11}`).join(' ')} fill="none" stroke="#a855f7" strokeWidth="2" />
-        </svg>
-      </div>
     </div>
   );
 }
@@ -195,17 +147,9 @@ export default function LandingPage() {
           <HeroIllustration className="mx-auto w-full max-w-[300px] sm:max-w-[420px] lg:max-w-[500px]" />
         </div>
 
-        {/* Dotted wave with the data sources on top of it */}
+        {/* Dotted wave under the hero */}
         <div className="relative -mt-10 lg:-mt-24">
           <ParticleWave className="h-48 w-full sm:h-64" />
-          <div className="absolute inset-x-0 bottom-6 px-4 sm:bottom-10 sm:px-6">
-            <p className="text-center text-sm text-[color:var(--l-text-2)]">Data crawled from leading Nepali financial portals</p>
-            <div className="mx-auto mt-5 flex max-w-6xl flex-wrap items-center justify-center gap-x-10 gap-y-3 sm:justify-between">
-              {SOURCES.map((s) => (
-                <span key={s} className="text-base font-semibold tracking-tight text-[color:var(--l-text)] sm:text-lg">{s}</span>
-              ))}
-            </div>
-          </div>
         </div>
       </section>
 
@@ -247,7 +191,7 @@ export default function LandingPage() {
             </ul>
             <Link to="/register" className={`${btnPrimary} mt-8`}>Open the analysis tools <ArrowRight size={16} /></Link>
           </div>
-          <ChartPreview />
+          <BasketPreview />
         </div>
       </section>
 

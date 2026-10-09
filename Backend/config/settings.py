@@ -219,14 +219,23 @@ CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1   # one task at a time per worker process
 
 # ---------------------------------------------------------------------------
-# NEPSE trading week
+# NEPSE trading week (date-aware)
 #   The single source of truth for which weekdays the exchange trades
-#   (Python weekday numbers, Monday=0).  NEPSE trades Monday-Friday,
-#   11:00-15:00 Asia/Kathmandu.  Public holidays live in the admin-editable
+#   (Python weekday numbers, Monday=0), as (effective_from, weekdays) pairs in
+#   date order.  NEPSE traded Sunday-Thursday until it moved to Monday-Friday
+#   in April 2026: the last Sunday session in the crawled prices is 2026-04-05
+#   and the first Friday session 2026-04-10, so Monday-Friday applies from
+#   2026-04-06.  Public holidays live in the admin-editable
 #   market_data.TradingHoliday table, not here.  Read through
 #   apps.market_data.services.trading_days rather than hardcoding weekdays.
 # ---------------------------------------------------------------------------
-NEPSE_TRADING_WEEKDAYS = (0, 1, 2, 3, 4)
+NEPSE_TRADING_WEEKS = (
+    ("1900-01-01", (6, 0, 1, 2, 3)),  # Sunday-Thursday
+    ("2026-04-06", (0, 1, 2, 3, 4)),  # Monday-Friday
+)
+
+# The current week, used for scheduling (11:00-15:00 Asia/Kathmandu).
+NEPSE_TRADING_WEEKDAYS = NEPSE_TRADING_WEEKS[-1][1]
 
 # Celery's crontab counts Sunday=0, Python's weekday() counts Monday=0.
 TRADING_DAYS_CRONTAB = ",".join(str((day + 1) % 7) for day in NEPSE_TRADING_WEEKDAYS)
@@ -252,8 +261,8 @@ CELERY_BEAT_SCHEDULE = {
     },
 
     # ---- Floorsheet ----
-    # Full floorsheet for every tracked company: the latest session plus any
-    # trading day still missing (replaces the old weekly sampled crawl).
+    # Floorsheet for every tracked company, latest session only: ShareSansar
+    # serves floorsheets for the current session alone (no history).
     "crawl-floorsheet-evening": {
         "task": "apps.crawler_runs.tasks.crawl_floorsheet",
         "schedule": crontab(minute=15, hour=18, day_of_week=TRADING_DAYS_CRONTAB),

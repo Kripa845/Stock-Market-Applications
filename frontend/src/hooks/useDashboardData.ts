@@ -18,7 +18,8 @@ export interface DashboardStats {
   successfulCrawls: number;
   failedCrawls: number;
   activeCrawlRuns: number;
-  marketChange: number;
+  /** Average latest-session change % of tracked companies; null when none is ranked. */
+  marketChange: number | null;
   trackedCompanies: number;
   correctionsCount: number;
   activeCompanies: Company[];
@@ -108,7 +109,7 @@ export function useDashboardData(_role: string | null) {
       let successfulCrawls = 0;
       let failedCrawls = 0;
       let activeCrawlRuns = 0;
-      let marketChange = 0;
+      let marketChange: number | null = null;
       let trackedCompanies = 0;
       let correctionsCount = 0;
       let activeCompanies: Company[] = [];
@@ -160,14 +161,13 @@ export function useDashboardData(_role: string | null) {
         const results = (companiesRes.value as { results?: unknown[] }).results ?? [];
         activeCompanies = results.filter(isCompany);
         totalCompanies = results.length || totalCompanies;
-        const gainers = [...activeCompanies].sort(
-          (a, b) => ((b as Company).price_change_percent ?? 0) - ((a as Company).price_change_percent ?? 0),
-        );
-        marketChange =
-          gainers.length > 0
-            ? gainers.reduce((sum, c) => sum + ((c as Company).price_change_percent ?? 0), 0) /
-              gainers.length
-            : 0;
+        // Average only real changes; a company without one is skipped, never counted as 0.
+        const changes = activeCompanies
+          .map((c) => (c as Company).price_change_percent)
+          .filter((value): value is number => value !== null && value !== undefined);
+        marketChange = changes.length > 0
+          ? Math.round((changes.reduce((sum, value) => sum + value, 0) / changes.length) * 100) / 100
+          : null;
       }
 
       if (newsRes.status === 'fulfilled' && newsRes.value) {
@@ -197,7 +197,7 @@ export function useDashboardData(_role: string | null) {
 
       if (tradingRes.status === 'fulfilled' && tradingRes.value) {
         const d = tradingRes.value as Record<string, unknown>;
-        if (d.market_change !== undefined) marketChange = d.market_change as number;
+        if (d.market_change !== undefined) marketChange = d.market_change as number | null;
         if (d.total_articles !== undefined) totalNews = d.total_articles as number;
         if (d.active_analysis !== undefined) analysisCount = d.active_analysis as number;
       }

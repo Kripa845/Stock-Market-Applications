@@ -39,12 +39,14 @@ class MarketSnapshotTests(TestCase):
         return days
 
     def test_weekends_and_duplicate_market_date_are_excluded(self):
-        monday, tuesday, wednesday = self.start, self.start + timedelta(days=1), self.start + timedelta(days=2)
+        # Monday-Friday era (from 2026-04-06).
+        monday = date(2026, 9, 7)
+        tuesday, wednesday = monday + timedelta(days=1), monday + timedelta(days=2)
         for company in (self.first, self.second):
             self.add_price(company, monday, 100)
             self.add_price(company, tuesday, 101)
             self.add_price(company, wednesday, 101)  # repeated close and volume for all companies
-        saturday, sunday = date(2025, 1, 11), date(2025, 1, 12)
+        saturday, sunday = date(2026, 9, 12), date(2026, 9, 13)
         for company in (self.first, self.second):
             self.add_price(company, saturday, 105)
             self.add_price(company, sunday, 106)
@@ -58,14 +60,20 @@ class MarketSnapshotTests(TestCase):
         self.assertIn(sunday, result["excluded_dates"])
         self.assertEqual(DailyPrice.objects.count(), 10)  # source rows remain untouched
 
-    def test_friday_is_a_trading_session(self):
-        friday = date(2025, 1, 10)
-        self.add_price(self.first, friday, 100)
+    def test_trading_week_follows_the_date(self):
+        # Sunday-Thursday until 2026-04-05, Monday-Friday from 2026-04-06.
+        old_sunday, old_friday = date(2025, 1, 12), date(2025, 1, 10)
+        new_sunday, new_friday = date(2026, 9, 13), date(2026, 9, 11)
+        for day in (old_sunday, old_friday, new_sunday, new_friday):
+            self.add_price(self.first, day, 100 + day.day)
 
         result = compute_market_snapshots(dry_run=True)
 
-        self.assertEqual(result["sessions"], 1)
-        self.assertNotIn(friday, result["excluded_dates"])
+        self.assertEqual(result["sessions"], 2)
+        self.assertNotIn(old_sunday, result["excluded_dates"])
+        self.assertNotIn(new_friday, result["excluded_dates"])
+        self.assertIn("Friday", result["excluded_dates"][old_friday][0])
+        self.assertIn("Sunday", result["excluded_dates"][new_sunday][0])
 
     @override_settings(MARKET_INTELLIGENCE_EXCLUDED_SESSIONS=["2025-01-06"])
     def test_manual_excluded_sessions_setting(self):

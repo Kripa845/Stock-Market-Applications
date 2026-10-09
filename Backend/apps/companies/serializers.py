@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import Company, TrackedCompany
 from .utils import normalize_symbol
+from apps.news.selectors import real_tags
 
 
 def _get_prices(obj, n=None):
@@ -63,48 +64,61 @@ class CompanySerializer(serializers.ModelSerializer):
             return obj.tracking.is_tracked
         return True
 
+    # Every price field is None when the company has no crawled price -- never a
+    # 0 that would display as a real price.
     def get_latest_price(self, obj):
         prices = _get_prices(obj, 1)
-        return float(prices[0].close) if prices else 0.0
+        return float(prices[0].close) if prices else None
 
     def get_latest_price_date(self, obj):
         prices = _get_prices(obj, 1)
         return prices[0].date.isoformat() if prices else None
 
+    def _movers_row(self, obj):
+        """
+        This company's latest-session row from services.movers (the one change
+        definition used everywhere), or None when it is not ranked (no previous
+        session, did not trade, possible corporate action, not tracked).
+        Computed once per request for all tracked companies.
+        """
+        if "_movers_rows" not in self.context:
+            from apps.market_data.services.movers import RANKED, company_rows
+
+            _, rows = company_rows(None)
+            self.context["_movers_rows"] = {
+                company_id: row for company_id, row in rows.items() if row["bucket"] in RANKED
+            }
+        return self.context["_movers_rows"].get(obj.id)
+
     def get_price_change(self, obj):
-        prices = _get_prices(obj, 2)
-        if len(prices) >= 2:
-            return round(float(prices[0].close - prices[1].close), 2)
-        return 0.0
+        row = self._movers_row(obj)
+        return round(float(row["change"]), 2) if row and row["change"] is not None else None
 
     def get_price_change_percent(self, obj):
-        prices = _get_prices(obj, 2)
-        if len(prices) >= 2 and float(prices[1].close) > 0:
-            diff = float(prices[0].close - prices[1].close)
-            return round((diff / float(prices[1].close)) * 100, 2)
-        return 0.0
+        row = self._movers_row(obj)
+        return round(float(row["change_pct"]), 2) if row and row["change_pct"] is not None else None
 
     def get_volume_24h(self, obj):
         prices = _get_prices(obj, 1)
-        return int(prices[0].volume) if prices else 0
+        return int(prices[0].volume) if prices else None
 
     def get_turnover_24h(self, obj):
         prices = _get_prices(obj, 1)
-        return float(prices[0].turnover) if prices else 0.0
+        return float(prices[0].turnover) if prices else None
 
     def get_high_24h(self, obj):
         prices = _get_prices(obj, 1)
-        return float(prices[0].high) if prices else 0.0
+        return float(prices[0].high) if prices else None
 
     def get_low_24h(self, obj):
         prices = _get_prices(obj, 1)
-        return float(prices[0].low) if prices else 0.0
+        return float(prices[0].low) if prices else None
 
     def get_news_count(self, obj):
-        return obj.article_tags.count()
+        return real_tags(obj.article_tags.all()).count()
 
     def get_sentiment_score(self, obj):
-        tags = obj.article_tags.select_related("article")
+        tags = real_tags(obj.article_tags.all()).select_related("article")
         sentiments = [
             tag.article.sentiment
             for tag in tags
@@ -112,7 +126,7 @@ class CompanySerializer(serializers.ModelSerializer):
         ]
         if sentiments:
             return round(sum(sentiments) / len(sentiments), 2)
-        return 0.0
+        return None
 
     def get_sparkline(self, obj):
         # Last 10 prices in chronological order (oldest → newest)

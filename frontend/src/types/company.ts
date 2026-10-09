@@ -17,19 +17,21 @@ export interface Company {
   is_tracked: boolean;
 
   // ── Latest daily price (SerializerMethodField) ──────────────────────
-  latest_price: number;
+  /** null when the company has no crawled price -- never 0. */
+  latest_price: number | null;
   latest_price_date: string | null;
-  price_change: number;
-  price_change_percent: number;
+  price_change: number | null;
+  /** Latest-session change % (same definition as /api/market/movers/); null when not ranked. */
+  price_change_percent: number | null;
 
-  volume_24h: number;
-  turnover_24h: number;
-  high_24h: number;
-  low_24h: number;
+  volume_24h: number | null;
+  turnover_24h: number | null;
+  high_24h: number | null;
+  low_24h: number | null;
 
   // ── News & sentiment ─────────────────────────────────────────────────
   news_count: number;
-  sentiment_score: number;
+  sentiment_score: number | null;
 
   // ── Sparkline (last 10 close prices) ─────────────────────────────────
   sparkline: number[];

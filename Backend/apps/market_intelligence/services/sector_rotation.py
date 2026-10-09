@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.price_source import with_crawled_price
 from apps.market_intelligence.models import SectorRotationSnapshot
 from apps.market_intelligence.services.snapshots import (
     _corporate_action_flags,
@@ -28,7 +29,7 @@ def compute_sector_rotation_snapshots():
     from apps.analysis.models import DailyAnalysis
     analyses = {
         (row.company_id, row.date): row
-        for row in DailyAnalysis.objects.filter(date__in=sessions).only("company_id", "date", "previous_close")
+        for row in with_crawled_price(DailyAnalysis.objects.filter(date__in=sessions)).only("company_id", "date", "previous_close")
     }
     flags = _corporate_action_flags(prices, sessions, analyses)
     sector_by_company = {row.company_id: row.company.sector for row in prices}

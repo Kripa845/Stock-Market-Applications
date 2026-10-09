@@ -122,11 +122,80 @@ COMPANIES = [
             "SANIMA",
         ],
     },
+    # ---- Added 2026-10: 10 more tracked companies (verified on ShareSansar first) ----
+    {
+        "symbol": "MNBBL",
+        "name": "Muktinath Bikas Bank Limited",
+        "sector": "Development Bank",
+        "aliases": ["Muktinath Bikas Bank", "Muktinath Bikas Bank Ltd", "Muktinath Bikas", "MNBBL"],
+    },
+    {
+        "symbol": "GUFL",
+        "name": "Gurkhas Finance Limited",
+        "sector": "Finance",
+        "aliases": ["Gurkhas Finance", "Gurkhas Finance Ltd", "GUFL"],
+    },
+    {
+        "symbol": "CBBL",
+        "name": "Chhimek Laghubitta Bittiya Sanstha Ltd",
+        "sector": "Microfinance",
+        "aliases": ["Chhimek Laghubitta", "Chhimek Laghubitta Bittiya Sanstha", "CBBL"],
+    },
+    {
+        "symbol": "NLG",
+        "name": "NLG Insurance Company Limited",
+        "sector": "Non Life Insurance",
+        "aliases": ["NLG Insurance", "NLG Insurance Company", "NLG Insurance Company Ltd", "NLG"],
+    },
+    {
+        "symbol": "TRH",
+        "name": "Taragaon Regency Hotel Limited",
+        "sector": "Hotels and Tourism",
+        "aliases": ["Taragaon Regency Hotel", "Taragaon Regency", "Hyatt Regency Kathmandu", "TRH"],
+    },
+    {
+        "symbol": "STC",
+        "name": "Salt Trading Corporation Limited",
+        "sector": "Trading",
+        "aliases": ["Salt Trading Corporation", "Salt Trading", "STC"],
+    },
+    {
+        "symbol": "NTC",
+        "name": "Nepal Doorsanchar Company Limited",
+        "sector": "Others",
+        "aliases": ["Nepal Doorsanchar", "Nepal Telecom", "Nepal Doorsanchar Company", "NTC"],
+    },
+    {
+        "symbol": "HIDCL",
+        "name": "Hydroelectricity Investment and Development Company Limited",
+        "sector": "Investment",
+        "aliases": ["Hydroelectricity Investment and Development Company", "HIDCL"],
+    },
+    {
+        "symbol": "AKJCL",
+        "name": "Ankhu Khola Jalvidhyut Company Limited",
+        "sector": "Hydropower",
+        "aliases": ["Ankhu Khola Jalvidhyut", "Ankhu Khola Hydropower", "Ankhu Khola", "AKJCL"],
+    },
+    {
+        "symbol": "LICN",
+        "name": "Life Insurance Corporation (Nepal) Limited",
+        "sector": "Life Insurance",
+        "aliases": [
+            "Life Insurance Corporation Nepal",
+            "Life Insurance Corporation (Nepal)",
+            "LIC Nepal",
+            "LICN",
+        ],
+    },
 ]
 
 
 class Command(BaseCommand):
-    help = "Create or update the 10-company stock-market watchlist."
+    help = (
+        "Create the tracked companies that do not exist yet. Idempotent: a company "
+        "that already exists is left exactly as it is (no duplicate, no update)."
+    )
 
     def handle(self, *args, **kwargs):
 
@@ -158,7 +227,7 @@ class Command(BaseCommand):
         }
 
         # -----------------------------------------
-        # 3. Seed the 10 companies
+        # 3. Seed the tracked companies
         # -----------------------------------------
 
         for data in COMPANIES:
@@ -179,8 +248,8 @@ class Command(BaseCommand):
                     )
                 )
 
-            # Create/update company
-            company, created = Company.objects.update_or_create(
+            # Create only; an existing company (and its tracking flag) is never altered.
+            company, created = Company.objects.get_or_create(
                 symbol=symbol,
                 defaults={
                     "name": data["name"],
@@ -191,15 +260,15 @@ class Command(BaseCommand):
                 },
             )
 
-            # Make company tracked
-            TrackedCompany.objects.update_or_create(
-                company=company,
-                defaults={
-                    "is_tracked": True,
-                },
-            )
+            if created:
+                TrackedCompany.objects.get_or_create(
+                    company=company,
+                    defaults={
+                        "is_tracked": True,
+                    },
+                )
 
-            action = "CREATED" if created else "UPDATED"
+            action = "CREATED" if created else "EXISTS (unchanged)"
 
             self.stdout.write(
                 self.style.SUCCESS(

@@ -290,8 +290,9 @@ def dividend_rows(company_ids=None):
         .annotate(
             symbol=F("company__symbol"),
             name=F("company__name"),
+            logo_url=F("company__logo_url"),
             total_pct=ExpressionWrapper(F("bonus_pct") + F("cash_pct"), output_field=PCT_FIELD),
         )
         .order_by(F("book_closure_date").desc(nulls_last=True), "company__symbol")
-        .values("id", "company_id", "symbol", "name", "fiscal_year", "bonus_pct", "cash_pct", "total_pct", "book_closure_date")
+        .values("id", "company_id", "symbol", "name", "logo_url", "fiscal_year", "bonus_pct", "cash_pct", "total_pct", "book_closure_date")
     )

@@ -384,6 +384,8 @@ class Command(BaseCommand):
                     "body": item["body"],
                     "published_at": pub_date,
                     "content_hash": f"hash_{i}_{random.randint(10000, 99999)}",
+                    # Synthetic demo article: never shown as real news.
+                    "data_provenance": "seeded",
                     "language": "en",
                     "sentiment": item["sentiment"],
                     "sentiment_label": item["sentiment_label"],

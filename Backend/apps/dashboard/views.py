@@ -13,6 +13,7 @@ from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.news.models import NewsArticle
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 from apps.users.company_access import filter_company_queryset, get_accessible_company_ids
+from apps.news.selectors import real_articles
 
 
 User = get_user_model()
@@ -71,7 +72,7 @@ class DashboardSummaryAPIView(APIView):
                 )
 
         if user.has_app_permission("view_news"):
-            news = NewsArticle.objects.all()
+            news = real_articles(NewsArticle.objects.all())
             accessible_ids = get_accessible_company_ids(user)
             if accessible_ids is not None:
                 news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
@@ -117,7 +118,7 @@ class AdminDashboardAPIView(APIView):
             summary["total_users"] = User.objects.count()
 
         if user.has_app_permission("view_news") or user.is_admin():
-            news = NewsArticle.objects.all()
+            news = real_articles(NewsArticle.objects.all())
             accessible_ids = get_accessible_company_ids(user)
             if accessible_ids is not None:
                 news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
@@ -200,7 +201,7 @@ class AnalystDashboardAPIView(APIView):
             ).count()
 
         if user.has_app_permission("view_news"):
-            news = NewsArticle.objects.all()
+            news = real_articles(NewsArticle.objects.all())
             accessible_ids = get_accessible_company_ids(user)
             if accessible_ids is not None:
                 news = news.filter(company_tags__company_id__in=accessible_ids).distinct()
@@ -248,7 +249,7 @@ class ViewerDashboardAPIView(APIView):
             result["tracked_companies"] = tracked_count
 
         if user.has_app_permission("view_news"):
-            news = NewsArticle.objects.all()
+            news = real_articles(NewsArticle.objects.all())
             accessible_ids = get_accessible_company_ids(user)
             if accessible_ids is not None:
                 news = news.filter(company_tags__company_id__in=accessible_ids).distinct()

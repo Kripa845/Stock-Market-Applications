@@ -154,7 +154,7 @@ function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onT
                   )}
                   <td className="py-2">
                     <div className="flex items-center gap-2">
-                      <CompanyLogo symbol={row.symbol} name={row.name} size="sm" />
+                      <CompanyLogo symbol={row.symbol} name={row.name} logoUrl={row.logo_url} size="sm" />
                       <span>
                         <span className="block font-mono font-semibold text-accent-light">{row.symbol}</span>
                         <span className="block text-xs text-text-muted">{row.sector}</span>
@@ -187,7 +187,7 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
   onSelect: (symbol: string) => void;
   watched: Set<string> | null;
   onToggleWatch: (symbol: string) => void;
-  onLoaded: (firstSymbol: string | null) => void;
+  onLoaded: (response: MoversResponse) => void;
 }) {
   const [period, setPeriod] = useState<MoverPeriod>('1D');
   const [data, setData] = useState<MoversResponse | null>(null);
@@ -202,7 +202,7 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
         if (cancelled) return;
         setData(response);
         setState('ready');
-        onLoaded(response.gainers[0]?.symbol ?? response.losers[0]?.symbol ?? null);
+        onLoaded(response);
       })
       .catch(() => { if (!cancelled) setState('error'); });
     return () => { cancelled = true; };
@@ -324,7 +324,7 @@ function TopLists() {
           {rows.map((row, i) => (
             <li key={row.symbol} className="flex items-center gap-3 text-sm">
               <span className="w-4 text-xs text-text-muted">{i + 1}</span>
-              <span className="w-16 font-mono font-semibold text-accent-light">{row.symbol}</span>
+              <span className="flex w-24 items-center gap-2"><CompanyLogo symbol={row.symbol} name={row.name} logoUrl={row.logo_url} size="sm" /><span className="font-mono font-semibold text-accent-light">{row.symbol}</span></span>
               <span className="flex-1 text-right font-mono text-text-primary">{tab.value(row)}</span>
               <span className="w-20 text-right text-xs"><Change pct={row.change_pct} /></span>
             </li>
@@ -477,7 +477,7 @@ function BrokersCard({ windows, denominator }: { windows: BrokerWindow[]; denomi
   );
 }
 
-function CompanyDetail({ symbol }: { symbol: string }) {
+function CompanyDetail({ symbol, company }: { symbol: string; company?: TrackedRow }) {
   const { hasPermission } = useAuth();
   const canAnalyse = hasPermission('view_analysis');
   const canNews = hasPermission('view_news');
@@ -502,7 +502,10 @@ function CompanyDetail({ symbol }: { symbol: string }) {
   return (
     <section className="space-y-4">
       <h2 className="text-lg font-semibold text-text-primary">
-        <span className="font-mono text-accent-light">{symbol}</span> in detail
+        <span className="inline-flex items-center gap-2 align-middle">
+          <CompanyLogo symbol={symbol} name={company?.name} logoUrl={company?.logo_url ?? null} size="md" />
+          <span className="font-mono text-accent-light">{symbol}</span>
+        </span>{' '}in detail
       </h2>
       {canAnalyse && signals && <SignalsCard signals={signals} />}
       <div className="grid gap-4 xl:grid-cols-[3fr_2fr]">
@@ -552,7 +555,7 @@ function DividendsCard({ rows }: { rows: DividendRow[] }) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.id} className="table-row">
-                <td className="py-2 font-mono font-semibold text-accent-light">{row.symbol}</td>
+                <td className="py-2"><span className="flex w-24 items-center gap-2"><CompanyLogo symbol={row.symbol} name={row.name} logoUrl={row.logo_url} size="sm" /><span className="font-mono font-semibold text-accent-light">{row.symbol}</span></span></td>
                 <td className="py-2 text-text-secondary">{row.fiscal_year}</td>
                 <td className="py-2 text-right font-mono">{Number(row.bonus_pct).toFixed(2)}%</td>
                 <td className="py-2 text-right font-mono">{Number(row.cash_pct).toFixed(2)}%</td>
@@ -577,7 +580,7 @@ function WatchlistCard({ rows, canRemove, onRemove }: { rows: WatchlistRow[]; ca
         <ul className="divide-y divide-bg-border">
           {rows.map((row) => (
             <li key={row.symbol} className="flex items-center gap-3 py-2 text-sm">
-              <span className="w-16 font-mono font-semibold text-accent-light">{row.symbol}</span>
+              <span className="flex w-24 items-center gap-2"><CompanyLogo symbol={row.symbol} name={row.name} logoUrl={row.logo_url ?? null} size="sm" /><span className="font-mono font-semibold text-accent-light">{row.symbol}</span></span>
               <span className="flex-1 text-right font-mono text-text-primary">{formatPrice(row.close)}</span>
               <span className="w-20 text-right text-xs">
                 {row.bucket === 'gainer' || row.bucket === 'loser' || row.bucket === 'unchanged'
@@ -635,7 +638,12 @@ export default function TrackedCompaniesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const onMoversLoaded = useCallback((first: string | null) => {
+  const [companiesBySymbol, setCompaniesBySymbol] = useState<Record<string, TrackedRow>>({});
+
+  const onMoversLoaded = useCallback((response: MoversResponse) => {
+    const rows = [...response.gainers, ...response.losers, ...response.unchanged, ...response.excluded];
+    setCompaniesBySymbol((current) => ({ ...current, ...Object.fromEntries(rows.map((row) => [row.symbol, row])) }));
+    const first = response.gainers[0]?.symbol ?? response.losers[0]?.symbol ?? null;
     setSelected((current) => current ?? first);
   }, []);
 
@@ -698,7 +706,7 @@ export default function TrackedCompaniesPage() {
         </div>
       </div>
 
-      {selected && <CompanyDetail symbol={selected} />}
+      {selected && <CompanyDetail symbol={selected} company={companiesBySymbol[selected]} />}
 
       {dividends && <DividendsCard rows={dividends} />}
     </div>

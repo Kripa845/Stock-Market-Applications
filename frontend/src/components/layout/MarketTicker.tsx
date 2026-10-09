@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown } from 'lucide-react';
 import { getCompanies } from '../../api/companies';
 import type { Company } from '../../types/company';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { changeTone, formatPct, formatPrice } from '../market/format';
 
 export default function MarketTicker() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -10,7 +11,9 @@ export default function MarketTicker() {
     .then(data => setCompanies(data.results));
   useEffect(() => { load(); }, []);
   useLiveRefresh(load);
-  const items = [...companies, ...companies];
+  // Only companies with a crawled price; nothing is shown as 0.
+  const priced = companies.filter(company => company.latest_price !== null);
+  const items = [...priced, ...priced];
   const dates = companies.map(company => company.latest_price_date).filter((date): date is string => Boolean(date)).sort();
   const latestDate = dates[dates.length - 1];
 
@@ -25,14 +28,15 @@ export default function MarketTicker() {
       <div className="flex-1 overflow-hidden relative">
         <div className="ticker-scroll">
           {items.map((company, i) => {
-            const pos = company.price_change_percent >= 0;
+            const tone = changeTone(company.price_change_percent);
             return (
               <span key={i} className="inline-flex items-center gap-2 px-5 text-xs">
                 <span className="font-semibold text-text-primary font-mono">{company.symbol}</span>
-                <span className="text-text-secondary font-mono">Rs.{company.latest_price.toFixed(2)}</span>
-                <span className={`flex items-center gap-0.5 font-medium ${pos ? 'text-up' : 'text-down'}`}>
-                  {pos ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                  {pos ? '+' : ''}{company.price_change_percent.toFixed(2)}%
+                <span className="text-text-secondary font-mono">Rs.{formatPrice(company.latest_price)}</span>
+                <span className={`flex items-center gap-0.5 font-medium ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : 'text-text-muted'}`}>
+                  {tone === 'up' && <TrendingUp size={10} />}
+                  {tone === 'down' && <TrendingDown size={10} />}
+                  {formatPct(company.price_change_percent)}
                 </span>
                 <span className="text-bg-border">|</span>
               </span>

@@ -112,7 +112,7 @@ NO_DATA_ACTION = (
 )
 
 ROW_FIELDS = (
-    "company_id", "symbol", "name", "sector", "bucket",
+    "company_id", "symbol", "name", "sector", "logo_url", "bucket",
     "close", "prev_close", "change", "change_pct",
     "raw_prev_close", "close_to_close_change_pct", "change_basis", "adjusted", "unadjusted",
     "possible_corporate_action", "volume", "turnover", "transactions", "price_source",

@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.market_data.services.price_source import with_crawled_price
 from apps.analysis.models import DailyAnalysis
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice, FloorsheetTransaction
@@ -36,7 +37,7 @@ def _market_context():
     sessions, excluded = _trading_calendar(prices, _configured_excluded_dates())
     analyses = {
         (row.company_id, row.date): row
-        for row in DailyAnalysis.objects.filter(date__in=sessions).only(
+        for row in with_crawled_price(DailyAnalysis.objects.filter(date__in=sessions)).only(
             "company_id", "date", "previous_close", "daily_return_pct", "volume_ratio"
         )
     }

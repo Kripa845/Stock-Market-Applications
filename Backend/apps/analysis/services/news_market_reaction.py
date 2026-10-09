@@ -56,6 +56,7 @@ def build_exploratory_news_reaction(company, window="t1", mode="per_article", st
     """
     from apps.market_data.models import DailyPrice
     from apps.news.models import ArticleCompanyTag
+    from apps.news.selectors import real_tags
     from django.conf import settings
     from django.utils import timezone
 
@@ -64,7 +65,7 @@ def build_exploratory_news_reaction(company, window="t1", mode="per_article", st
     prices = list(DailyPrice.objects.filter(company=company, source__in=sources).order_by("date"))
     dates = [p.date for p in prices]
     threshold = float(getattr(settings, "CATEGORIZATION_THRESHOLD", 0.65))
-    tags = ArticleCompanyTag.objects.filter(company=company, confidence__gte=threshold,
+    tags = real_tags(ArticleCompanyTag.objects.all()).filter(company=company, confidence__gte=threshold,
         article__data_provenance__in=sources, article__sentiment__isnull=False,
         article__sentiment_status__in=["ok", "no_lexicon_match"], article__published_at__isnull=False
     ).select_related("article").order_by("article__published_at", "article_id")
@@ -109,6 +110,7 @@ def build_news_market_reaction(company, window_start, prices=None):
     """
     from apps.market_data.models import DailyPrice
     from apps.news.models import ArticleCompanyTag
+    from apps.news.selectors import real_tags
     from django.utils import timezone
 
     price_rows = prices if prices is not None else list(
@@ -116,7 +118,7 @@ def build_news_market_reaction(company, window_start, prices=None):
     )
     price_dates = [row.date for row in price_rows]
     tags = list(
-        ArticleCompanyTag.objects.filter(
+        real_tags(ArticleCompanyTag.objects.all()).filter(
             company=company,
             article__published_at__isnull=False,
         ).select_related("article").order_by("article__published_at", "article_id")

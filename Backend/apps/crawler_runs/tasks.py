@@ -421,16 +421,19 @@ def crawl_brokers():
 
 
 # ---------------------------------------------------------------------------
-# Scheduled: daily full floorsheet (latest session + missing trading days)
+# Scheduled: daily floorsheet (latest session only)
 # ---------------------------------------------------------------------------
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_floorsheet")
 def crawl_floorsheet():
     """
-    Scheduled daily floorsheet crawl in ``mode=full``: every trade for every
-    tracked company on the latest session, plus any recent trading day still
-    missing.  Chains ``derive_price_fields_task`` so DailyPrice.transactions
-    is filled from the new trades.
+    Scheduled daily floorsheet crawl in ``mode=latest``: every trade for every
+    tracked company on the latest session.  ShareSansar's company-floor-sheet
+    endpoint only returns the current session (a past date returns
+    recordsFiltered=0), so ``mode=full`` cannot back-fill anything and would
+    only send ~60 empty requests per company; it stays available for manual
+    runs.  Chains ``derive_price_fields_task`` so DailyPrice.transactions is
+    filled from the new trades.
     """
     closed = _market_closed_today("crawl_floorsheet")
     if closed:
@@ -446,16 +449,16 @@ def crawl_floorsheet():
         crawl_run = CrawlRun.objects.create(
             crawl_type=CrawlRun.CrawlType.FLOORSHEET,
             source="floorsheet",
-            target="All tracked companies (full, with backfill)",
+            target="All tracked companies (latest session)",
             status=CrawlRun.Status.PENDING,
             sources=list(FLOORSHEET_SPIDERS),
-            metadata={"mode": "full"},
+            metadata={"mode": "latest"},
         )
 
     from apps.market_data.tasks import derive_price_fields_task
 
     task = chain(
-        run_crawl.si(crawl_run.id, spider_args={"mode": "full"}),
+        run_crawl.si(crawl_run.id, spider_args={"mode": "latest"}),
         derive_price_fields_task.si(),
     ).apply_async()
 
@@ -469,7 +472,7 @@ def crawl_floorsheet():
         "crawl_run_id": crawl_run.id,
         "task_id": task.id,
         "type": "floorsheet",
-        "mode": "full",
+        "mode": "latest",
     }
 
 

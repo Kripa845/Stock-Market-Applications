@@ -13,7 +13,7 @@ from django.test import TestCase
 from apps.analysis.models import DailyAnalysis
 from apps.analysis.services.daily_metrics import BASELINE_SESSIONS
 from apps.analysis.tasks import rebuild_all_analysis, rebuild_company_analysis_task
-from apps.companies.models import Company
+from apps.companies.models import Company, TrackedCompany
 from apps.market_data.models import DailyPrice
 
 
@@ -23,6 +23,7 @@ class AnalysisPipelineTests(TestCase):
         self.company = Company.objects.create(
             symbol="NABIL", name="Nabil Bank", sector="Banking",
         )
+        TrackedCompany.objects.create(company=self.company, is_tracked=True)
         self.sessions = self._weekdays(25)
 
         for index, day in enumerate(self.sessions):
@@ -187,6 +188,8 @@ class AnalysisPipelineTests(TestCase):
         Company.objects.create(
             symbol="DEAD", name="Delisted", sector="Banking", is_active=False,
         )
+        untracked = Company.objects.create(symbol="UNT", name="Active, untracked", sector="Banking")
+        TrackedCompany.objects.create(company=untracked, is_tracked=False)
 
         result = rebuild_all_analysis()
 

@@ -287,6 +287,7 @@ from .serializers import (
 )
 from .tasks import categorize_article_task
 from apps.users.company_access import get_accessible_company_ids, require_company_access
+from apps.news.selectors import real_articles, real_tags
 
 
 class NewsArticleListAPIView(generics.ListAPIView):
@@ -298,9 +299,9 @@ class NewsArticleListAPIView(generics.ListAPIView):
     serializer_class = NewsArticleSerializer
 
     def get_queryset(self):
-        qs = NewsArticle.objects.prefetch_related(
+        qs = real_articles(NewsArticle.objects.prefetch_related(
             "company_tags__company", "corrections__corrected_by"
-        ).all().order_by(
+        ).all()).order_by(
             F("published_at").desc(nulls_last=True),
             F("id").desc(),
         )
@@ -381,9 +382,9 @@ class NewsArticleDetailAPIView(generics.RetrieveAPIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_news"
     serializer_class = NewsArticleSerializer
-    queryset = NewsArticle.objects.prefetch_related(
+    queryset = real_articles(NewsArticle.objects.prefetch_related(
         "company_tags__company", "corrections__corrected_by"
-    ).all()
+    ).all())
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -603,8 +604,8 @@ class NewsStatsAPIView(APIView):
 
     def get(self, request):
         accessible_ids = get_accessible_company_ids(request.user)
-        articles = NewsArticle.objects.all()
-        tags = ArticleCompanyTag.objects.all()
+        articles = real_articles(NewsArticle.objects.all())
+        tags = real_tags(ArticleCompanyTag.objects.all())
         if accessible_ids is not None:
             articles = articles.filter(company_tags__company_id__in=accessible_ids).distinct()
             tags = tags.filter(company_id__in=accessible_ids)

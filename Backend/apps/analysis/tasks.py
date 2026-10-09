@@ -234,7 +234,9 @@ def rebuild_all_analysis(self, since=None):
             else date_cls.fromisoformat(str(since))
         )
 
-    companies = Company.objects.filter(is_active=True).order_by("symbol")
+    from apps.companies.selection import tracked_active_companies
+
+    companies = tracked_active_companies()
 
     processed = 0
     failed = []

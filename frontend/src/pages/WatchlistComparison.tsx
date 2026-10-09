@@ -47,14 +47,30 @@ const COLORS = {
   vwap:    '#F59E0B',
 };
 
-function fmt(v: number): string {
+// Missing values (no crawled data) render as "—", never as 0.
+function fmt(v: number | null): string {
+  if (v === null) return '—';
   if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
   if (v >= 1_000)     return `${(v / 1_000).toFixed(1)}K`;
   return String(Math.round(v));
 }
 
-function pct(v: number): string {
-  return `${v >= 0 ? '+' : ''}${v.toFixed(2)}%`;
+function pct(v: number | null): string {
+  if (v === null) return '—';
+  return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
+}
+
+function tone(v: number | null): string {
+  if (v === null || v === 0) return 'text-text-muted';
+  return v > 0 ? 'text-up' : 'text-down';
+}
+
+function price(v: number | null): string {
+  return v === null ? '—' : `Rs. ${v.toFixed(2)}`;
+}
+
+function volatilityText(v: number | null): string {
+  return v === null ? '—' : `${v.toFixed(2)}%`;
 }
 
 // ─── Pressure badge ───────────────────────────────────────────────────────────
@@ -164,11 +180,12 @@ function CompanyTable({
               <td className="py-2 font-mono font-semibold text-accent-light">{c.symbol}</td>
               <td className="py-2 text-text-muted">{c.sector}</td>
               <td className="py-2 text-right font-mono text-text-primary">
-                {c.latest_price > 0 ? `Rs. ${c.latest_price.toFixed(2)}` : '—'}
+                {price(c.latest_price)}
               </td>
-              <td className={clsx('py-2 text-right font-mono', c.change_pct >= 0 ? 'text-up' : 'text-down')}>
+              <td className={clsx('py-2 text-right font-mono', tone(c.change_pct))}>
                 <span className="flex items-center justify-end gap-0.5">
-                  {c.change_pct >= 0 ? <ArrowUp size={9} /> : <ArrowDown size={9} />}
+                  {c.change_pct !== null && c.change_pct > 0 && <ArrowUp size={9} />}
+                  {c.change_pct !== null && c.change_pct < 0 && <ArrowDown size={9} />}
                   {pct(c.change_pct)}
                 </span>
               </td>
@@ -187,7 +204,7 @@ function CompanyTable({
               </td>
               <td className="py-2 text-center"><PressureBadge p={c.pressure} /></td>
               <td className="py-2 text-right text-text-secondary">{c.news_count}</td>
-              <td className="py-2 text-right font-mono text-text-secondary">{c.volatility.toFixed(2)}%</td>
+              <td className="py-2 text-right font-mono text-text-secondary">{volatilityText(c.volatility)}</td>
             </tr>
           ))}
         </tbody>
@@ -208,11 +225,11 @@ function ComparisonGrid({ companies }: { companies: CompanyStat[] }) {
   }
 
   const rows: { label: string; render: (c: CompanyStat) => React.ReactNode }[] = [
-    { label: 'Price',      render: c => c.latest_price > 0 ? `Rs. ${c.latest_price.toFixed(2)}` : '—' },
+    { label: 'Price',      render: c => price(c.latest_price) },
     {
       label: 'Return',
       render: c => (
-        <span className={c.change_pct >= 0 ? 'text-up' : 'text-down'}>{pct(c.change_pct)}</span>
+        <span className={tone(c.change_pct)}>{pct(c.change_pct)}</span>
       ),
     },
     { label: 'Volume',     render: c => fmt(c.volume_24h) },
@@ -232,7 +249,7 @@ function ComparisonGrid({ companies }: { companies: CompanyStat[] }) {
     },
     { label: 'Pressure',   render: c => <PressureBadge p={c.pressure} /> },
     { label: 'News',       render: c => c.news_count },
-    { label: 'Volatility', render: c => `${c.volatility.toFixed(2)}%` },
+    { label: 'Volatility', render: c => volatilityText(c.volatility) },
     { label: 'Sector',     render: c => <span className="text-text-muted text-[11px]">{c.sector}</span> },
   ];
 
@@ -332,7 +349,7 @@ function SectorSummary({ sectors }: { sectors: SectorStat[] }) {
           <p className="text-[11px] text-text-muted mt-0.5">
             {s.companies_count} {s.companies_count === 1 ? 'company' : 'companies'}
           </p>
-          <p className={clsx('text-sm font-semibold font-mono mt-1', s.avg_change_pct >= 0 ? 'text-up' : 'text-down')}>
+          <p className={clsx('text-sm font-semibold font-mono mt-1', tone(s.avg_change_pct))}>
             {pct(s.avg_change_pct)}
           </p>
           <p className="text-[11px] text-text-muted">avg return · turnover {fmt(s.total_turnover)}</p>
@@ -522,8 +539,8 @@ export default function WatchlistComparison() {
                   {most_volatile.map(c => (
                     <tr key={c.id} className="table-row">
                       <td className="py-1.5 font-mono text-accent-light">{c.symbol}</td>
-                      <td className="py-1.5 text-right font-mono text-text-primary">{c.volatility.toFixed(2)}%</td>
-                      <td className={clsx('py-1.5 text-right font-mono', c.change_pct >= 0 ? 'text-up' : 'text-down')}>{pct(c.change_pct)}</td>
+                      <td className="py-1.5 text-right font-mono text-text-primary">{volatilityText(c.volatility)}</td>
+                      <td className={clsx('py-1.5 text-right font-mono', tone(c.change_pct))}>{pct(c.change_pct)}</td>
                       <td className="py-1.5 text-right"><PressureBadge p={c.pressure} /></td>
                     </tr>
                   ))}
@@ -579,7 +596,7 @@ export default function WatchlistComparison() {
                     <tr key={c.id} className="table-row">
                       <td className="py-1.5 font-mono text-accent-light">{c.symbol}</td>
                       <td className="py-1.5 text-right font-mono text-accent-light">{c.news_count}</td>
-                      <td className={clsx('py-1.5 text-right font-mono', c.change_pct >= 0 ? 'text-up' : 'text-down')}>{pct(c.change_pct)}</td>
+                      <td className={clsx('py-1.5 text-right font-mono', tone(c.change_pct))}>{pct(c.change_pct)}</td>
                       <td className="py-1.5 text-right"><PressureBadge p={c.pressure} /></td>
                     </tr>
                   ))}
@@ -606,7 +623,7 @@ export default function WatchlistComparison() {
                 <Tooltip contentStyle={TT} formatter={(v: unknown) => [`${Number(v ?? 0).toFixed(2)}%`, 'Avg Return']} />
                 <Bar dataKey="avg_change_pct" radius={[3, 3, 0, 0]} maxBarSize={40}>
                   {sectors.map((s, i) => (
-                    <Cell key={i} fill={s.avg_change_pct >= 0 ? COLORS.buy : COLORS.sell} opacity={0.8} />
+                    <Cell key={i} fill={(s.avg_change_pct ?? 0) >= 0 ? COLORS.buy : COLORS.sell} opacity={s.avg_change_pct === null ? 0 : 0.8} />
                   ))}
                 </Bar>
               </BarChart>

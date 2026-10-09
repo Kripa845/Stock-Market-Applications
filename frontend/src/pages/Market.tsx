@@ -11,6 +11,7 @@ import MarketBreadthWidget from '../components/market-intelligence/MarketBreadth
 import MarketHeatmap from '../components/market-intelligence/MarketHeatmap';
 import MarketRankings from '../components/market-intelligence/MarketRankings';
 import CompanyLogo from '../components/companies/CompanyLogo';
+import { changeTone, formatCount, formatPct, formatPrice } from '../components/market/format';
 
 export default function MarketPage() {
   const navigate = useNavigate();
@@ -74,7 +75,7 @@ export default function MarketPage() {
             </thead>
             <tbody>
               {companies.map((company) => {
-                const positive = company.price_change_percent >= 0;
+                const tone = changeTone(company.price_change_percent);
                 return (
                   <tr
                     key={company.id}
@@ -92,14 +93,15 @@ export default function MarketPage() {
                       <Badge variant="gray">{company.sector}</Badge>
                     </td>
                     <td className="py-3 text-right font-mono">
-                      Rs. {company.latest_price.toFixed(2)}
+                      {company.latest_price === null ? '—' : `Rs. ${formatPrice(company.latest_price)}`}
                     </td>
-                    <td className={`py-3 text-right font-mono ${positive ? 'text-up' : 'text-down'}`}>
-                      {positive ? <TrendingUp size={13} className="inline" /> : <TrendingDown size={13} className="inline" />}
-                      {' '}{positive ? '+' : ''}{company.price_change_percent.toFixed(2)}%
+                    <td className={`py-3 text-right font-mono ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : 'text-text-muted'}`}>
+                      {tone === 'up' && <TrendingUp size={13} className="inline" />}
+                      {tone === 'down' && <TrendingDown size={13} className="inline" />}
+                      {' '}{formatPct(company.price_change_percent)}
                     </td>
                     <td className="py-3 text-right font-mono">
-                      {company.volume_24h.toLocaleString()}
+                      {formatCount(company.volume_24h)}
                     </td>
                     <td className="py-3 text-right">
                       <Badge variant={company.is_tracked ? 'green' : 'gray'}>

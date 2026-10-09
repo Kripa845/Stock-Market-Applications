@@ -279,10 +279,10 @@ export interface BrokerDetailResponse {
 export interface CorrelationDataPoint {
   date: string;
   close: number;
-  price_change_pct: number;     // (close - prev_close) / prev_close * 100
+  price_change_pct: number | null; // ShareSansar % change, else close-to-close; null on the first day of the window
   volume: number;
   news_count: number;           // articles tagged to this company on this date
-  sentiment_score: number;      // avg sentiment of articles on this date (0 if none)
+  sentiment_score: number | null; // avg sentiment of articles on this date; null when none
 }
 
 export interface NewsPriceCorrelation {
@@ -414,11 +414,11 @@ export interface CompanyStat {
   name: string;
   logo_url: string | null;
   sector: string;
-  latest_price: number;
-  change_pct: number;
-  volume_24h: number;
-  turnover_24h: number;
-  volatility: number;           // std dev of daily returns over 31d window
+  latest_price: number | null;  // null when no crawled price (never 0)
+  change_pct: number | null;    // latest-session change (services.movers); null when not ranked
+  volume_24h: number | null;
+  turnover_24h: number | null;
+  volatility: number | null;    // std dev of daily returns over 31d window; null with < 3 sessions
   vwap: number | null;          // from stored DailyAnalysis
   pressure: PressureLabel;
   pressure_score: number | null;
@@ -432,7 +432,7 @@ export interface SectorStat {
   sector: string;
   companies_count: number;
   total_turnover: number;
-  avg_change_pct: number;
+  avg_change_pct: number | null;
 }
 
 export interface CrossCompanyAnalysis {
@@ -456,7 +456,7 @@ export interface CrossCompanyAnalysis {
 export interface DashboardSummary {
   market_turnover: number;
   market_volume: number;
-  daily_change_pct: number;
+  daily_change_pct: number | null;
   tracked_companies_count: number;
   companies_with_data: number;
   news_analyzed_count: number;

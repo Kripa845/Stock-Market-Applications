@@ -121,18 +121,18 @@ export const universalDashboardConfig: DashboardConfig = {
     {
       id: 'market-data',
       title: 'Market Data',
-      description: 'Real-time market data and stock performance.',
+      description: 'End-of-day data for the tracked companies, from crawled closing prices.',
       requiredAnyPermission: ['view_market_data', 'view_price_history', 'view_trading_volume'],
       cards: [
         {
           id: 'market-overview',
-          title: 'Market Overview',
-          description: 'Track market movements',
+          title: 'Tracked avg. change %',
+          description: 'Average latest-session change of the tracked companies',
           route: '/market',
           icon: TrendingUp,
           type: 'stat',
           dataPath: 'marketChange',
-          badge: 'Live',
+          badge: 'Latest close',
           iconColor: 'text-up',
           requiredPermission: 'view_market_data',
         },

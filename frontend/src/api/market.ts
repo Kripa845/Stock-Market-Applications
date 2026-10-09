@@ -18,6 +18,7 @@ export interface TrackedRow {
   symbol: string;
   name: string;
   sector: string;
+  logo_url: string | null;
   bucket: MoverBucket;
   close: number | null;
   /** Reference price behind change_pct (source-adjusted when change_basis = 'source'). */
@@ -166,6 +167,7 @@ export interface DividendRow {
   id: number;
   symbol: string;
   name: string;
+  logo_url: string | null;
   fiscal_year: string;
   bonus_pct: number;
   cash_pct: number;

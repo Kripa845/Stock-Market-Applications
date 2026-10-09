@@ -16,6 +16,7 @@ from .services.brokers import (
     sampled_floorsheet_dates,
 )
 from apps.market_data.services.price_source import with_crawled_price
+from apps.news.selectors import real_articles, real_tags
 from apps.companies.models import Company
 from apps.users.company_access import (
     filter_company_queryset,
@@ -83,7 +84,7 @@ class CompanyBehaviorSummaryAPIView(APIView):
 
         if window_start is not None:
             analysis_rows = list(
-                DailyAnalysis.objects
+                with_crawled_price(DailyAnalysis.objects.all())
                 .filter(
                     company=company,
                     date__gte=window_start,
@@ -123,7 +124,7 @@ class CompanyBehaviorSummaryAPIView(APIView):
         )
 
         tags = (
-            ArticleCompanyTag.objects
+            real_tags(ArticleCompanyTag.objects.all())
             .filter(
                 company=company,
                 article__published_at__date__gte=window_start,
@@ -645,7 +646,7 @@ class CompanyCategorizedNewsAPIView(APIView):
         except ValueError:
             return Response({"detail": "page must be a positive integer."}, status=400)
 
-        tags = ArticleCompanyTag.objects.filter(
+        tags = real_tags(ArticleCompanyTag.objects.all()).filter(
             company=company,
         ).select_related("article").order_by(
             F("article__published_at").desc(nulls_last=True),
@@ -739,7 +740,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                 }
             )
 
-        tags = ArticleCompanyTag.objects.filter(
+        tags = real_tags(ArticleCompanyTag.objects.all()).filter(
             company=company,
             article__published_at__date__gte=window_start,
         ).select_related("article").order_by("article__published_at")
@@ -761,14 +762,23 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
 
         for i, p in enumerate(prices):
             d_str = p.date.isoformat()
-            prev_close = float(prices[i - 1].close) if i > 0 else float(p.open)
-            pct_change = round(((float(p.close) - prev_close) / prev_close) * 100, 2) if prev_close > 0 else 0.0
+            # Session change: ShareSansar's % change when stored (adjusted for
+            # bonus/right issues), else close-to-close.  The first row has no
+            # previous session in the window, so its change is unknown (None),
+            # never measured against the open.
+            if p.source_change_pct is not None:
+                pct_change = round(float(p.source_change_pct), 2)
+            elif i > 0 and float(prices[i - 1].close) > 0:
+                prev_close = float(prices[i - 1].close)
+                pct_change = round(((float(p.close) - prev_close) / prev_close) * 100, 2)
+            else:
+                pct_change = None
 
             n_info = news_by_date.get(d_str, {"count": 0, "sentiments": []})
             s_avg = (
                 round(sum(n_info["sentiments"]) / len(n_info["sentiments"]), 2)
                 if n_info["sentiments"]
-                else 0.0
+                else None
             )
 
             data_points.append(
@@ -782,7 +792,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
                 }
             )
 
-            if n_info["count"] > 0:
+            if n_info["count"] > 0 and s_avg is not None and pct_change is not None:
                 sentiments_list.append(s_avg)
                 price_changes_list.append(pct_change)
     
@@ -872,6 +882,12 @@ class CrossCompanyAnalysisAPIView(APIView):
         sector_stats = {}
         pressure_counts = {"buying": 0, "selling": 0, "neutral": 0}
 
+        # Latest-session change from services.movers (one definition everywhere);
+        # companies that are not ranked there get no change rather than a guess.
+        from apps.market_data.services.movers import RANKED, company_rows
+
+        _, movers_rows = company_rows([c.id for c in companies])
+
         for c in companies:
             # Use date__gte so the window always reflects the last 31 calendar
             # days from today, not a Python-side slice of arbitrary depth.
@@ -880,11 +896,15 @@ class CrossCompanyAnalysisAPIView(APIView):
                 .filter(company=c, source="crawled", date__gte=window_start)
                 .order_by("-date")
             )
-            latest_price = float(prices[0].close) if prices else 0.0
-            prev_price = float(prices[1].close) if len(prices) > 1 else latest_price
-            change_pct = round(((latest_price - prev_price) / prev_price) * 100, 2) if prev_price > 0 else 0.0
-            volume_24h = int(prices[0].volume) if prices else 0
-            turnover_24h = float(prices[0].turnover) if prices else 0.0
+            latest_price = float(prices[0].close) if prices else None
+            mover = movers_rows.get(c.id)
+            change_pct = (
+                round(float(mover["change_pct"]), 2)
+                if mover and mover["bucket"] in RANKED and mover["change_pct"] is not None
+                else None
+            )
+            volume_24h = int(prices[0].volume) if prices else None
+            turnover_24h = float(prices[0].turnover) if prices else None
 
             # Volatility (Std deviation of daily % changes over 30 days)
             daily_returns = []
@@ -899,9 +919,9 @@ class CrossCompanyAnalysisAPIView(APIView):
                 variance = sum((r - mean_ret) ** 2 for r in daily_returns) / len(daily_returns)
                 volatility = round(math.sqrt(variance), 2)
             else:
-                volatility = 1.5
+                volatility = None  # not enough crawled sessions; never a made-up default
 
-            news_count = c.article_tags.count()
+            news_count = real_tags(c.article_tags.all()).count()
 
             # VWAP & pressure come from the stored analytical state so the
             # cross-company view can never disagree with the per-company
@@ -970,20 +990,28 @@ class CrossCompanyAnalysisAPIView(APIView):
                     "changes": [],
                 }
             sector_stats[c.sector]["companies_count"] += 1
-            sector_stats[c.sector]["total_turnover"] += turnover_24h
-            sector_stats[c.sector]["changes"].append(change_pct)
+            if turnover_24h is not None:
+                sector_stats[c.sector]["total_turnover"] += turnover_24h
+            if change_pct is not None:
+                sector_stats[c.sector]["changes"].append(change_pct)
 
         for s in sector_stats.values():
-            s["avg_change_pct"] = round(sum(s["changes"]) / len(s["changes"]), 2) if s["changes"] else 0.0
+            s["avg_change_pct"] = round(sum(s["changes"]) / len(s["changes"]), 2) if s["changes"] else None
             del s["changes"]
 
+        def top(key, reverse=True, keep=lambda value: True):
+            """Top 5 by ``key`` among companies that actually have a value."""
+            rows = [row for row in company_stats if row[key] is not None and keep(row[key])]
+            return sorted(rows, key=lambda row: row[key], reverse=reverse)[:5]
+
         # Sortings
-        most_volatile = sorted(company_stats, key=lambda x: x["volatility"], reverse=True)[:5]
-        most_active_volume = sorted(company_stats, key=lambda x: x["volume_24h"], reverse=True)[:5]
-        most_active_turnover = sorted(company_stats, key=lambda x: x["turnover_24h"], reverse=True)[:5]
-        most_in_news = sorted(company_stats, key=lambda x: x["news_count"], reverse=True)[:5]
-        top_gainers = sorted(company_stats, key=lambda x: x["change_pct"], reverse=True)[:5]
-        top_losers = sorted(company_stats, key=lambda x: x["change_pct"])[:5]
+        most_volatile = top("volatility")
+        most_active_volume = top("volume_24h")
+        most_active_turnover = top("turnover_24h")
+        most_in_news = top("news_count")
+        # Same rule as /api/market/movers/: only rises are gainers, only falls are losers.
+        top_gainers = top("change_pct", keep=lambda value: value > 0)
+        top_losers = top("change_pct", reverse=False, keep=lambda value: value < 0)
 
         return Response(
             {
@@ -1004,7 +1032,7 @@ class CrossCompanyAnalysisAPIView(APIView):
 class DashboardSummaryAPIView(APIView):
     """
     GET /api/analysis/dashboard-summary/
-    Real-time aggregate market indicators.
+    End-of-day aggregates over the active companies (crawled prices only).
 
     All values are computed from actual database records.
     Fields that have no real database equivalent (portfolio value,
@@ -1017,42 +1045,43 @@ class DashboardSummaryAPIView(APIView):
         from django.utils import timezone
         from datetime import timedelta
 
+        from apps.market_data.services.movers import RANKED, company_rows
+
         companies = filter_company_queryset(
             Company.objects.filter(is_active=True), request.user, "id"
-        ).prefetch_related("dailyprice_set")
+        )
+        crawled = DailyPrice.objects.filter(company__in=companies, source="crawled")
         total_market_turnover = 0.0
         total_market_volume = 0
-        avg_change_sum = 0.0
         companies_with_data = 0
 
         for c in companies:
-            latest = c.dailyprice_set.order_by("-date").first()
+            latest = crawled.filter(company=c).order_by("-date").first()
             if latest:
                 companies_with_data += 1
                 total_market_turnover += float(latest.turnover)
                 total_market_volume += int(latest.volume)
-                prev = c.dailyprice_set.order_by("-date")[1:2].first()
-                if prev and float(prev.close) > 0:
-                    avg_change_sum += (
-                        (float(latest.close) - float(prev.close))
-                        / float(prev.close)
-                    ) * 100
+
+        # Average latest-session change over the companies ranked by
+        # services.movers (same definition as the Tracked Companies page);
+        # None -- not 0 -- when no company has a usable change.
+        _, movers_rows = company_rows([c.id for c in companies])
+        changes = [
+            float(row["change_pct"]) for row in movers_rows.values()
+            if row["bucket"] in RANKED and row["change_pct"] is not None
+        ]
+        avg_change_pct = round(sum(changes) / len(changes), 2) if changes else None
 
         total_companies = companies.count()
-        avg_change_pct = (
-            round(avg_change_sum / companies_with_data, 2)
-            if companies_with_data > 0
-            else 0.0
-        )
-        total_news = NewsArticle.objects.count()
+        total_news = real_articles(NewsArticle.objects.all()).count()
 
-        # Volume anomaly count: companies whose latest volume is ≥1.5× their
+        # Volume anomaly count: companies whose latest volume is >=1.5x their
         # 31-day average (same threshold used by CompanyBehaviorSummaryAPIView).
         window_start = timezone.localdate() - timedelta(days=31)
         volume_anomaly_count = 0
         for c in companies:
             recent = list(
-                c.dailyprice_set.filter(date__gte=window_start).order_by("-date")
+                crawled.filter(company=c, date__gte=window_start).order_by("-date")
             )
             if len(recent) >= 2:
                 avg = sum(int(p.volume) for p in recent) / len(recent)

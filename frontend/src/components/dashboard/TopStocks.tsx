@@ -92,6 +92,7 @@ import Sparkline from '../common/Sparkline';
 import { getCompanies } from '../../api/companies';
 import type { Company } from '../../types/company';
 import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+import { changeTone, formatPct, formatPrice } from '../market/format';
 
 export default function TopStocks() {
   const navigate = useNavigate();
@@ -131,8 +132,9 @@ export default function TopStocks() {
   useLiveRefresh(load);
 
   // Helper function for clean currency/volume formatting
-  const formatVolume = (vol: number) => {
-    if (!vol) return '0';
+  const formatVolume = (vol: number | null) => {
+    if (vol === null) return '—';  // no crawled price: unknown, not zero
+    if (vol === 0) return '0';
     if (vol >= 1_000_000_000) return `${(vol / 1_000_000_000).toFixed(1)}B`;
     if (vol >= 1_000_000) return `${(vol / 1_000_000).toFixed(1)}M`;
     if (vol >= 1_000) return `${(vol / 1_000).toFixed(0)}K`;
@@ -178,7 +180,8 @@ export default function TopStocks() {
               </tr>
             ) : (
               companies.map((company) => {
-                const pos = (company.price_change_percent ?? 0) >= 0;
+                const tone = changeTone(company.price_change_percent);
+                const pos = tone !== 'down';
                 
                 return (
                   <tr
@@ -195,12 +198,13 @@ export default function TopStocks() {
                       {company.name}
                     </td>
                     <td className="py-2.5 text-right font-mono text-text-primary font-medium">
-                      {company.latest_price ? company.latest_price.toFixed(2) : '0.00'}
+                      {formatPrice(company.latest_price)}
                     </td>
-                    <td className={`py-2.5 text-right font-medium ${pos ? 'text-up' : 'text-down'}`}>
+                    <td className={`py-2.5 text-right font-medium ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : 'text-text-muted'}`}>
                       <span className="inline-flex items-center justify-end gap-1">
-                        {pos ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                        {pos ? '+' : ''}{(company.price_change_percent ?? 0).toFixed(2)}%
+                        {tone === 'up' && <TrendingUp size={11} />}
+                        {tone === 'down' && <TrendingDown size={11} />}
+                        {formatPct(company.price_change_percent)}
                       </span>
                     </td>
                     <td className="py-2.5 text-right text-text-secondary hidden md:table-cell font-mono">

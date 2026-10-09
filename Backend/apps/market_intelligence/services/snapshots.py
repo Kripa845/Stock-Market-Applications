@@ -9,6 +9,7 @@ from django.db import transaction
 
 from apps.analysis.models import DailyAnalysis
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.price_source import with_crawled_price
 from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.models import MarketBreadthSnapshot, ProxyIndexSnapshot
 from apps.market_intelligence.app_settings import MARKET_INTELLIGENCE_EXCLUDED_SESSIONS as DEFAULT_EXCLUDED_SESSIONS
@@ -159,7 +160,7 @@ def compute_market_snapshots(dry_run=False):
         by_company[row.company_id][row.date] = row
     analyses = {
         (row.company_id, row.date): row
-        for row in DailyAnalysis.objects.filter(date__in=sessions).only(
+        for row in with_crawled_price(DailyAnalysis.objects.filter(date__in=sessions)).only(
             "company_id", "date", "previous_close"
         )
     }

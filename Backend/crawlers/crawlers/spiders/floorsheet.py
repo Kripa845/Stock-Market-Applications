@@ -29,7 +29,7 @@ os.environ.setdefault(
 django.setup()
 
 
-from apps.companies.models import Company
+from apps.companies.selection import select_crawl_companies
 from apps.market_data.models import FloorsheetTransaction
 from apps.market_data.services.price_fields import SYNTHETIC_TRANSACTION_PREFIX
 from apps.market_data.services.trading_calendar import (
@@ -77,14 +77,17 @@ class FloorsheetSpider(scrapy.Spider):
     ``mode=latest``
         Only the latest available trading session.
 
-    ``mode=full`` (daily, scheduled)
+    ``mode=full`` (manual only)
         Every trade for every tracked company: the latest session plus
         each of the last ``backfill_sessions`` stored trading sessions
         (default 60) that has no real floorsheet rows for that company
         yet.  Dates are chosen PER COMPANY, so a gap left by a failed
         request is filled on the next run.  The latest session is always
         re-fetched in case its earlier crawl was partial; the unique key
-        makes that idempotent.  This is what the beat schedule runs.
+        makes that idempotent.  NOTE: ShareSansar's company-floor-sheet only
+        returns the current session (past dates come back empty), so in
+        practice this collects the latest session plus ~60 empty requests per
+        company.  The beat schedule runs ``mode=latest``.
 
     Neither mode ever deletes existing rows.  Persistence goes through
     ``update_or_create`` on ``(company, date, transaction_id)``, so
@@ -146,10 +149,15 @@ class FloorsheetSpider(scrapy.Spider):
         sample_offsets=None,
         company_symbol=None,
         backfill_sessions=None,
+        symbols=None,
         *args,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
+
+        # Optional comma-separated symbols (``-a symbols=MNBBL,GUFL``), resolved
+        # against the active + tracked companies in the database.
+        self.symbols = symbols
 
         try:
             self.backfill_sessions = int(backfill_sessions) if backfill_sessions else self.FULL_BACKFILL_SESSIONS
@@ -322,7 +330,12 @@ class FloorsheetSpider(scrapy.Spider):
             yield request
 
     def start_requests(self):
-        companies = Company.objects.filter(is_active=True).order_by("symbol")
+        companies, unknown = select_crawl_companies(self.symbols)
+        for symbol in unknown:
+            self.logger.error(
+                "Symbol %s is not an active, tracked company in the database; not crawled.",
+                symbol,
+            )
         if self.company_symbol:
             companies = companies.filter(symbol__iexact=self.company_symbol)
 
@@ -332,7 +345,7 @@ class FloorsheetSpider(scrapy.Spider):
         companies = list(companies)
 
         if not companies:
-            self.logger.error("No active companies found in Company table.")
+            self.logger.error("No active, tracked companies to crawl.")
             return
 
         if self.mode == "full" and not self.floorsheet_date:

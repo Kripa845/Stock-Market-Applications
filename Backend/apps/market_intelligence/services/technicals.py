@@ -8,6 +8,7 @@ from django.db import transaction
 from apps.analysis.models import DailyAnalysis
 from apps.companies.models import Company
 from apps.market_data.models import DailyPrice
+from apps.market_data.services.price_source import with_crawled_price
 from apps.market_intelligence.models import CompanyTechnicalSnapshot
 from apps.market_intelligence.services.snapshots import (
     DMA_COVERAGE_RATIO,
@@ -98,7 +99,7 @@ def compute_company_technical_snapshots():
         companies[row.company_id] = row.company
     analyses = {
         (row.company_id, row.date): row
-        for row in DailyAnalysis.objects.filter(date__in=sessions).only("company_id", "date", "previous_close")
+        for row in with_crawled_price(DailyAnalysis.objects.filter(date__in=sessions)).only("company_id", "date", "previous_close")
     }
     flags = _corporate_action_flags(prices, sessions, analyses)
     result_rows = []

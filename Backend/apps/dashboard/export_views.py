@@ -52,6 +52,7 @@ from apps.analysis.models import DailyAnalysis
 from apps.analysis.services.brokers import build_broker_activity, sampled_floorsheet_dates
 from apps.users.permissions import HasAppPermission
 from apps.users.company_access import get_accessible_company_ids
+from apps.news.selectors import real_articles
 
 logger = logging.getLogger(__name__)
 
@@ -392,7 +393,7 @@ class ExportNewsAPIView(APIView):
 
         # ── build queryset ────────────────────────────────────────────
         qs = (
-            NewsArticle.objects
+            real_articles(NewsArticle.objects.all())
             .prefetch_related(Prefetch(
                 "company_tags",
                 queryset=ArticleCompanyTag.objects.filter(
@@ -968,7 +969,7 @@ class ExportReportAPIView(APIView):
             result["trading"] = None
 
         # ── News summary ──────────────────────────────────────────────
-        news_qs = NewsArticle.objects.all()
+        news_qs = real_articles(NewsArticle.objects.all())
         news_qs = news_qs.filter(company_tags__company__in=companies).distinct()
         if date_from:
             news_qs = news_qs.filter(published_at__date__gte=date_from)
