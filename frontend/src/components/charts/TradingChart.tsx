@@ -24,6 +24,13 @@ export interface MinuteBar {
   time: string | number;
   open: string | number; high: string | number; low: string | number; close: string | number;
   volume: number;
+  turnover?: string | number | null;  // real turnover when the source has it
+}
+// Intervals the backend stores as candles (GET /api/stocks/<symbol>/intraday/).
+export type IntradayInterval = '1m' | '5m' | '15m' | '30m' | '1h';
+export interface IntradayCandles {
+  date: string | null;                // trading day the candles belong to
+  candles: MinuteBar[];
 }
 interface Props {
   prices: ChartPrice[];               // daily bars; pass as many days as you have
@@ -32,6 +39,9 @@ interface Props {
   // Optional. Returns 1-minute bars for the last `days` days. Every intraday interval is built from
   // these, so the backend only needs one endpoint. Without it, intraday intervals are disabled.
   fetchMinuteBars?: (days: number) => Promise<MinuteBar[]>;
+  // Optional. Server-built candles for one trading day (default: the latest). When given, the
+  // 1m / 5m / 15m / 30m / 1h intervals use it instead of aggregating fetchMinuteBars.
+  fetchIntradayCandles?: (interval: IntradayInterval, date?: string) => Promise<IntradayCandles>;
 }
 
 // ─── Menu config ──────────────────────────────────────────────────────────────
@@ -83,6 +93,20 @@ const INTERVALS: { id: Interval; group: 'Minutes' | 'Hours' | 'Days'; minutes?: 
 const NPT_OFFSET_MS = 345 * 60_000;
 const NPT_SESSION_OPEN_MS = 11 * 60 * 60_000;
 const MAX_INTRADAY_DAYS = 60;
+const SERVER_INTERVALS: Interval[] = ['1m', '5m', '15m', '30m', '1h'];
+const QUICK_INTRADAY: IntradayInterval[] = ['1m', '5m', '15m', '1h'];
+const INTRADAY_REFRESH_MS = 60_000;
+
+// Session 11:00-15:00 Nepal time, plus a few minutes for the last trades to be published.
+// Weekdays NEPSE is closed (0 = Sun ... 6 = Sat). It trades Monday-Friday since 2026-04-06
+// (settings.NEPSE_TRADING_WEEKS); public holidays are not known here.
+const NPT_CLOSED_DAYS = [0, 6];
+function inNepalSession(now = Date.now()) {
+  const local = new Date(now + NPT_OFFSET_MS);
+  if (NPT_CLOSED_DAYS.includes(local.getUTCDay())) return false;
+  const minuteOfDay = local.getUTCHours() * 60 + local.getUTCMinutes();
+  return minuteOfDay >= 11 * 60 && minuteOfDay <= 15 * 60 + 10;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toBars(prices: ChartPrice[]): KLineData[] {
@@ -102,7 +126,8 @@ function toMinuteBars(rows: MinuteBar[]): KLineData[] {
     return {
       timestamp: typeof r.time === 'number' ? r.time : Date.parse(r.time),
       open: +r.open, high: +r.high, low: +r.low, close, volume,
-      turnover: close * volume,        // approximation, so DAILY_VWAP still draws on intraday bars
+      // Approximated when missing, so DAILY_VWAP still draws on intraday bars.
+      turnover: r.turnover != null ? +r.turnover : close * volume,
     };
   }).filter((b) => Number.isFinite(b.timestamp)).sort((a, b) => a.timestamp - b.timestamp);
 }
@@ -182,7 +207,7 @@ function buildStyles(dark: boolean) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars }: Props) {
+export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars, fetchIntradayCandles }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<Chart | null>(null);
   const paneIds = useRef<Record<string, string>>({});   // indicator name -> pane id
@@ -193,7 +218,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   const [tool, setTool] = useState<string>('cursor');
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<string[]>(DEFAULT_ON);
-
+  const [chartType, setChartType] = useState<ChartType>('candles');
   const [ivOpen, setIvOpen] = useState(false);
   const [minuteBars, setMinuteBars] = useState<KLineData[]>([]);
   const [loadingMin, setLoadingMin] = useState(false);
@@ -204,6 +229,9 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   const cfg = INTERVALS.find((i) => i.id === interval)!;
   const intraday = cfg.group !== 'Days';
+  const fetchCandlesRef = useRef(fetchIntradayCandles);
+  fetchCandlesRef.current = fetchIntradayCandles;
+  const serverMode = !!fetchIntradayCandles && SERVER_INTERVALS.includes(interval);
   // Ranges are measured against the real trading dates in `prices` (see chartRanges.ts).
   const dailyDates = useMemo(() => [...new Set(prices.map((p) => p.date))].sort(), [prices]);
   const range: RangeId = rangeChoice && rangeAvailable(dailyDates, rangeChoice) ? rangeChoice : defaultRange(dailyDates);
@@ -213,7 +241,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   // Intraday: fetch 1-minute bars whenever the interval group, range or symbol changes.
   useEffect(() => {
-    if (!intraday || !fetchRef.current) { setMinuteBars([]); return; }
+    if (!intraday || serverMode || !fetchRef.current) { setMinuteBars([]); return; }
     let cancelled = false;
     setLoadingMin(true);
     fetchRef.current(Math.min(rangeDays, MAX_INTRADAY_DAYS))
@@ -221,17 +249,61 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       .catch(() => { if (!cancelled) setMinuteBars([]); })
       .finally(() => { if (!cancelled) setLoadingMin(false); });
     return () => { cancelled = true; };
-  }, [intraday, rangeDays, symbol]);
+  }, [intraday, serverMode, rangeDays, symbol]);
+
+  // Server candles: one trading day, refreshed every minute while the session is open.
+  const [serverBars, setServerBars] = useState<KLineData[]>([]);
+  const [serverDate, setServerDate] = useState<string | null>(null);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverError, setServerError] = useState('');
+  const [live, setLive] = useState(false);
+
+  useEffect(() => {
+    if (!serverMode || !fetchCandlesRef.current) { setServerBars([]); setServerDate(null); return; }
+    let cancelled = false;
+    const load = (initial: boolean) => {
+      // Clear the previous interval's candles so they never linger behind the loading state.
+      if (initial) { setServerBars([]); setServerLoading(true); setServerError(''); }
+      fetchCandlesRef.current!(interval as IntradayInterval)
+        .then((res) => {
+          if (cancelled) return;
+          setServerBars(toMinuteBars(res.candles));
+          setServerDate(res.date);
+          setServerError('');
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          const detail = err?.response?.data?.detail;
+          // A failed background refresh keeps the candles already drawn.
+          if (initial) setServerBars([]);
+          setServerError(typeof detail === 'string' ? detail : 'Unable to load intraday candles.');
+        })
+        .finally(() => { if (!cancelled && initial) setServerLoading(false); });
+    };
+    load(true);
+    const timer = window.setInterval(() => {
+      const open = inNepalSession();
+      setLive(open);
+      if (open) load(false);
+    }, INTRADAY_REFRESH_MS);
+    setLive(inNepalSession());
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [serverMode, interval, symbol]);
 
   const bars = useMemo(() => {
+    if (serverMode) return serverBars;
     if (intraday) return aggregateIntraday(minuteBars, cfg.minutes!);
     const all = toBars(prices);
     if (!all.length || !rangeFrom) return all;
     const from = Date.UTC(+rangeFrom.slice(0, 4), +rangeFrom.slice(5, 7) - 1, +rangeFrom.slice(8, 10));
     return aggregate(all.filter((b) => b.timestamp >= from), interval as '1D' | '1W' | '1M');
-  }, [prices, minuteBars, intraday, cfg, interval, rangeFrom]);
+  }, [prices, minuteBars, serverBars, serverMode, intraday, cfg, interval, rangeFrom]);
 
-  const status = intraday
+  const status = serverMode
+    ? serverLoading ? 'Loading intraday candles...'
+      : serverError && bars.length === 0 ? serverError
+      : bars.length === 0 ? `No intraday candles for ${symbol} yet (trade times come from ShareHub)` : ''
+    : intraday
     ? !fetchMinuteBars ? 'Intraday data is not connected yet'
       : loadingMin ? 'Loading intraday data...'
       : bars.length === 0 ? 'No intraday data for this range' : ''
@@ -305,12 +377,14 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   // Reload data whenever range / interval / prices change.
   useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    chart.setPeriod(cfg.period);       // makes the x-axis show times (11:15) instead of dates
-    chart.setDataLoader({ getBars: ({ callback }) => callback(bars) });
-    chart.resetData();
-  }, [bars, cfg, symbol, anomalyKey]);
+  const chart = chartRef.current;
+  if (!chart) return;
+  chart.setPeriod(cfg.period);       // makes the x-axis show times (11:15) instead of dates
+  const data = chartType === 'heikin' ? toHeikinAshi(bars) : bars;
+  chart.setDataLoader({ getBars: ({ callback }) => callback(data) });
+  chart.resetData();
+  applyChartType(chart, chartType);
+}, [bars, cfg, symbol, anomalyKey, chartType]);
 
   const toggleIndicator = (ind: Ind, on: boolean) => {
     if (ind.name === 'VOL_ANOMALY') {
@@ -359,6 +433,16 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       <div className="relative flex flex-wrap items-center gap-1 border-b border-bg-border px-2 py-1">
         <span className="pr-2 text-sm font-bold text-text-primary">{symbol}</span>
         <button className={btn(menuOpen)} onClick={() => setMenuOpen((o) => !o)}>Indicators</button>
+        <select
+  value={chartType}
+  onChange={(e) => setChartType(e.target.value as ChartType)}
+  className="rounded border border-bg-border bg-bg-card px-2 py-1 text-xs text-text-primary"
+  title="Chart type"
+>
+  {CHART_TYPES.map((t) => (
+    <option key={t.id} value={t.id}>{t.label}</option>
+  ))}
+</select>
         <span className="mx-1 h-4 w-px bg-bg-border" />
         <div className="relative">
           <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)} title="Candle size">{INTERVAL_LABELS[interval]} candles ▾</button>
@@ -368,7 +452,8 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
                 <div key={g}>
                   <p className="px-2 pb-0.5 pt-1.5 text-[11px] font-semibold text-text-secondary">{g}</p>
                   {INTERVALS.filter((i) => i.group === g).map((i) => {
-                    const disabled = i.group !== 'Days' && !fetchMinuteBars;
+                    const disabled = i.group !== 'Days' && !fetchMinuteBars
+                      && !(fetchIntradayCandles && SERVER_INTERVALS.includes(i.id));
                     return (
                       <button key={i.id} disabled={disabled}
                         title={disabled ? 'Needs an intraday data source' : undefined}
@@ -383,12 +468,24 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
             </div>
           )}
         </div>
+        {fetchIntradayCandles && QUICK_INTRADAY.map((i) => (
+          <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}
+            title={`Each candle = ${INTERVAL_LABELS[i]} (latest trading day)`}>
+            {i}
+          </button>
+        ))}
         {(['1D', '1W', '1M'] as const).map((i) => (
           <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}
             title={`Each candle = 1 ${INTERVAL_LABELS[i] === 'Daily' ? 'day' : INTERVAL_LABELS[i] === 'Weekly' ? 'week' : 'month'}`}>
             {INTERVAL_LABELS[i]}
           </button>
         ))}
+        {serverMode && serverDate && (
+          <span className="ml-1 text-[11px] text-text-secondary" title="Trading day shown (Nepal time)">
+            Session {serverDate}{live ? ' · live' : ''}
+            {serverError && bars.length > 0 ? ' · refresh failed' : ''}
+          </span>
+        )}
 
         {menuOpen && (
           <div className="absolute left-2 top-9 z-20 min-w-[210px] rounded-lg border border-bg-border bg-bg-card p-2 shadow-lg">
@@ -431,8 +528,63 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       </div>
 
       {/* Bottom bar: date ranges, measured against the real trading dates */}
-      <RangeBar dates={dailyDates} value={range} onChange={setRange} shownFrom={rangeFrom} shownCount={shownCount} />
+      {/* Server intraday candles always show one trading day, so date ranges do not apply. */}
+      {!serverMode && (
+        <RangeBar dates={dailyDates} value={range} onChange={setRange} shownFrom={rangeFrom} shownCount={shownCount} />
+      )}
     </div>
   );
 }
 
+type ChartType = 'candles' | 'hollow' | 'bars' | 'line' | 'area' | 'heikin';
+
+const CHART_TYPES: { id: ChartType; label: string }[] = [
+  { id: 'bars', label: 'Bars' },
+  { id: 'candles', label: 'Candles' },
+  { id: 'hollow', label: 'Hollow candles' },
+  { id: 'line', label: 'Line' },
+  { id: 'area', label: 'Area' },
+  { id: 'heikin', label: 'Heikin Ashi' },
+];
+
+// Heikin Ashi: smoothed candles calculated from the normal ones
+function toHeikinAshi(bars: any[]) {
+  const out: any[] = [];
+  bars.forEach((b, i) => {
+    const close = (b.open + b.high + b.low + b.close) / 4;
+    const open = i === 0
+      ? (b.open + b.close) / 2
+      : (out[i - 1].open + out[i - 1].close) / 2;
+    out.push({
+      ...b,
+      open,
+      close,
+      high: Math.max(b.high, open, close),
+      low: Math.min(b.low, open, close),
+    });
+  });
+  return out;
+}
+
+function applyChartType(chart: any, type: ChartType) {
+  const styleType = {
+    candles: 'candle_solid',
+    hollow: 'candle_up_stroke',   // up candles hollow, down candles filled
+    bars: 'ohlc',
+    line: 'area',
+    area: 'area',
+    heikin: 'candle_solid',
+  }[type];
+
+  chart.setStyles({
+    candle: {
+      type: styleType,
+      area: {
+        // "line" is an area with no fill
+        backgroundColor: type === 'line' ? 'transparent' : 'rgba(41, 98, 255, 0.25)',
+        lineColor: '#2962ff',
+        lineSize: 2,
+      },
+    },
+  });
+}

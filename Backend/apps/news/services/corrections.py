@@ -1,34 +1,3 @@
-"""
-Persistent manual corrections to automatic categorization.
-
-THE BUG THIS FIXES
-------------------
-``categorize_article`` guarded manual tags with ``if existing_tag and
-existing_tag.is_manual``. That guard can only protect a tag that still
-EXISTS. When an analyst removes a tag, the row is deleted, so on the next
-automatic run ``existing_tag`` is ``None``, the model re-predicts the
-company above threshold, and the tag is silently recreated. The analyst's
-correction is lost, and it is lost again on every subsequent run.
-
-``CategorizationCorrection`` rows were already being written but were
-never read back by the categorizer, so the audit trail existed while the
-behaviour it was supposed to drive did not.
-
-THE MINIMAL ARCHITECTURE
-------------------------
-No new model is needed. The existing pieces are sufficient:
-
-    ArticleCompanyTag.is_manual    -- this tag is human-owned, do not touch
-    CategorizationCorrection       -- the durable log of what a human did
-
-The one missing piece is *reading* the correction log before writing
-tags. A removal is a correction with no surviving row, so the log is the
-only place that fact can live. This module turns that log into a decision
-table the categorizer consults.
-
-Resolution rule: for each (article, company) the LATEST correction wins.
-An analyst who removes a tag and later re-adds it gets the re-add.
-"""
 
 from __future__ import annotations
 

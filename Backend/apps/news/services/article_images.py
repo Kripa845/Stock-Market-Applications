@@ -1,17 +1,4 @@
-"""
-Lead-image extraction for crawled news articles.
 
-Works on raw HTML, so the crawler uses it at scrape time and the
-``backfill_news_images`` command reuses it on HTML already stored in
-RawArticle. Only the image URL is kept; the file itself stays on the
-source site.
-
-Order of preference:
-    1. og:image / og:image:secure_url   (set by every portal crawled today)
-    2. twitter:image / twitter:image:src
-    3. <link rel="image_src">
-    4. the first real <img> inside the article body
-"""
 
 import re
 from urllib.parse import quote, urljoin, urlparse

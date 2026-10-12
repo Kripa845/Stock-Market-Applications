@@ -11,6 +11,7 @@ urlpatterns = [
     path("api/market-data/", include("apps.market_data.urls")),
     path("api/market/", include("apps.market_data.market_urls")),
     path("api/floorsheet/", FloorsheetListAPIView.as_view(), name="floorsheet-api"),
+    path("api/stocks/", include("apps.market_data.stock_urls")),
 
     # News & Categorization
     path("api/news/", include("apps.news.urls")),

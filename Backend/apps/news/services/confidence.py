@@ -6,19 +6,7 @@ from apps.news.models import NewsArticle
 
 
 def normalize_text(text: Any) -> str:
-    """
-    Normalize text for reliable company/entity matching.
-
-    The normalization:
-    - converts text to lowercase using casefold()
-    - converts punctuation to spaces
-    - preserves word boundaries
-    - collapses repeated whitespace
-
-    Example:
-
-        "Nabil Bank, Ltd." -> "nabil bank ltd"
-    """
+   
 
     if text is None:
         return ""

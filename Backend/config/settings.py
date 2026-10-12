@@ -268,6 +268,25 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute=15, hour=18, day_of_week=TRADING_DAYS_CRONTAB),
     },
 
+    # ---- Intraday candles (ShareHub trade times) ----
+    # Every 5 minutes, 11:00-14:55, plus 15:00-15:05 to catch the last trades.
+    # The task itself also checks TradingHoliday and the session clock.
+    # `expires` drops a queued run that a slow previous run has made stale.
+    "build-intraday-candles-market-hours": {
+        "task": "apps.market_data.tasks.build_intraday_candles_live",
+        "schedule": crontab(minute="*/5", hour="11-14", day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 240},
+    },
+    "build-intraday-candles-at-close": {
+        "task": "apps.market_data.tasks.build_intraday_candles_live",
+        "schedule": crontab(minute="0,5", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 240},
+    },
+    "finalize-intraday-candles-after-close": {
+        "task": "apps.market_data.tasks.finalize_intraday_candles",
+        "schedule": crontab(minute=30, hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+    },
+
     # ---- Analysis rebuild ----
     "rebuild-analysis-after-prices": {
         "task": "apps.analysis.tasks.rebuild_all_analysis",

@@ -110,6 +110,11 @@ class FloorsheetTransaction(models.Model):
             models.Index(
                 fields=["seller_broker"],
             ),
+            # Intraday candles read one company's trades in time order.
+            models.Index(
+                fields=["company", "trade_time"],
+                name="floorsheet_company_time_idx",
+            ),
         ]
 
         constraints = [
@@ -129,6 +134,55 @@ class FloorsheetTransaction(models.Model):
             f"{self.date} - "
             f"{self.quantity}"
         )
+
+
+class IntradayCandle(models.Model):
+    """
+    OHLCV candle for one company, interval and time bucket, built from the
+    timestamped floorsheet trades by services.intraday_candles.  Only buckets
+    with at least one trade exist; nothing is stored outside the session.
+    """
+
+    INTERVAL_CHOICES = [
+        ("1m", "1 minute"),
+        ("5m", "5 minutes"),
+        ("15m", "15 minutes"),
+        ("30m", "30 minutes"),
+        ("1h", "1 hour"),
+    ]
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="intraday_candles",
+    )
+    interval = models.CharField(max_length=4, choices=INTERVAL_CHOICES)
+    # Start of the bucket (aware; buckets are aligned to Asia/Kathmandu session open).
+    bucket_start = models.DateTimeField()
+
+    open = models.DecimalField(max_digits=14, decimal_places=4)
+    high = models.DecimalField(max_digits=14, decimal_places=4)
+    low = models.DecimalField(max_digits=14, decimal_places=4)
+    close = models.DecimalField(max_digits=14, decimal_places=4)
+    volume = models.BigIntegerField()
+    turnover = models.DecimalField(max_digits=20, decimal_places=4)
+    trade_count = models.PositiveIntegerField()
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["company", "interval", "bucket_start"]
+        # The unique constraint is also the (company, interval, bucket_start)
+        # index, so no separate Index is declared.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["company", "interval", "bucket_start"],
+                name="unique_intraday_candle",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.company.symbol} | {self.interval} | {self.bucket_start} | close: {self.close}"
 
 
 class Broker(models.Model):

@@ -75,12 +75,7 @@ class CompanySerializer(serializers.ModelSerializer):
         return prices[0].date.isoformat() if prices else None
 
     def _movers_row(self, obj):
-        """
-        This company's latest-session row from services.movers (the one change
-        definition used everywhere), or None when it is not ranked (no previous
-        session, did not trade, possible corporate action, not tracked).
-        Computed once per request for all tracked companies.
-        """
+      
         if "_movers_rows" not in self.context:
             from apps.market_data.services.movers import RANKED, company_rows
 

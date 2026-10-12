@@ -1,11 +1,4 @@
-"""
-Read-side filters for news.
 
-``seed_market_data`` writes synthetic demo articles labelled
-``data_provenance="seeded"``; no page, export or calculation may show them.
-Crawled and pre-provenance ("unverified") articles are real pages and are kept.
-The crawl pipeline and its duplicate detection do not use these filters.
-"""
 
 SEEDED = "seeded"
 

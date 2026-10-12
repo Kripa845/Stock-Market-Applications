@@ -1,19 +1,4 @@
-"""
-Celery tasks for crawl-run management.
 
-Architecture note
------------------
-Each CrawlRun has EXACTLY ONE owning Celery task (``run_crawl``).
-
-For news crawls that include multiple spiders (e.g. sharesansar,
-merolagani, …) we iterate the spiders *sequentially inside the single
-task* rather than dispatching a ``celery.group``.  Using a group would
-share one CrawlRun id across N independent workers — each worker would
-then race to update ``status``, ``task_id``, ``process_id``, and
-``completed_at`` on the same row, producing the "stuck RUNNING" symptom.
-
-One task → one CrawlRun → no races.
-"""
 
 import logging
 
@@ -33,21 +18,12 @@ from .models import CrawlRun
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Time limits
-# A news crawl over 6 sources typically takes 20-30 minutes.
-# Soft limit fires SoftTimeLimitExceeded so we can tidy up gracefully.
-# Hard limit terminates the worker process unconditionally.
-# ---------------------------------------------------------------------------
+
 CRAWL_SOFT_TIME_LIMIT = 60 * 55   # 55 minutes  → graceful shutdown
 CRAWL_HARD_TIME_LIMIT = 60 * 60   # 60 minutes  → kill worker if still alive
 
 
-# ---------------------------------------------------------------------------
-# Trading-day guard (used by scheduled market-data tasks)
-# Beat already fires these only on NEPSE trading weekdays; this also skips
-# admin-entered TradingHoliday dates.
-# ---------------------------------------------------------------------------
+
 
 def _market_closed_today(task_name: str):
     from apps.market_data.services.trading_days import market_closed_reason
@@ -59,16 +35,10 @@ def _market_closed_today(task_name: str):
     return None
 
 
-# ---------------------------------------------------------------------------
-# Duplicate-run guard (used by scheduled tasks)
-# ---------------------------------------------------------------------------
+
 
 def _has_active_crawl(crawl_type: str) -> bool:
-    """
-    Return True if there is already a PENDING or RUNNING crawl of this type.
-
-    Wrapped in a transaction + select_for_update to be race-condition safe.
-    """
+    
     with transaction.atomic():
         return (
             CrawlRun.objects
@@ -84,9 +54,7 @@ def _has_active_crawl(crawl_type: str) -> bool:
         )
 
 
-# ---------------------------------------------------------------------------
-# Finish helper
-# ---------------------------------------------------------------------------
+
 
 def _finish_run(crawl_run_id, *, success, results=None, logs=""):
     """Write final status + completed_at to the CrawlRun."""
@@ -121,9 +89,8 @@ def _finish_run(crawl_run_id, *, success, results=None, logs=""):
     )
 
 
-# ---------------------------------------------------------------------------
 # Main crawl task  — ONE task, ONE CrawlRun, sequential spiders
-# ---------------------------------------------------------------------------
+
 
 @shared_task(
     bind=True,
@@ -144,9 +111,9 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
         logger.error("run_crawl called with unknown CrawlRun #%s.", crawl_run_id)
         return {"error": "CrawlRun not found."}
 
-    # ------------------------------------------------------------------
+    
     # Mark as RUNNING
-    # ------------------------------------------------------------------
+    
     crawl_run.task_id = self.request.id
     crawl_run.status = CrawlRun.Status.RUNNING
     if not crawl_run.started_at:
@@ -157,9 +124,9 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
     success = False
 
     try:
-        # ----------------------------------------------------------------
+
         # Determine which spiders to run
-        # ----------------------------------------------------------------
+
         if spider_name:
             spider_names = [spider_name]
         elif crawl_run.crawl_type == CrawlRun.CrawlType.NEWS:
@@ -182,21 +149,12 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
                 f"Unsupported crawl type: {crawl_run.crawl_type}"
             )
 
-        # ----------------------------------------------------------------
-        # PID callback — stores the Scrapy process ID so cancellation
-        # can kill the right process.  With sequential spiders only the
-        # currently running spider's PID is stored; the previous one is
-        # already dead by the time the next starts.
-        # ----------------------------------------------------------------
+        
         def _save_pid(pid):
             CrawlRun.objects.filter(pk=crawl_run_id).update(process_id=pid)
             logger.info("CrawlRun #%s: Scrapy PID=%s", crawl_run_id, pid)
 
-        # ----------------------------------------------------------------
-        # Run spiders sequentially.
-        # All spiders share the same crawl_run_id so the pipeline can
-        # update article/price/floorsheet counters on the right record.
-        # ----------------------------------------------------------------
+       
         results = run_spiders(
             spider_names,
             spider_args={
@@ -217,9 +175,9 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
 
         success = all(r.ok for r in results)
 
-        # ----------------------------------------------------------------
+
         # Build logs
-        # ----------------------------------------------------------------
+
         log_lines = [
             f"CrawlRun: #{crawl_run_id}",
             f"Type: {crawl_run.crawl_type}",
@@ -304,9 +262,9 @@ def _mark_failed(crawl_run_id, reason: str) -> None:
         logger.exception("_mark_failed failed for CrawlRun #%s.", crawl_run_id)
 
 
-# ---------------------------------------------------------------------------
+# -------
 # Scheduled: hourly news crawl
-# ---------------------------------------------------------------------------
+# -------
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_all_news")
 def crawl_all_news():
@@ -342,9 +300,9 @@ def crawl_all_news():
     return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "news"}
 
 
-# ---------------------------------------------------------------------------
+# -------
 # Scheduled: daily prices
-# ---------------------------------------------------------------------------
+# -------
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_daily_prices")
 def crawl_daily_prices():
@@ -476,9 +434,9 @@ def crawl_floorsheet():
     }
 
 
-# ---------------------------------------------------------------------------
+# -------
 # Scheduled: weekly floorsheet sample (historical sessions)
-# ---------------------------------------------------------------------------
+# -------
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_floorsheet_sample")
 def crawl_floorsheet_sample(sample_offsets=None):
@@ -524,9 +482,9 @@ def crawl_floorsheet_sample(sample_offsets=None):
     }
 
 
-# ---------------------------------------------------------------------------
+# -------
 # Backwards-compat alias kept for the existing API
-# ---------------------------------------------------------------------------
+# -------
 
 @shared_task(name="apps.crawler_runs.tasks.run_full_crawl_pipeline")
 def run_full_crawl_pipeline(crawl_run_id):
@@ -534,10 +492,10 @@ def run_full_crawl_pipeline(crawl_run_id):
     return run_crawl(crawl_run_id)
 
 
-# ---------------------------------------------------------------------------
+# -------
 # Periodic stale-run recovery task
 # Called by Celery Beat every 2 hours (see settings.CELERY_BEAT_SCHEDULE).
-# ---------------------------------------------------------------------------
+# -------
 
 @shared_task(name="apps.crawler_runs.tasks.recover_stale_crawls")
 def recover_stale_crawls(max_age_minutes: int = 90) -> dict:

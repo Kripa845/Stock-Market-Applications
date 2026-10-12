@@ -1,10 +1,4 @@
-"""
-Which companies the crawlers and the analysis rebuild work on.
 
-One rule everywhere: ``is_active`` AND ``tracking.is_tracked``.  A company
-added in the database (e.g. by ``seed_companies``) is picked up with no code
-change; no symbol is ever hardcoded here.
-"""
 
 from apps.companies.models import Company
 
@@ -25,13 +19,7 @@ def parse_symbols(value):
 
 
 def select_crawl_companies(symbols=None):
-    """
-    Active, tracked companies, optionally narrowed to ``symbols``.
-
-    Returns ``(queryset, unknown)``: ``unknown`` lists requested symbols that
-    are not active-and-tracked in the database.  They are never crawled; the
-    caller logs them.
-    """
+   
     companies = tracked_active_companies()
     requested = parse_symbols(symbols)
     if not requested:

@@ -1,12 +1,4 @@
-"""
-Categorization: evidence tiers, multi-label behaviour, and the
-persistence of manual corrections across automatic reruns.
 
-The embedding model is patched out throughout. Loading
-sentence-transformers would download weights and make these tests depend
-on the network and on a model's opinions; the decision logic under test
-is deterministic given a similarity number, so the similarity is injected.
-"""
 
 from unittest.mock import patch
 

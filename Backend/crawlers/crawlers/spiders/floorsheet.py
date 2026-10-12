@@ -38,10 +38,7 @@ from apps.market_data.services.trading_calendar import (
     select_sample_dates,
     trading_dates,
 )
-# Under ``scrapy crawl`` the Scrapy project root is on sys.path, so
-# ``crawlers`` means Backend/crawlers/crawlers. Imported from Django
-# (tests, management commands) ``crawlers`` means Backend/crawlers
-# instead. Support both rather than only working inside Scrapy.
+
 try:
     from crawlers.items import FloorsheetItem
 except ModuleNotFoundError:  # pragma: no cover - import-path shim
@@ -49,59 +46,7 @@ except ModuleNotFoundError:  # pragma: no cover - import-path shim
 
 
 class FloorsheetSpider(scrapy.Spider):
-    """
-    Collects transaction-level floorsheet data from ShareSansar.
-
-    Two deliberately separate collection strategies
-    -----------------------------------------------
-    ``DailyPrice`` needs a CONTINUOUS rolling month, because every
-    metric built on it (20-session volume baseline, daily returns) breaks
-    if a session is missing from the middle.
-
-    Floorsheet is different.  A single company-day can run to thousands
-    of transactions, so collecting a continuous month for every tracked
-    company is neither polite to the source nor necessary: broker net
-    positions are read as a SAMPLE of behaviour over time, not as a
-    continuous series.  So this spider has two modes:
-
-    ``mode=sample`` (historical)
-        A deterministic sample of ~6 sessions, chosen by TRADING-SESSION
-        offset from the latest available session: offsets
-        ``(0, 5, 10, 15, 20, 25)``.  Session offsets, not calendar
-        offsets — ``latest - 5 sessions`` skips weekends and holidays
-        automatically because the session list is derived from dates the
-        market actually traded (see ``apps.market_data.services``).
-        The SAME sampled dates are used for every tracked company, so
-        cross-company comparison on a sampled date is valid.
-
-    ``mode=latest``
-        Only the latest available trading session.
-
-    ``mode=full`` (manual only)
-        Every trade for every tracked company: the latest session plus
-        each of the last ``backfill_sessions`` stored trading sessions
-        (default 60) that has no real floorsheet rows for that company
-        yet.  Dates are chosen PER COMPANY, so a gap left by a failed
-        request is filled on the next run.  The latest session is always
-        re-fetched in case its earlier crawl was partial; the unique key
-        makes that idempotent.  NOTE: ShareSansar's company-floor-sheet only
-        returns the current session (past dates come back empty), so in
-        practice this collects the latest session plus ~60 empty requests per
-        company.  The beat schedule runs ``mode=latest``.
-
-    Neither mode ever deletes existing rows.  Persistence goes through
-    ``update_or_create`` on ``(company, date, transaction_id)``, so
-    re-running a sample is idempotent and historical data accumulates.
-
-    CLI::
-
-        scrapy crawl floorsheet -a mode=full
-        scrapy crawl floorsheet -a mode=full -a backfill_sessions=20
-        scrapy crawl floorsheet -a mode=latest
-        scrapy crawl floorsheet -a mode=sample
-        scrapy crawl floorsheet -a mode=sample -a sample_offsets=0,3,6,9
-        scrapy crawl floorsheet -a floorsheet_date=2026-09-16
-    """
+   
 
     name = "floorsheet"
 
@@ -206,15 +151,7 @@ class FloorsheetSpider(scrapy.Spider):
     # ------------------------------------------------------------------
 
     def _target_dates(self):
-        """
-        Resolve which trading dates this run should collect.
-
-        Every branch returns real trading sessions taken from stored
-        ``DailyPrice`` data, so a weekend or holiday can never end up in
-        the list.  Returns an empty list when no price history exists
-        yet — the crawler then has nothing meaningful to anchor to, and
-        says so rather than guessing at ``date.today()``.
-        """
+      
         if self.floorsheet_date:
             parsed = self._parse_date(self.floorsheet_date)
             return [parsed] if parsed else []
@@ -226,10 +163,7 @@ class FloorsheetSpider(scrapy.Spider):
         return [latest] if latest else []
 
     def _full_mode_dates(self, company, sessions):
-        """
-        ``mode=full``: sessions this company still lacks real floorsheet
-        rows for, plus the latest session.  Oldest first.
-        """
+       
         if not sessions:
             return []
         collected = set(
@@ -252,12 +186,7 @@ class FloorsheetSpider(scrapy.Spider):
             return None
 
     def _record_sampled_dates(self):
-        """
-        Persist the sampled dates onto the CrawlRun metadata.
-
-        Without this you cannot later tell whether a broker's absence on
-        a date means "did not trade" or "we never asked for that date".
-        """
+        
         crawl_run_id = getattr(self, "crawl_run_id", None)
 
         if not crawl_run_id:
@@ -456,16 +385,7 @@ class FloorsheetSpider(scrapy.Spider):
         referer,
         start=0,
     ):
-        """
-        Yield a POST for one symbol+date combination at the given offset.
-
-        NOTE: the previous implementation iterated over dates but never
-        put the date in the request body, so every "different date"
-        request was byte-identical and the site returned the same rows
-        each time.  The date is now sent both as a top-level ``date``
-        parameter and as the DataTables column search on ``date_``;
-        whichever the endpoint honours, the filter now actually applies.
-        """
+        
         date_text = date.isoformat() if hasattr(date, "isoformat") else str(date)
 
         data = {

@@ -1,4 +1,6 @@
-from django.shortcuts import render
+from datetime import datetime, time, timedelta
+
+from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
 from rest_framework.views import APIView
 from apps.users.permissions import HasAppPermission
@@ -8,9 +10,16 @@ from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 from rest_framework.filters import SearchFilter, OrderingFilter
 
-from .models import DailyPrice, FloorsheetTransaction
+from apps.companies.models import Company
+from .models import DailyPrice, FloorsheetTransaction, IntradayCandle
+from .services.intraday_candles import NPT, latest_candle_date
 from .services.price_source import requested_price_source
-from .serializers import DailyPriceSerializers, FloorsheetSerializer
+from .serializers import (
+    DailyPriceSerializers,
+    FloorsheetSerializer,
+    IntradayCandleQuerySerializer,
+    IntradayCandleSerializer,
+)
 
 
 class FloorsheetFilter(django_filters.FilterSet):
@@ -86,3 +95,80 @@ class FloorsheetListAPIView(generics.ListAPIView):
         return filter_company_queryset(
             super().get_queryset(), self.request.user
         )
+
+
+class StockIntradayCandlesAPIView(APIView):
+    """
+    GET /api/stocks/<symbol>/intraday/?interval=5m&date=YYYY-MM-DD
+
+    Stored IntradayCandle rows for one Asia/Kathmandu trading day (default:
+    the latest day with candles), oldest first.  One day is at most 240
+    candles, so the response is not paginated, like the daily prices endpoint.
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
+
+    def get(self, request, symbol):
+        company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
+        require_company_access(request.user, company.pk)
+
+        params = IntradayCandleQuerySerializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        interval = params.validated_data["interval"]
+        day = params.validated_data.get("date") or latest_candle_date(company)
+
+        candles = IntradayCandle.objects.none()
+        if day is not None:
+            day_start = datetime.combine(day, time.min, tzinfo=NPT)
+            candles = IntradayCandle.objects.filter(
+                company=company,
+                interval=interval,
+                bucket_start__gte=day_start,
+                bucket_start__lt=day_start + timedelta(days=1),
+            ).order_by("bucket_start")
+
+        data = IntradayCandleSerializer(candles, many=True).data
+        return Response(
+            {
+                "company_id": company.id,
+                "symbol": company.symbol,
+                "name": company.name,
+                "interval": interval,
+                "date": day.isoformat() if day else None,
+                "count": len(data),
+                "candles": data,
+            }
+        )
+
+# apps/market_data/views.py
+from datetime import date
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from .services.movers import tracked_movers, normalize_period
+
+CARD_FIELDS = ("symbol", "name", "logo_url", "close", "change", "change_pct", "adjusted")
+
+
+def _slim(rows):
+    return [{k: r[k] for k in CARD_FIELDS} for r in rows]
+
+
+class TrackedMoversView(APIView):
+    def get(self, request):
+        period = normalize_period(request.query_params.get("period")) or "1D"
+        limit = max(1, min(int(request.query_params.get("limit", 5)), 20))
+        requested = request.query_params.get("date")
+        requested = date.fromisoformat(requested) if requested else None
+
+        data = tracked_movers(period=period, requested_date=requested, limit=limit)
+        return Response({
+            "as_of": data["as_of"],
+            "period": data["period"],
+            "base_date": data["base_date"],
+            "gainers": _slim(data["gainers"]),
+            "losers": _slim(data["losers"]),
+            "tracked_count": data.get("tracked_count"),
+            "reason": data.get("reason"),
+            "action": data.get("action"),
+        })

@@ -28,7 +28,7 @@ import Badge from '../components/common/Badge';
 import BrokerBadge from '../components/brokers/BrokerBadge';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import EmptyState from '../components/common/EmptyState';
-import TradingChart from '../components/charts/TradingChart';
+import TradingChart, { type IntradayInterval } from '../components/charts/TradingChart';
 import type { Company, DailyPrice, FloorsheetTransaction, NewsArticle, SentimentLabel } from '../types';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -598,6 +598,12 @@ export default function StockDetail() {
     (days: number) => company ? stocksApi.getIntradayBars(company.id, days) : Promise.resolve([]),
     [company?.id],
   );
+  const fetchIntradayCandles = useCallback(
+    (interval: IntradayInterval, date?: string) => company
+      ? stocksApi.getIntradayCandles(company.symbol, interval, date)
+      : Promise.resolve({ date: null, candles: [] }),
+    [company?.symbol],
+  );
 
   // ── Loading / error screens ──────────────────────────────────────────────
 
@@ -686,6 +692,7 @@ export default function StockDetail() {
                   prices={prices}
                   symbol={company.symbol}
                   fetchMinuteBars={fetchMinuteBars}
+                  fetchIntradayCandles={fetchIntradayCandles}
                 />
               </div>
 

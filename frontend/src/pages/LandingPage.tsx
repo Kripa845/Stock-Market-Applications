@@ -8,8 +8,6 @@ import { useTheme } from '../hooks/useTheme';
 import HeroIllustration from '../components/landing/HeroIllustration';
 import ParticleWave from '../components/landing/ParticleWave';
 import LandingNews from '../components/landing/LandingNews';
-import LandingTracked from '../components/landing/LandingTracked';
-import BasketPreview from '../components/landing/BasketPreview';
 
 // Public landing page with purple glows; follows the app's light / dark theme (colours in index.css .landing).
 // Every claim here describes something the app really does; there are no invented reviews or user counts.
@@ -90,7 +88,7 @@ function Faq() {
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, toggleTheme] = useTheme();
-  const nav = [['Features', '#features'], ['Tracked companies', '#tracked'], ['News', '#news'], ['How it works', '#how-it-works'], ['Access', '#access'], ['FAQ', '#faq']];
+  const nav = [['Features', '#features'],['News', '#news'], ['How it works', '#how-it-works'], ['Access', '#access'], ['FAQ', '#faq']];
 
   return (
     <div className="landing min-h-screen overflow-x-hidden bg-[var(--l-bg)] font-sans text-[color:var(--l-text)] antialiased">
@@ -176,7 +174,7 @@ export default function LandingPage() {
 
       {/* Split: research platform */}
       <section className="px-4 py-20 sm:px-6">
-        <div className="mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-2">
+        <div className="mx-auto max-w-3xl">
           <div>
             <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">Research built on real market data</h2>
             <ul className="mt-8 space-y-5">
@@ -191,15 +189,8 @@ export default function LandingPage() {
             </ul>
             <Link to="/register" className={`${btnPrimary} mt-8`}>Open the analysis tools <ArrowRight size={16} /></Link>
           </div>
-          <BasketPreview />
         </div>
       </section>
-
-      {/* Tracked companies snapshot (hidden when there is no data) */}
-      <LandingTracked heading={
-        <SectionHeading title="Tracked companies at the close"
-          text="The biggest gainers and losers among the companies StockScope follows, with the Tracked Basket index we build from them." />
-      } />
 
       {/* Latest crawled news (hidden when there is none) */}
       <LandingNews heading={

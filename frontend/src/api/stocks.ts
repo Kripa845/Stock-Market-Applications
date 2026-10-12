@@ -69,6 +69,35 @@ export const stocksApi = {
       }>(`/companies/${id}/intraday/`, { params: { days } })
       .then((response) => response.data.bars),
 
+  // Stored candles for one trading day (default: latest), oldest first.
+  getIntradayCandles: (
+    symbol: string,
+    interval: '1m' | '5m' | '15m' | '30m' | '1h' = '5m',
+    date?: string
+  ) =>
+    apiClient
+      .get<{
+        company_id: number;
+        symbol: string;
+        name: string;
+        interval: string;
+        date: string | null;
+        count: number;
+        candles: Array<{
+          time: string;
+          open: string;
+          high: string;
+          low: string;
+          close: string;
+          volume: number;
+          turnover: string;
+          trade_count: number;
+        }>;
+      }>(`/stocks/${encodeURIComponent(symbol)}/intraday/`, {
+        params: date ? { interval, date } : { interval },
+      })
+      .then((response) => response.data),
+
   getFloorsheet: (
     id: number,
     date?: string

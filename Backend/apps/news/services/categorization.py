@@ -1,12 +1,3 @@
-"""
-Production-grade AI/ML News Auto-Categorization Service.
-
-Combines:
-1. Deterministic company alias / entity lexical matching
-2. Semantic sentence embeddings (SentenceTransformers / cosine similarity)
-3. Multi-label independent confidence scoring
-4. Manual Analyst correction precedence and audit trail
-"""
 
 import logging
 import re
@@ -238,13 +229,7 @@ def calculate_lexical_score(
     article: NewsArticle,
     company: Company,
 ) -> Tuple[float, Dict[str, Any]]:
-    """
-    Deterministic company alias/entity matching.
-    Evaluates official symbol, canonical name, and aliases against headline and body.
-
-    Returns:
-        (lexical_score: float in [0.0, 1.0], evidence: dict)
-    """
+    
     headline = normalize_text(article.headline or "")
     body = normalize_text(article.body or "")
 
