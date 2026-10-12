@@ -8,9 +8,9 @@ export interface SparkPoint { date: string; close: number }
 
 export type MoverBucket =
   | 'gainer' | 'loser' | 'unchanged'
-  | 'not_traded' | 'missing_previous_session' | 'prev_close_zero' | 'possible_corporate_action';
+  | 'missing_price' | 'not_traded' | 'missing_previous_session' | 'prev_close_zero' | 'possible_corporate_action';
 
-export type ExclusionReason = 'not_traded' | 'missing_previous_session' | 'prev_close_zero' | 'possible_corporate_action';
+export type ExclusionReason = 'missing_price' | 'not_traded' | 'missing_previous_session' | 'prev_close_zero' | 'possible_corporate_action';
 
 /** One tracked company's change over the period (definition: Backend services/movers.py). */
 export interface TrackedRow {
@@ -66,9 +66,13 @@ export interface MoversResponse {
   losers_count?: number;
   unchanged_count?: number;
   not_traded_count?: number;
+  /** Tracked companies with no crawled row on as_of. */
+  missing_price_count?: number;
   excluded_counts?: Record<ExclusionReason, number>;
   provenance: Provenance;
   reason?: string;
+  /** Set when some tracked companies have no crawled price on as_of. */
+  warning?: string;
   action?: string;
   note?: string;
 }
@@ -89,6 +93,7 @@ export interface TrackedSummary {
   total_transactions?: number | null;
   transactions_reported?: number;
   reason?: string;
+  warning?: string;
   action?: string;
 }
 

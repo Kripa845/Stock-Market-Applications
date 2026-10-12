@@ -33,17 +33,7 @@ from .serializers import CompanySerializer
 
 
 def _company_list_queryset():
-    """
-    Shared queryset with all prefetches needed by CompanySerializer.
-
-    Using Prefetch with an ordered queryset so that serializer methods
-    such as get_latest_price() can call .first() / [:N] on the
-    already-cached prefetch result without issuing additional SQL.
-
-    Without this, every SerializerMethodField that calls
-    obj.dailyprice_set.order_by("-date")... fires a new query,
-    causing N×M extra queries for a list of N companies.
-    """
+    
     return (
         Company.objects
         .prefetch_related(
@@ -409,3 +399,47 @@ def get_queryset(self):
     return queryset.filter(
         id__in=company_ids
     )
+from django.db.models import ExpressionWrapper, F, FloatField
+from django.http import JsonResponse
+
+from .models import Company
+
+
+def _ranked_queryset():
+    """Companies that have prices, annotated with change and change_percent."""
+    return (
+        Company.objects.filter(ltp__isnull=False, previous_close__gt=0)
+        .annotate(
+            change=ExpressionWrapper(F("ltp") - F("previous_close"), output_field=FloatField()),
+            change_percent=ExpressionWrapper(
+                (F("ltp") - F("previous_close")) * 100.0 / F("previous_close"),
+                output_field=FloatField(),
+            ),
+        )
+    )
+
+
+def _serialize(qs):
+    return [
+        {
+            "symbol": c.symbol,
+            "name": c.name,
+            "ltp": float(c.ltp),
+            "previous_close": float(c.previous_close),
+            "change": round(c.change, 2),
+            "change_percent": round(c.change_percent, 2),
+        }
+        for c in qs
+    ]
+
+
+def top_gainers(request):
+    limit = int(request.GET.get("limit", 5))
+    qs = _ranked_queryset().filter(change__gt=0).order_by("-change_percent")[:limit]
+    return JsonResponse({"results": _serialize(qs)})
+
+
+def top_losers(request):
+    limit = int(request.GET.get("limit", 5))
+    qs = _ranked_queryset().filter(change__lt=0).order_by("change_percent")[:limit]
+    return JsonResponse({"results": _serialize(qs)})

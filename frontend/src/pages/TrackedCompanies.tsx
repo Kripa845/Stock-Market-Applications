@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Info, Minus, RefreshCw, Star } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowDownRight, ArrowUp, ArrowUpRight, ChevronRight, Info, Minus, RefreshCw, Star } from 'lucide-react';
 import { format } from 'date-fns';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
-import Sparkline from '../components/common/Sparkline';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import BrokerBadge from '../components/brokers/BrokerBadge';
 import BasketChart from '../components/market/BasketChart';
@@ -48,29 +47,35 @@ function SummaryTiles({ summary }: { summary: TrackedSummary }) {
     ? `${formatCount(summary.total_transactions)}${summary.transactions_reported < summary.tracked_count ? '*' : ''}`
     : '—';
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-      <Tile label="Tracked companies" value={summary.tracked_count} />
-      <Tile label="Advanced" value={summary.advanced} tone="text-up" />
-      <Tile label="Declined" value={summary.declined} tone="text-down" />
-      <Tile
-        label="Unchanged / not ranked"
-        value={`${summary.unchanged} / ${Object.values(summary.excluded_counts).reduce((a, b) => a + b, 0)}`}
-        hint="Not ranked: did not trade, missing previous session, previous close 0, or possible corporate action"
-      />
-      <Tile label="Circuit ↑ / ↓" value={`${summary.positive_circuit} / ${summary.negative_circuit}`} hint="|change %| ≥ 9.9" />
-      <Tile label="Turnover" value={`Rs ${formatNprCompact(summary.total_turnover)}`} />
-      <Tile label="Shares traded" value={formatCount(summary.total_traded_shares)} />
-      <Tile
-        label="Transactions"
-        value={transactions}
-        hint={`From the floorsheet; known for ${summary.transactions_reported ?? 0} of ${summary.tracked_count} companies`}
-      />
+    <div className="space-y-2">
+      {summary.warning && (
+        <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={13} className="mt-px shrink-0" />{summary.warning}</p>
+      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+        <Tile label="Tracked companies" value={summary.tracked_count} />
+        <Tile label="Advanced" value={summary.advanced} tone="text-up" />
+        <Tile label="Declined" value={summary.declined} tone="text-down" />
+        <Tile
+          label="Unchanged / not ranked"
+          value={`${summary.unchanged} / ${Object.values(summary.excluded_counts).reduce((a, b) => a + b, 0)}`}
+          hint="Not ranked: no crawled price, did not trade, missing previous session, previous close 0, or possible corporate action"
+        />
+        <Tile label="Circuit ↑ / ↓" value={`${summary.positive_circuit} / ${summary.negative_circuit}`} hint="|change %| ≥ 9.9" />
+        <Tile label="Turnover" value={`Rs ${formatNprCompact(summary.total_turnover)}`} />
+        <Tile label="Shares traded" value={formatCount(summary.total_traded_shares)} />
+        <Tile
+          label="Transactions"
+          value={transactions}
+          hint={`From the floorsheet; known for ${summary.transactions_reported ?? 0} of ${summary.tracked_count} companies`}
+        />
+      </div>
     </div>
   );
 }
 
 const REASON_LABELS: Record<ExclusionReason, string> = {
-  not_traded: 'Did not trade',
+  missing_price: 'No crawled price for this session',
+  not_traded: 'Did not trade (zero volume)',
   missing_previous_session: 'No row on the comparison session',
   prev_close_zero: 'Previous close is 0',
   possible_corporate_action: 'Possible corporate action (>10%, no source % change)',
@@ -106,6 +111,8 @@ function BasisBadge({ row }: { row: TrackedRow }) {
   return null;
 }
 
+const MOVERS_COLLAPSED = 5;
+
 function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onToggleWatch }: {
   title: string;
   rows: TrackedRow[];
@@ -116,62 +123,73 @@ function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onT
   watched: Set<string> | null;
   onToggleWatch: (symbol: string) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const up = tone === 'up';
+  const shown = expanded ? rows : rows.slice(0, MOVERS_COLLAPSED);
+  const canExpand = rows.length > MOVERS_COLLAPSED;
   return (
-    <div className="card overflow-x-auto">
-      <div className="mb-3 flex items-baseline justify-between">
-        <h3 className={`text-sm font-semibold ${tone === 'up' ? 'text-up' : 'text-down'}`}>{title}</h3>
-        <span className="text-xs text-text-muted">{total} {total === 1 ? 'company' : 'companies'}</span>
+    <div className="card">
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h3 className={`rounded-md px-3 py-1.5 text-sm font-semibold ${up ? 'bg-up/15 text-up' : 'bg-down/15 text-down'}`}>{title}</h3>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-text-muted">{total} {total === 1 ? 'company' : 'companies'}</span>
+          {canExpand && (
+            <button onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}
+              title={expanded ? `Show top ${MOVERS_COLLAPSED}` : `Show top ${rows.length}`}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-bg-elevated text-text-secondary hover:text-text-primary">
+              <ChevronRight size={15} className={`transition-transform ${expanded ? 'rotate-90' : ''}`} />
+            </button>
+          )}
+        </div>
       </div>
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-xs text-text-muted">No tracked company {tone === 'up' ? 'rose' : 'fell'} in this period.</p>
+        <p className="py-6 text-center text-xs text-text-muted">No tracked company {up ? 'rose' : 'fell'} in this period.</p>
       ) : (
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-bg-border text-text-secondary">
-              {watched && <th className="w-7" />}
-              <th className="py-2 text-left font-medium">Company</th>
-              <th className="py-2 text-center font-medium">Last 7 closes</th>
-              <th className="py-2 text-right font-medium">Close</th>
-              <th className="py-2 text-right font-medium">Prev close</th>
-              <th className="py-2 text-right font-medium">Change</th>
-              <th className="py-2 text-right font-medium">Turnover</th>
+            <tr className="border-b border-bg-border text-xs font-semibold uppercase tracking-wide text-text-secondary">
+              <th className="py-2 text-left font-semibold">Symbol</th>
+              <th className="py-2 text-right font-semibold">Ch</th>
+              <th className="py-2 text-center font-semibold">Ch %</th>
+              <th className="py-2 text-right font-semibold">LTP</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {shown.map((row) => {
               const isWatched = watched?.has(row.symbol) ?? false;
+              const change = row.change === null ? null : Number(row.change);
+              const pct = row.change_pct === null ? null : Number(row.change_pct);
+              const Arrow = up ? ArrowUp : ArrowDown;
               return (
                 <tr key={row.symbol} onClick={() => onSelect(row.symbol)}
-                  className={`table-row cursor-pointer ${selected === row.symbol ? 'bg-accent/5' : ''}`}>
-                  {watched && (
-                    <td className="py-2" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => onToggleWatch(row.symbol)} aria-pressed={isWatched}
-                        title={isWatched ? 'Remove from my watchlist' : 'Add to my watchlist'}
-                        className="rounded p-1 text-text-muted hover:text-yellow-400">
-                        <Star size={14} className={isWatched ? 'fill-yellow-400 text-yellow-400' : ''} />
-                      </button>
-                    </td>
-                  )}
-                  <td className="py-2">
-                    <div className="flex items-center gap-2">
+                  className={`cursor-pointer border-b border-bg-border hover:bg-bg-elevated/50 ${selected === row.symbol ? 'bg-accent/5' : ''}`}>
+                  <td className="py-3">
+                    <div className="flex items-center gap-2.5">
+                      {watched && (
+                        <button onClick={(e) => { e.stopPropagation(); onToggleWatch(row.symbol); }} aria-pressed={isWatched}
+                          title={isWatched ? 'Remove from my watchlist' : 'Add to my watchlist'}
+                          className="-ml-1 rounded p-0.5 text-text-muted hover:text-yellow-400">
+                          <Star size={13} className={isWatched ? 'fill-yellow-400 text-yellow-400' : ''} />
+                        </button>
+                      )}
                       <CompanyLogo symbol={row.symbol} name={row.name} logoUrl={row.logo_url} size="sm" />
-                      <span>
-                        <span className="block font-mono font-semibold text-accent-light">{row.symbol}</span>
-                        <span className="block text-xs text-text-muted">{row.sector}</span>
+                      <span className="font-semibold text-accent-light" title={row.name}>{row.symbol}</span>
+                    </div>
+                  </td>
+                  <td className={`py-3 text-right font-mono ${up ? 'text-up' : 'text-down'}`}>
+                    {change === null ? '—' : `${change > 0 ? '+' : ''}${change.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                  </td>
+                  <td className="py-3">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className={`inline-flex min-w-[78px] items-center justify-center gap-1 rounded-md px-2 py-1 font-mono text-xs ${up ? 'bg-up/10 text-up' : 'bg-down/10 text-down'}`}>
+                        <Arrow size={12} />{pct === null ? '—' : `${pct.toFixed(2)}%`}
                       </span>
+                      <BasisBadge row={row} />
                     </div>
                   </td>
-                  <td className="py-2">
-                    <div className="flex justify-center">
-                      <Sparkline data={(row.sparkline ?? []).map((p) => Number(p.close))} width={84} height={26} positive={tone === 'up'} />
-                    </div>
+                  <td className="py-3 text-right font-mono font-semibold text-text-primary">
+                    {row.close === null ? '—' : Number(row.close).toLocaleString('en-IN', { maximumFractionDigits: 2 })}
                   </td>
-                  <td className="py-2 text-right font-mono font-semibold text-text-primary">{formatPrice(row.close)}</td>
-                  <td className="py-2 text-right font-mono text-text-secondary">{formatPrice(row.prev_close)}</td>
-                  <td className="py-2 text-right">
-                    <div className="flex flex-col items-end gap-0.5"><Change pct={row.change_pct} /><BasisBadge row={row} /></div>
-                  </td>
-                  <td className="py-2 text-right font-mono">{formatNprCompact(row.turnover)}</td>
                 </tr>
               );
             })}
@@ -241,10 +259,15 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
       )}
       {state === 'ready' && data?.as_of && (
         <>
+          {data.warning && (
+            <p className="flex items-start gap-1.5 rounded-md border border-yellow-400/30 bg-yellow-400/10 px-3 py-2 text-xs text-yellow-400">
+              <AlertTriangle size={13} className="mt-px shrink-0" />{data.warning}
+            </p>
+          )}
           {data.reason && (
             <p className="flex items-center gap-1 text-xs text-yellow-400"><Info size={12} />{data.reason}</p>
           )}
-          <div className="grid gap-4 2xl:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <MoverTable title="Tracked gainers" rows={data.gainers} total={data.gainers_count ?? data.gainers.length} tone="up"
               onSelect={onSelect} selected={selected} watched={watched} onToggleWatch={onToggleWatch} />
             <MoverTable title="Tracked losers" rows={data.losers} total={data.losers_count ?? data.losers.length} tone="down"

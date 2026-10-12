@@ -102,12 +102,17 @@ class OneSessionTests(MoversFixture):
     def test_exclusion_reasons(self):
         result = movers.tracked_movers("1D")
         self.assertEqual(result["excluded_counts"], {
-            "not_traded": 2,                 # NOROW, NOVOL
+            "missing_price": 1,              # NOROW
+            "not_traded": 1,                 # NOVOL
             "missing_previous_session": 1,   # MISS
             "prev_close_zero": 1,            # ZERO
             "possible_corporate_action": 1,  # CIRC
         })
-        self.assertEqual(result["not_traded_count"], 2)
+        self.assertEqual(result["not_traded_count"], 1)
+        self.assertEqual(result["missing_price_count"], 1)
+        self.assertEqual(self.bucket(result, "NOROW")["bucket"], "missing_price")
+        self.assertIn("1 of 8 tracked companies have no crawled price", result["warning"])
+        self.assertIn("1 of 8 tracked companies have no crawled price", movers.tracked_summary()["warning"])
         self.assertEqual(self.bucket(result, "MISS")["bucket"], "missing_previous_session")
         circ = self.bucket(result, "CIRC")
         self.assertTrue(circ["possible_corporate_action"])
@@ -157,6 +162,7 @@ class RankingTests(MoversFixture):
         self.assertEqual(result["gainers"], [])
         self.assertEqual(result["gainers_count"], 0)
         self.assertEqual(self.symbols(result["losers"]), ["B", "A"])
+        self.assertNotIn("warning", result)  # every tracked company has a row on as_of
 
     def test_limit_caps_lists_but_not_counts(self):
         for index in range(4):

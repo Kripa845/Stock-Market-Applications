@@ -3,6 +3,7 @@ from apps.analysis.views import (
     CompanyBehaviorSummaryAPIView,
     CompanyNewsPriceCorrelationAPIView,
 )
+from . import views
 from .views import (
     CompanyDetailUpdateDestroyAPIView,
     CompanyFloorsheetAPIView,
@@ -90,5 +91,6 @@ path(
     "sectors/",
     CompanySectorsAPIView.as_view(),
     name="company-sectors",
-),
+), path("top-gainers/", views.top_gainers),
+    path("top-losers/", views.top_losers),
 ]

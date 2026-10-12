@@ -1,5 +1,3 @@
-
-
 from datetime import timedelta
 from decimal import Decimal
 
@@ -13,6 +11,7 @@ from django.db.models import (
     F,
     FloatField,
     IntegerField,
+    Max,
     OuterRef,
     Q,
     Subquery,
@@ -24,25 +23,40 @@ from django.db.models import (
 from django.db.models.functions import Abs, Cast, Coalesce, Exp, Ln, RowNumber
 
 from apps.crawler_runs.models import CrawlRun
-from apps.market_data.models import DailyPrice
+from apps.market_data.models import DailyPrice, FloorsheetTransaction
 from apps.market_data.services.trading_calendar import latest_trading_date, previous_trading_sessions
 from apps.market_data.services.market_stats import PRICE_SOURCE, tracked_companies
 
 
+# CHANGED: more periods for the full movers page. Periods are trading sessions
+# (NEPSE trades 5 days a week), not calendar days.
 PERIODS = {
-    "1D": {"sessions": 1, "label": "1 session"},
-    "5S": {"sessions": 5, "label": "5 sessions"},
-    "20S": {"sessions": 20, "label": "20 sessions"},
+    "1D":   {"sessions": 1,   "label": "Today"},
+    "2S":   {"sessions": 2,   "label": "2 sessions"},
+    "3S":   {"sessions": 3,   "label": "3 sessions"},
+    "5S":   {"sessions": 5,   "label": "5 sessions"},
+    "7S":   {"sessions": 7,   "label": "7 sessions"},
+    "20S":  {"sessions": 20,  "label": "1 month"},
+    "60S":  {"sessions": 60,  "label": "3 months"},
+    "80S":  {"sessions": 80,  "label": "4 months"},
+    "120S": {"sessions": 120, "label": "6 months"},
+    "240S": {"sessions": 240, "label": "1 year"},
 }
-PERIOD_ALIASES = {"1W": "5S", "1M": "20S"}
+PERIOD_ALIASES = {
+    "2D": "2S", "3D": "3S", "5D": "5S", "7D": "7S",
+    "1W": "5S", "1M": "20S", "3M": "60S", "4M": "80S", "6M": "120S", "1Y": "240S",
+}
 
 ADJUSTMENT_TOLERANCE_PCT = Decimal("0.05")
-CORPORATE_ACTION_PCT = Decimal("10")
+CORPORATE_ACTION_PCT = Decimal("10")   # one-session threshold (NEPSE daily circuit)
 CIRCUIT_THRESHOLD_PCT = Decimal("9.9")
 SPARKLINE_SESSIONS = 7
 
 RANKED = ("gainer", "loser", "unchanged")
-EXCLUSION_REASONS = ("not_traded", "missing_previous_session", "prev_close_zero", "possible_corporate_action")
+# missing_price: no crawled row on as_of at all (crawl gap, or no trades listed by the source);
+# not_traded: a row exists but with zero / no volume.
+EXCLUSION_REASONS = ("missing_price", "not_traded", "missing_previous_session", "prev_close_zero", "possible_corporate_action")
+NOT_RANKABLE_TODAY = ("missing_price", "not_traded")
 
 PCT = DecimalField(max_digits=24, decimal_places=6)
 # Percentages are computed in double precision and cast back to numeric(24,6):
@@ -76,6 +90,14 @@ def normalize_period(value):
     return key if key in PERIODS else None
 
 
+# NEW: a move bigger than this over N sessions can't be a real price move
+# (daily circuit is +-10%, compounded), so it is treated as a corporate action.
+def corporate_action_threshold(sessions):
+    if sessions <= 1:
+        return CORPORATE_ACTION_PCT
+    return ((Decimal("1.1") ** sessions - 1) * 100).quantize(Decimal("0.01"))
+
+
 def resolve_sessions(requested_date=None, sessions=1):
     """(as_of, base_date, window_dates) from the crawled trading calendar; any part may be None."""
     if requested_date is None:
@@ -92,7 +114,8 @@ def resolve_sessions(requested_date=None, sessions=1):
     return as_of, base_date, window_dates
 
 
-def annotated_companies(as_of, base_date, window_dates, company_ids=None):
+# CHANGED: new `adjusted` argument (True = use ShareSansar's adjusted %, False = close-to-close).
+def annotated_companies(as_of, base_date, window_dates, company_ids=None, adjusted=True):
     """Tracked companies annotated with the period's prices, change and bucket (SQL only)."""
     sessions = len(window_dates)
     prices = DailyPrice.objects.filter(company=OuterRef("pk"), source=PRICE_SOURCE)
@@ -132,12 +155,19 @@ def annotated_companies(as_of, base_date, window_dates, company_ids=None):
         ),
     )
 
-    if sessions == 1:
+    # CHANGED: the Adjusted Price switch.
+    if not adjusted:
+        has_source = Q(pk__isnull=True)          # never true -> always close-to-close
+        source_pct = F("source_pct_today")       # unused
+    elif sessions == 1:
         has_source = Q(source_pct_today__isnull=False)
         source_pct = F("source_pct_today")
     else:
         has_source = Q(window_known=sessions)
         source_pct = Cast((Exp(F("window_log")) - ONE) * HUNDRED, PCT)
+
+    # CHANGED: threshold scales with the number of sessions.
+    threshold = corporate_action_threshold(sessions)
 
     companies = companies.annotate(
         change_basis=Case(When(has_source, then=Value("source")), default=Value("close_to_close"), output_field=CharField()),
@@ -164,12 +194,13 @@ def annotated_companies(as_of, base_date, window_dates, company_ids=None):
         ),
         unadjusted=Case(When(change_basis="close_to_close", then=Value(True)), default=Value(False), output_field=BooleanField()),
         bucket=Case(
-            When(Q(close__isnull=True) | Q(volume__isnull=True) | Q(volume=0), then=Value("not_traded")),
+            When(close__isnull=True, then=Value("missing_price")),
+            When(Q(volume__isnull=True) | Q(volume=0), then=Value("not_traded")),
             When(raw_prev_close__isnull=True, then=Value("missing_previous_session")),
             When(raw_prev_close__lte=0, then=Value("prev_close_zero")),
             When(
                 Q(change_basis="close_to_close")
-                & (Q(close_to_close_change_pct__gt=CORPORATE_ACTION_PCT) | Q(close_to_close_change_pct__lt=-CORPORATE_ACTION_PCT)),
+                & (Q(close_to_close_change_pct__gt=threshold) | Q(close_to_close_change_pct__lt=-threshold)),
                 then=Value("possible_corporate_action"),
             ),
             When(change_pct__gt=0, then=Value("gainer")),
@@ -230,7 +261,19 @@ def provenance():
     }
 
 
-def tracked_movers(period="1D", requested_date=None, company_ids=None, limit=5):
+def incomplete_session_warning(as_of, missing, tracked):
+    """Text for when some tracked companies have no crawled row on as_of, else None."""
+    if not missing:
+        return None
+    return (
+        f"{missing} of {tracked} tracked companies have no crawled price for {as_of}, so counts and totals "
+        f"cover only {tracked - missing}. The price crawl may be incomplete, or the source listed no trades for them."
+    )
+
+
+# CHANGED: `lean` skips unchanged / excluded rows and sparklines (use it for the dashboard card);
+# `adjusted` is passed through.
+def tracked_movers(period="1D", requested_date=None, company_ids=None, limit=5, lean=False, adjusted=True):
     """Gainers / losers / unchanged / excluded for the tracked companies."""
     period = normalize_period(period) or "1D"
     sessions = PERIODS[period]["sessions"]
@@ -255,7 +298,7 @@ def tracked_movers(period="1D", requested_date=None, company_ids=None, limit=5):
             "action": NO_DATA_ACTION,
         }
 
-    companies = annotated_companies(as_of, base_date, window_dates, company_ids)
+    companies = annotated_companies(as_of, base_date, window_dates, company_ids, adjusted)
     counts = companies.aggregate(
         tracked_count=Count("id"),
         gainers_count=Count("id", filter=Q(bucket="gainer")),
@@ -266,9 +309,12 @@ def tracked_movers(period="1D", requested_date=None, company_ids=None, limit=5):
 
     gainers = _rows(companies.filter(bucket="gainer").order_by("-change_pct", "-turnover", "symbol")[:limit])
     losers = _rows(companies.filter(bucket="loser").order_by("change_pct", "-turnover", "symbol")[:limit])
-    unchanged = _rows(companies.filter(bucket="unchanged").order_by("-turnover", "symbol"))
-    excluded = _rows(companies.exclude(bucket__in=RANKED).order_by("bucket", "symbol"))
-    _attach_sparklines(gainers + losers + unchanged + excluded, as_of)
+    if lean:
+        unchanged, excluded = [], []
+    else:
+        unchanged = _rows(companies.filter(bucket="unchanged").order_by("-turnover", "symbol"))
+        excluded = _rows(companies.exclude(bucket__in=RANKED).order_by("bucket", "symbol"))
+        _attach_sparklines(gainers + losers + unchanged + excluded, as_of)
 
     result.update(
         gainers=gainers,
@@ -280,8 +326,12 @@ def tracked_movers(period="1D", requested_date=None, company_ids=None, limit=5):
         losers_count=counts["losers_count"],
         unchanged_count=counts["unchanged_count"],
         not_traded_count=counts["not_traded_count"],
+        missing_price_count=counts["missing_price_count"],
         excluded_counts={reason: counts[f"{reason}_count"] for reason in EXCLUSION_REASONS},
     )
+    warning = incomplete_session_warning(as_of, counts["missing_price_count"], counts["tracked_count"])
+    if warning:
+        result["warning"] = warning
     if base_date is None:
         result["reason"] = (
             f"fewer than {sessions + 1} crawled trading sessions up to {as_of}; "
@@ -289,6 +339,54 @@ def tracked_movers(period="1D", requested_date=None, company_ids=None, limit=5):
         )
         result["action"] = "Back-fill older prices: `cd Backend/crawlers && scrapy crawl trading_data -a window_days=60`."
     return result
+
+
+# NEW: paged, filterable list for the full "Tracked Top Gainers / Losers" page.
+def tracked_movers_page(side="gainer", period="1D", sector=None, adjusted=True,
+                        requested_date=None, page=1, page_size=20, company_ids=None):
+    side = "loser" if side == "loser" else "gainer"
+    period = normalize_period(period) or "1D"
+    sessions = PERIODS[period]["sessions"]
+    as_of, base_date, window_dates = resolve_sessions(requested_date, sessions)
+
+    out = {
+        "as_of": as_of,
+        "period": period,
+        "period_label": PERIODS[period]["label"],
+        "base_date": base_date,
+        "side": side,
+        "sectors": sorted(set(tracked_companies(company_ids).values_list("sector", flat=True))),
+        "total": 0,
+        "page": page,
+        "page_size": page_size,
+        "rows": [],
+    }
+    if as_of is None or base_date is None:
+        out["reason"] = "Not enough crawled sessions for this period."
+        out["action"] = "Back-fill older prices: `cd Backend/crawlers && scrapy crawl trading_data -a window_days=300`."
+        return out
+
+    qs = annotated_companies(as_of, base_date, window_dates, company_ids, adjusted).filter(bucket=side)
+    if sector:
+        qs = qs.filter(sector=sector)
+
+    order = ("-change_pct", "-turnover", "symbol") if side == "gainer" else ("change_pct", "-turnover", "symbol")
+    out["total"] = qs.count()
+    start = (page - 1) * page_size
+    rows = _rows(qs.order_by(*order)[start:start + page_size])
+
+    # Latest trade time per listed company on the as_of session (None until the floorsheet is crawled).
+    last_trade = dict(
+        FloorsheetTransaction.objects
+        .filter(date=as_of, company_id__in=[r["company_id"] for r in rows])
+        .values("company_id")
+        .annotate(t=Max("trade_time"))
+        .values_list("company_id", "t")
+    )
+    for r in rows:
+        r["last_updated"] = last_trade.get(r["company_id"])
+    out["rows"] = rows
+    return out
 
 
 def tracked_summary(requested_date=None, company_ids=None):
@@ -312,7 +410,11 @@ def tracked_summary(requested_date=None, company_ids=None):
         transactions_reported=Count("transactions"),
     )
     excluded = {reason: totals.pop(f"{reason}_count") for reason in EXCLUSION_REASONS}
-    return {"trade_date": as_of, "previous_trade_date": base_date, **totals, "excluded_counts": excluded}
+    summary = {"trade_date": as_of, "previous_trade_date": base_date, **totals, "excluded_counts": excluded}
+    warning = incomplete_session_warning(as_of, excluded["missing_price"], totals["tracked_count"])
+    if warning:
+        summary["warning"] = warning
+    return summary
 
 
 TOP_FIELDS = {"turnover": "turnover", "volume": "volume", "transactions": "transactions"}
@@ -326,7 +428,7 @@ def top_by(metric, requested_date=None, company_ids=None, limit=10):
         return {"trade_date": None, "metric": metric, "rows": [], "reason": "no completed trading day in DailyPrice (source=crawled)", "action": NO_DATA_ACTION}
     rows = _rows(
         annotated_companies(as_of, base_date, window_dates, company_ids)
-        .exclude(bucket="not_traded")
+        .exclude(bucket__in=NOT_RANKABLE_TODAY)
         .order_by(F(field).desc(nulls_last=True), "symbol")[:limit]
     )
     return {"trade_date": as_of, "metric": metric, "rows": rows}
