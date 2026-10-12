@@ -1,8 +1,6 @@
 
 import json
 import time
-import urllib.error
-import urllib.request
 from datetime import date, datetime, timedelta
 from datetime import time as dtime
 from decimal import Decimal
@@ -15,40 +13,26 @@ from django.db import connection
 
 from apps.companies.models import Company, TrackedCompany
 from apps.market_data.models import FloorsheetTransaction
+from apps.market_data.services.sharehub_floorsheet import ShareHubError, request_floorsheet
 from apps.market_data.services.sharehub_time import parse_sharehub_time
 
-API = "https://sharehubnepal.com/live/api/v2/floorsheet"
 PAGE_SIZE = 500          # if ShareHub rejects 500, try 100
 PAUSE_SECONDS = 1.0      # pause between requests. Do not lower it.
-PAGE_PARAM_CANDIDATES = ["Page", "PageIndex", "PageNumber", "page", "pageIndex"]
+# No lowercase "page": ShareHub's robots.txt disallows "/*?*page=".
+PAGE_PARAM_CANDIDATES = ["Page", "PageIndex", "PageNumber", "pageIndex"]
 NPT = ZoneInfo("Asia/Kathmandu")
 STATE_FILE = Path(getattr(settings, "BASE_DIR", Path.cwd())) / "sharehub_done_dates.json"
 
 
 def fetch(d, page=None, page_param=None):
     # ShareHub's own site sends the date without zero padding (2026-10-6); we do the same.
-    url = f"{API}?Size={PAGE_SIZE}&date={d.year}-{d.month}-{d.day}"
+    params = {"Size": PAGE_SIZE, "date": f"{d.year}-{d.month}-{d.day}"}
     if page_param:
-        url += f"&{page_param}={page}"
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "personal-stock-project/1.0", "Accept": "application/json"},
-    )
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                body = json.load(resp)
-            return body.get("data") or {}
-        except urllib.error.HTTPError as e:
-            if e.code in (401, 403, 429):
-                raise CommandError(
-                    f"ShareHub refused the request (HTTP {e.code}). Stop, wait a while, "
-                    "and do not retry in a loop."
-                )
-            time.sleep(2 * (attempt + 1))
-        except (urllib.error.URLError, TimeoutError):
-            time.sleep(2 * (attempt + 1))
-    raise CommandError(f"Could not fetch {url}")
+        params[page_param] = page
+    try:
+        return request_floorsheet(params)
+    except ShareHubError as exc:
+        raise CommandError(str(exc)) from exc
 
 
 def parse_trade_time(s):

@@ -238,6 +238,45 @@ class ShareHubDedupeTests(CandleTestCase):
         with self.assertRaises(sharehub_floorsheet.ShareHubError):
             sharehub_floorsheet.build_transactions(self.company, DAY, [bad])
 
+    def test_changed_format_skips_only_that_company(self):
+        nica = Company.objects.create(symbol="NICA", name="NIC Asia", sector="Banking")
+        renamed = self.item(1, "2026-10-09T11:00:00Z")
+        renamed["contractNo"] = renamed.pop("contractId")      # ShareHub renamed a field
+        good = self.item(2, "2026-10-09T11:00:01Z", symbol="NICA")
+        by_symbol = {"NABIL": [renamed], "NICA": [good]}
+        with mock.patch.object(sharehub_floorsheet, "fetch_company_day",
+                               side_effect=lambda day, symbol, known_ids: by_symbol[symbol]), \
+                mock.patch.object(sharehub_floorsheet.time, "sleep"):
+            summary = sharehub_floorsheet.sync_day(DAY, [self.company, nica])
+
+        self.assertEqual(summary["companies"], 1)
+        self.assertEqual(len(summary["errors"]), 1)
+        self.assertIn("NABIL", summary["errors"][0])
+        self.assertEqual(list(FloorsheetTransaction.objects.values_list("company__symbol", flat=True)), ["NICA"])
+
+
+class ShareHubRequestTests(SimpleTestCase):
+
+    def response(self, body):
+        resp = mock.MagicMock()
+        resp.__enter__.return_value = StringIO(body)
+        return resp
+
+    def test_request_sends_user_agent_and_timeout(self):
+        with mock.patch.object(sharehub_floorsheet.urllib.request, "urlopen",
+                               return_value=self.response('{"data": {"content": []}}')) as urlopen:
+            data = sharehub_floorsheet.request_floorsheet({"Size": 100})
+        request, = urlopen.call_args.args
+        self.assertEqual(data, {"content": []})
+        self.assertEqual(request.get_header("User-agent"), sharehub_floorsheet.USER_AGENT)
+        self.assertEqual(urlopen.call_args.kwargs["timeout"], sharehub_floorsheet.TIMEOUT_SECONDS)
+
+    def test_non_json_response_raises_instead_of_crashing(self):
+        with mock.patch.object(sharehub_floorsheet.urllib.request, "urlopen",
+                               return_value=self.response("<html>maintenance</html>")):
+            with self.assertRaises(sharehub_floorsheet.ShareHubError):
+                sharehub_floorsheet.request_floorsheet({"Size": 100})
+
 
 class FetchPagingTests(SimpleTestCase):
 

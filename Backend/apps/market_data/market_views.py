@@ -16,9 +16,7 @@ from datetime import datetime
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from rest_framework import status
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
@@ -27,7 +25,7 @@ from apps.users.company_access import get_accessible_company_ids, require_compan
 from apps.users.models import WatchlistItem
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
-from .services import market_stats, movers
+from .services import live_prices, market_stats, movers
 
 CACHE_SECONDS = 60
 SCOPE = "tracked_companies"
@@ -67,60 +65,11 @@ def _tracked_company(request, symbol):
     return company
 
 
-PUBLIC_MOVER_FIELDS = (
-    "symbol", "name", "sector", "close", "prev_close", "change", "change_pct",
-    "adjusted", "unadjusted", "volume", "turnover", "sparkline",
-)
-PUBLIC_SUMMARY_FIELDS = (
-    "tracked_count", "advanced", "declined", "unchanged", "excluded_counts",
-    "positive_circuit", "negative_circuit", "total_turnover", "total_traded_shares",
-)
-PUBLIC_BASKET_DAYS = 30
-PUBLIC_MOVERS_LIMIT = 5
-
-
 def _limit(request, default):
     try:
         return max(1, min(int(request.query_params.get("limit", default)), 50))
     except ValueError:
         return default
-
-
-class PublicTrackedSnapshotAPIView(APIView):
-    """
-    GET /api/market/public/snapshot/
-
-    Unauthenticated, for the public landing page: the tracked companies'
-    1-session summary, the top 5 tracked gainers and losers (same definition
-    as /api/market/movers/) with 7-close sparklines, and the last 30
-    Tracked Basket levels.  Nothing else -- no brokers, signals, dividends,
-    transactions or watchlists.
-    """
-    permission_classes = [AllowAny]
-    authentication_classes = []
-    throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "public"
-
-    def get(self, request):
-        key = "market-api:public-snapshot"
-        payload = cache.get(key)
-        if payload is None:
-            result = movers.tracked_movers("1D", limit=PUBLIC_MOVERS_LIMIT)
-            summary = movers.tracked_summary(result["as_of"]) if result["as_of"] else {}
-            payload = {
-                "scope": SCOPE,
-                "units": market_stats.UNITS,
-                "as_of": result["as_of"],
-                "period_label": result["period_label"],
-                "summary": {name: summary.get(name) for name in PUBLIC_SUMMARY_FIELDS},
-                "gainers": [{name: row[name] for name in PUBLIC_MOVER_FIELDS} for row in result["gainers"]],
-                "losers": [{name: row[name] for name in PUBLIC_MOVER_FIELDS} for row in result["losers"]],
-                "basket": market_stats.basket_index(PUBLIC_BASKET_DAYS),
-                "provenance": result["provenance"],
-                "reason": result.get("reason"),
-            }
-            cache.set(key, payload, CACHE_SECONDS)
-        return Response(payload)
 
 
 class TrackedSummaryAPIView(APIView):
@@ -165,6 +114,22 @@ class TrackedMoversAPIView(APIView):
             **movers.tracked_movers(period, trade_date, ids, limit),
             "note": market_stats.CORPORATE_ACTION_NOTE,
         })
+
+
+class LiveTrackedMoversAPIView(APIView):
+    """
+    GET /api/market/movers/live/?limit=10
+
+    Intraday gainers and losers from NEPSE's live feed (services.live_prices),
+    refreshed every 2 minutes in market hours.  Unofficial until the close;
+    /api/market/movers/ stays the official end-of-day view.
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        limit = _limit(request, 10)
+        return _cached(request, lambda ids: live_prices.live_movers(ids, limit))
 
 
 class TrackedTopAPIView(APIView):

@@ -1,4 +1,11 @@
+"""
+ShareHub floorsheet (trades with trade times).
 
+``request_floorsheet`` is the ONLY code that talks to ShareHub: URL, User-Agent,
+timeout, retries and error mapping live there, so swapping the source means
+editing that one function.  Used by the intraday tasks (``sync_day``) and the
+``load_sharehub_floorsheet`` command.
+"""
 
 import json
 import logging
@@ -6,14 +13,16 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
-from apps.market_data.management.commands.load_sharehub_floorsheet import API
 from apps.market_data.models import FloorsheetTransaction
 from apps.market_data.services.sharehub_time import parse_sharehub_time
 
 logger = logging.getLogger(__name__)
 
+API = "https://sharehubnepal.com/live/api/v2/floorsheet"
+USER_AGENT = "personal-stock-project/1.0"
+TIMEOUT_SECONDS = 30
 PAGE_SIZE = 100          # ShareHub's maximum
 PAUSE_SECONDS = 1.0      # pause between requests. Do not lower it.
 PAGE_PARAM = "Page"
@@ -24,30 +33,36 @@ class ShareHubError(Exception):
     """ShareHub refused or kept failing; the caller should stop, not retry in a loop."""
 
 
+def request_floorsheet(params):
+    """GET the floorsheet API with ``params``; returns its ``data`` dict or raises ShareHubError."""
+    url = f"{API}?{urllib.parse.urlencode(params)}"
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    for attempt in range(4):
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+                body = json.load(resp)
+            if not isinstance(body, dict):
+                raise ShareHubError(f"Unexpected ShareHub response format for {url}.")
+            return body.get("data") or {}
+        except urllib.error.HTTPError as e:
+            if e.code in (400, 401, 403, 429):
+                raise ShareHubError(f"ShareHub refused {url} (HTTP {e.code}). Stop; do not retry in a loop.")
+            time.sleep(2 * (attempt + 1))
+        except json.JSONDecodeError:
+            raise ShareHubError(f"ShareHub did not return JSON for {url}.")
+        except (urllib.error.URLError, TimeoutError):
+            time.sleep(2 * (attempt + 1))
+    raise ShareHubError(f"Could not fetch {url} from ShareHub.")
+
+
 def fetch_page(day, symbol, page=1):
     # ShareHub's own site sends the date without zero padding (2026-10-6).
-    query = urllib.parse.urlencode({
+    return request_floorsheet({
         "Size": PAGE_SIZE,
         "date": f"{day.year}-{day.month}-{day.day}",
         "symbol": symbol,
         PAGE_PARAM: page,
     })
-    req = urllib.request.Request(
-        f"{API}?{query}",
-        headers={"User-Agent": "personal-stock-project/1.0", "Accept": "application/json"},
-    )
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                body = json.load(resp)
-            return body.get("data") or {}
-        except urllib.error.HTTPError as e:
-            if e.code in (400, 401, 403, 429):
-                raise ShareHubError(f"ShareHub refused {symbol} {day} page {page} (HTTP {e.code}).")
-            time.sleep(2 * (attempt + 1))
-        except (urllib.error.URLError, TimeoutError):
-            time.sleep(2 * (attempt + 1))
-    raise ShareHubError(f"Could not fetch {symbol} {day} page {page} from ShareHub.")
 
 
 def fetch_company_day(day, symbol, known_ids=frozenset()):
@@ -86,18 +101,22 @@ def build_transactions(company, day, items):
             raise ShareHubError(
                 f"Asked ShareHub for {day} but got {item.get('businessDate')}; nothing written."
             )
-        txn_id = str(item["contractId"])
-        rows[txn_id] = FloorsheetTransaction(
-            company=company,
-            date=day,
-            transaction_id=txn_id,
-            buyer_broker=str(item["buyerMemberId"]),
-            seller_broker=str(item["sellerMemberId"]),
-            quantity=int(item["contractQuantity"]),
-            rate=Decimal(str(item["contractRate"])),
-            amount=Decimal(str(item["contractAmount"])),
-            trade_time=parse_sharehub_time(item["tradeTime"]),
-        )
+        try:
+            txn_id = str(item["contractId"])
+            rows[txn_id] = FloorsheetTransaction(
+                company=company,
+                date=day,
+                transaction_id=txn_id,
+                buyer_broker=str(item["buyerMemberId"]),
+                seller_broker=str(item["sellerMemberId"]),
+                quantity=int(item["contractQuantity"]),
+                rate=Decimal(str(item["contractRate"])),
+                amount=Decimal(str(item["contractAmount"])),
+                trade_time=parse_sharehub_time(item["tradeTime"]),
+            )
+        except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+            # A renamed or missing field means ShareHub changed its format: skip this company, keep the rest.
+            raise ShareHubError(f"Unexpected ShareHub trade format for {company.symbol} {day}: {exc!r}") from exc
     return list(rows.values())
 
 

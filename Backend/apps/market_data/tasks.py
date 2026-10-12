@@ -86,3 +86,22 @@ def build_intraday_candles_live():
 def finalize_intraday_candles():
     """After the close: full ShareHub re-read and full recompute of today's candles."""
     return _sync_and_rebuild_today("finalize_intraday_candles", incremental=False)
+
+
+@shared_task(name="apps.market_data.tasks.update_live_prices")
+def update_live_prices():
+    """Every 2 minutes in the session: NEPSE live LTP for the tracked companies."""
+    from apps.market_data.services.live_prices import LivePriceError, sync_live_prices
+    from apps.market_data.services.trading_days import market_closed_reason
+
+    reason = market_closed_reason()
+    if reason:
+        logger.info("update_live_prices: skipping — %s.", reason)
+        return {"skipped": True, "reason": reason}
+    try:
+        result = sync_live_prices()
+    except LivePriceError as exc:
+        logger.warning("update_live_prices: %s; keeping old prices.", exc)
+        return {"skipped": True, "reason": str(exc)}
+    logger.info("update_live_prices: %s", result)
+    return result

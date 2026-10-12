@@ -30,7 +30,7 @@ from apps.users.company_access import (
 )
 from .models import Company, TrackedCompany
 from .serializers import CompanySerializer
-
+from apps.market_data.services.movers import normalize_period, tracked_movers
 
 def _company_list_queryset():
     
@@ -163,22 +163,7 @@ class CompanyToggleTrackAPIView(APIView):
 
 
 class CompanyPricesAPIView(APIView):
-    """
-    GET /api/companies/:id/prices?range=30d
-    Ranges: 7d, 30d, 31d, 90d, 180d, 1y, all
-
-    Rolling window design
-    ---------------------
-    The window is anchored to **today** (not the latest stored date) so
-    the result is always the genuine last N calendar days of stored data.
-    This means:
-      - range=31d  → today - 31 days  (the canonical rolling month)
-      - range=30d  → today - 30 days  (kept for backwards compatibility)
-      - range=7d   → today - 7 days
-      etc.
-
-    Historical records are never deleted; the filter is query-time only.
-    """
+ 
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
@@ -376,70 +361,53 @@ class CompanySectorsAPIView(APIView):
         return Response(
             list(sectors)
         )
-from apps.users.company_access import (
-    get_accessible_company_ids,
-)
 
 
-def get_queryset(self):
-
-    user = self.request.user
-
-    queryset = Company.objects.filter(
-        is_active=True
-    )
-
-    if user.is_admin():
-        return queryset
-
-    company_ids = get_accessible_company_ids(
-        user
-    )
-
-    return queryset.filter(
-        id__in=company_ids
-    )
-from django.db.models import ExpressionWrapper, F, FloatField
-from django.http import JsonResponse
-
-from .models import Company
+def _int(value, default, lo, hi):
+    try:
+        return max(lo, min(int(value), hi))
+    except (TypeError, ValueError):
+        return default
 
 
-def _ranked_queryset():
-    """Companies that have prices, annotated with change and change_percent."""
-    return (
-        Company.objects.filter(ltp__isnull=False, previous_close__gt=0)
-        .annotate(
-            change=ExpressionWrapper(F("ltp") - F("previous_close"), output_field=FloatField()),
-            change_percent=ExpressionWrapper(
-                (F("ltp") - F("previous_close")) * 100.0 / F("previous_close"),
-                output_field=FloatField(),
-            ),
+class _TrackedMoversSideAPIView(APIView):
+    """
+    Gainers or losers of the tracked companies.
+
+    The numbers come from services.movers (the single definition of session
+    change, crawled prices only). Users only see companies they may access,
+    same rule as the company list.
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+    side = None  # "gainers" or "losers"
+
+    def get(self, request):
+        accessible_ids = filter_company_queryset(
+            Company.objects.filter(is_active=True), request.user, "id"
+        ).values_list("id", flat=True)
+        data = tracked_movers(
+            period=normalize_period(request.query_params.get("period")) or "1D",
+            limit=_int(request.query_params.get("limit"), 5, 1, 20),
+            company_ids=accessible_ids,
+            lean=True,
         )
-    )
+        return Response({
+            "as_of": data["as_of"],
+            "reason": data.get("reason"),
+            "warning": data.get("warning"),
+            "results": data[self.side],
+        })
 
 
-def _serialize(qs):
-    return [
-        {
-            "symbol": c.symbol,
-            "name": c.name,
-            "ltp": float(c.ltp),
-            "previous_close": float(c.previous_close),
-            "change": round(c.change, 2),
-            "change_percent": round(c.change_percent, 2),
-        }
-        for c in qs
-    ]
+class TopGainersAPIView(_TrackedMoversSideAPIView):
+    side = "gainers"
 
 
-def top_gainers(request):
-    limit = int(request.GET.get("limit", 5))
-    qs = _ranked_queryset().filter(change__gt=0).order_by("-change_percent")[:limit]
-    return JsonResponse({"results": _serialize(qs)})
+class TopLosersAPIView(_TrackedMoversSideAPIView):
+    side = "losers"
 
 
-def top_losers(request):
-    limit = int(request.GET.get("limit", 5))
-    qs = _ranked_queryset().filter(change__lt=0).order_by("change_percent")[:limit]
-    return JsonResponse({"results": _serialize(qs)})
+# companies/urls.py already points at views.top_gainers / views.top_losers.
+top_gainers = TopGainersAPIView.as_view()
+top_losers = TopLosersAPIView.as_view()

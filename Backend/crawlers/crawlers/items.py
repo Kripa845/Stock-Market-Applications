@@ -51,3 +51,33 @@ class FloorsheetItem(scrapy.Item):
     amount = scrapy.Field()
 
     source = scrapy.Field()
+
+
+class IndexDailyItem(scrapy.Item):
+    item_code = scrapy.Field()
+
+    
+    date = scrapy.Field()
+
+    open = scrapy.Field()
+    high = scrapy.Field()
+    low = scrapy.Field()
+    close = scrapy.Field()
+
+    source = scrapy.Field()
+    
+    
+class MarketStockDailyItem(scrapy.Item):
+    symbol = scrapy.Field()
+
+    date = scrapy.Field()
+    sector_raw = scrapy.Field()
+    close=scrapy.Field()
+    prev_close=scrapy.Field()
+    turnover = scrapy.Field()
+    volume = scrapy.Field()
+    transactions = scrapy.Field()
+
+    source = scrapy.Field()
+    
+    

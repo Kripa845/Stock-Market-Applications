@@ -240,28 +240,8 @@ class MarketApiTests(TrackedMarketFixture):
         self.assertIn(APIClient().get("/api/market/summary/").status_code, (401, 403))
 
 
-class PublicSnapshotTests(TrackedMarketFixture):
+class PublicSnapshotRemovedTests(TrackedMarketFixture):
 
-    def setUp(self):
-        super().setUp()
-        derive_price_fields()
-
-    def test_anonymous_gets_only_public_fields(self):
-        client = APIClient()
-        client.credentials(HTTP_AUTHORIZATION="Bearer expired.or.invalid")  # stale token is ignored
-        response = client.get("/api/market/public/snapshot/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.data["scope"], "tracked_companies")
-        self.assertEqual(response.data["as_of"], TUESDAY)
-        self.assertEqual(response.data["summary"]["tracked_count"], 7)
-        self.assertNotIn("total_transactions", response.data["summary"])
-        self.assertEqual([row["symbol"] for row in response.data["gainers"]], ["UPC", "GAIN"])
-        self.assertEqual([row["symbol"] for row in response.data["losers"]], ["LOSE"])  # CIRC is excluded
-        self.assertEqual(
-            set(response.data["gainers"][0]),
-            {"symbol", "name", "sector", "close", "prev_close", "change", "change_pct",
-             "adjusted", "unadjusted", "volume", "turnover", "sparkline"},
-        )
-        self.assertEqual(response.data["basket"]["label"], "Tracked Basket")
-        self.assertEqual(response.data["provenance"]["price_source"], "crawled")
+    def test_no_unauthenticated_price_endpoint(self):
+        # Crawled prices are not redistributed to anonymous visitors.
+        self.assertEqual(APIClient().get("/api/market/public/snapshot/").status_code, 404)

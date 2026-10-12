@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.dashboard",
     "apps.market_intelligence",
+    "apps.market_indices",
     
 ]
 
@@ -282,6 +283,18 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute="0,5", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
         "options": {"expires": 240},
     },
+    # ---- Live LTP (NEPSE live-market feed) ----
+    # Every 2 minutes, 11:00-14:58, plus 15:00-15:10 to pick up the closing trades.
+    "update-live-prices-market-hours": {
+        "task": "apps.market_data.tasks.update_live_prices",
+        "schedule": crontab(minute="*/2", hour="11-14", day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 100},
+    },
+    "update-live-prices-at-close": {
+        "task": "apps.market_data.tasks.update_live_prices",
+        "schedule": crontab(minute="0,5,10", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 100},
+    },
     "finalize-intraday-candles-after-close": {
         "task": "apps.market_data.tasks.finalize_intraday_candles",
         "schedule": crontab(minute=30, hour=15, day_of_week=TRADING_DAYS_CRONTAB),
@@ -308,6 +321,16 @@ CELERY_BEAT_SCHEDULE = {
     "recover-stale-crawls": {
         "task": "apps.crawler_runs.tasks.recover_stale_crawls",
         "schedule": crontab(minute=30, hour="*/2"),
+    },
+        # ---- Whole-market indices / sector data (after the 18:00 price crawl) ----
+    "sync-nepse-indices-after-close": {
+        "task": "apps.market_indices.tasks.sync_indices_from_nepse",
+        "schedule": crontab(minute="15,45", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+    },
+    "crawl-market-wide-evening": {
+        "task": "apps.market_indices.tasks.crawl_market_wide",
+        "schedule": crontab(minute=10, hour=18, day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"queue": "crawling"},   # your worker only listens to this queue
     },
 }
 

@@ -122,52 +122,7 @@ def parse_number(value):
 # ============================================================
 
 class TradingDataSpider(scrapy.Spider):
-    """
-    Collects a genuine rolling one-month window of daily OHLCV +
-    turnover history from ShareSansar, for every active company.
-
-    Why this is date-driven, not row-count driven
-    ---------------------------------------------
-    The previous implementation asked for a fixed number of rows and
-    treated that count as "one month".  It is not.  NEPSE trades a
-    variable number of sessions per month — holidays, closures and
-    suspensions all move the number, and a suspended company can have
-    far fewer sessions than the market as a whole.  Any fixed row count
-    is therefore either short of a month or wastefully long, and you
-    cannot tell which without looking at the dates.
-
-    So the window is defined by DATES and the row count falls out of it:
-
-        target_end_date   = latest AVAILABLE trading date for the company
-        target_start_date = target_end_date - WINDOW_DAYS calendar days
-
-    ``target_end_date`` is read from the first page of the API response,
-    NOT from ``date.today()``.  If the market last traded three days ago,
-    today's date is not a trading date and anchoring to it would silently
-    shorten the window by three days.
-
-    Pagination
-    ----------
-    Pages of ``PAGE_SIZE`` rows are requested until the oldest row
-    received reaches back past ``retrieval_start_date``, or until
-    ``MAX_PAGES`` is hit.  ``MAX_PAGES`` is the safety limit that stops
-    this from walking the entire historical database of a company.
-
-    Retrieval buffer
-    ----------------
-    ``RETRIEVAL_BUFFER_DAYS`` extends how far back we FETCH, so that the
-    window boundary is never decided by a page edge.  It does not extend
-    the analysis window: rows are filtered back down to
-    ``[target_start_date, target_end_date]`` before being emitted.  Rows
-    that fall only in the buffer are discarded, never persisted.  Fetch
-    range and final dataset range are deliberately separate.
-
-    Completeness
-    ------------
-    Completeness is judged on UNIQUE TRADING DATES covered, never on a
-    row count.  A company with 21 sessions in the window is complete; so
-    is one with 22.  Neither 20 nor 30 rows means anything on its own.
-    """
+  
 
     name = "trading_data"
 
@@ -432,14 +387,7 @@ class TradingDataSpider(scrapy.Spider):
         company_id,
         start=0,
     ):
-        """
-        Build the DataTables POST body for the price-history endpoint.
-
-        The column list is unchanged from the working implementation —
-        it mirrors what the site's own DataTables instance sends.  Only
-        ``length`` changed, from a fixed 20 to ``PAGE_SIZE``, and it is
-        now a PAGE size rather than the definition of the window.
-        """
+        
         columns = [
             "DT_Row_Index",
             "published_date",
@@ -478,13 +426,7 @@ class TradingDataSpider(scrapy.Spider):
     # ----------------------------------------------------------
 
     def extract_row(self, row, symbol):
-        """
-        Validate one API row into a normalised dict, or ``None``.
-
-        Validates date, open, high, low, close, volume and turnover.  A
-        row missing any of them is skipped and logged; it never raises,
-        because one malformed row must not abort the company's crawl.
-        """
+        
         if not isinstance(row, dict):
             self.logger.warning("%s: non-dict row skipped: %r", symbol, row)
             return None
@@ -714,10 +656,7 @@ class TradingDataSpider(scrapy.Spider):
     # ----------------------------------------------------------
 
     def _finalise(self, symbol):
-        """
-        Filter the retrieved buffer down to the real target window and
-        emit items, then log the per-company audit line.
-        """
+       
         state = self.company_state.get(symbol)
 
         if state is None:

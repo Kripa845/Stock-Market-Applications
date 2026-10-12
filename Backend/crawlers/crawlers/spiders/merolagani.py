@@ -1,185 +1,127 @@
+"""
+Whole-market daily stock table (every listed stock, one request).
 
+Source default: ShareSansar "today share price" page.
+VERIFY BEFORE USE (I could not open the site from the authoring environment):
+  1. URL                 -> START_URL (or pass -a url=...)
+  2. the table selector  -> TABLE_SELECTOR
+  3. where the trade date is shown -> DATE_REGEX (or pass -a date=YYYY-MM-DD)
+Column positions are NOT hard-coded: columns are found by their header text
+(HEADER_ALIASES), so a re-ordered table still works.  If the date cannot be
+determined the spider yields nothing rather than guessing.
+
+Respects the project's ROBOTSTXT_OBEY = True.  Manual run:
+    scrapy crawl market_stocks
+    scrapy crawl market_stocks -a date=2026-10-09
+"""
 
 import re
+from datetime import date
 
 import scrapy
-from dateutil import parser as date_parser
-from django.utils import timezone
 
-from crawlers.spiders.base_news import BaseNewsSpider
-from crawlers.utils.urls import canonicalize_url
+from crawlers.items import MarketStockDailyItem
+
+START_URL = "https://www.sharesansar.com/today-share-price"
+TABLE_SELECTOR = "table"                      # VERIFY: tighten to the real table, e.g. "table#headFixed"
+DATE_REGEX = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+# canonical field -> header texts (lower-case, punctuation stripped) that mean it
+HEADER_ALIASES = {
+    "symbol": ("symbol", "scrip", "stock symbol"),
+    "close": ("close", "ltp", "closing price"),
+    "prev_close": ("prev close", "previous close", "prev. close"),
+    "volume": ("vol", "volume", "traded shares", "total traded quantity"),
+    "turnover": ("turnover", "total traded value"),
+    "transactions": ("trans", "transactions", "no of transactions", "total transactions"),
+}
 
 
-class MerolaganiSpider(BaseNewsSpider):
+def _clean_header(text):
+    return re.sub(r"[^a-z ]+", "", (text or "").lower()).strip()
 
-    name = "merolagani"
 
-    allowed_domains = [
-        "merolagani.com",
-        "www.merolagani.com",
-    ]
+class MarketStocksSpider(scrapy.Spider):
+    name = "market_stocks"
+    custom_settings = {
+        "ITEM_PIPELINES": {
+            "crawlers.pipelines.CrawlRunPipeline": 100,
+            "crawlers.market_wide_pipeline.MarketWidePipeline": 450,
+        },
+    }
 
-    start_urls = [
-        "https://merolagani.com/NewsList.aspx",
-    ]
+    def __init__(self, url=None, date=None, **kwargs):
+        super().__init__(**kwargs)
+        self.start_url = url or START_URL
+        self.forced_date = date
 
-    SOURCE = "MeroLagani"
-    source = "MeroLagani"
+    def start_requests(self):
+        yield scrapy.Request(self.start_url, callback=self.parse)
 
-    max_articles = 40
-
-    def __init__(self, max_articles=None, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.max_articles = (
-            int(max_articles) if max_articles else 40
-        )
-
-        self.articles_seen = 0
-        self.articles_scheduled = 0
-
-        # Counters consumed by CrawlRunPipeline / logging.
-        self.news_created = 0
-        self.news_duplicate_url = 0
-        self.news_duplicate_content = 0
-        self.news_failed = 0
+    # ------------------------------------------------------------------
 
     def parse(self, response):
+        trade_date = self._trade_date(response)
+        if trade_date is None:
+            self.logger.error("Trade date not found on the page; pass -a date=YYYY-MM-DD. Nothing saved.")
+            return
 
-        article_urls = []
-        seen = set()
+        table = response.css(TABLE_SELECTOR)
+        if not table:
+            self.logger.error("Table %r not found: check TABLE_SELECTOR", TABLE_SELECTOR)
+            return
+        table = table[0]
 
-        for href in response.css(
-            "a[href*='NewsDetail.aspx']::attr(href)"
-        ).getall():
+        headers = [_clean_header(" ".join(th.css("*::text").getall())) for th in table.css("thead th")]
+        columns = self._column_positions(headers)
+        missing = [field for field in ("symbol", "close", "volume", "turnover") if field not in columns]
+        if missing:
+            self.logger.error("Required columns not found %s in headers %s", missing, headers)
+            return
+        if "transactions" not in columns:
+            self.logger.warning("No transactions column: transactions will be stored as NULL")
 
-            absolute = canonicalize_url(
-                response.urljoin(href.strip())
-            )
-
-            if "newsdetail.aspx" not in absolute.lower():
+        count = 0
+        for row in table.css("tbody tr"):
+            cells = [" ".join(td.css("*::text").getall()).strip() for td in row.css("td")]
+            if len(cells) <= max(columns.values()):
                 continue
 
-            if absolute in seen:
+            def cell(field):
+                position = columns.get(field)
+                return cells[position] if position is not None else None
+
+            symbol = (cell("symbol") or "").strip()
+            if not symbol:
                 continue
-
-            seen.add(absolute)
-            article_urls.append(absolute)
-
-        self.logger.info(
-            "MeroLagani: found %s article links on listing page",
-            len(article_urls),
-        )
-
-        for url in article_urls:
-
-            if self.articles_scheduled >= self.max_articles:
-                break
-
-            self.articles_seen += 1
-            self.articles_scheduled += 1
-
-            yield scrapy.Request(
-                url,
-                callback=self.parse_article,
-                errback=self.errback_article,
-                dont_filter=True,
+            yield MarketStockDailyItem(
+                item_type="market_stock_daily",
+                symbol=symbol,
+                sector_raw=None,                 # sector comes from the StockSector table
+                date=trade_date,
+                close=cell("close"),
+                prev_close=cell("prev_close"),
+                volume=cell("volume"),
+                turnover=cell("turnover"),
+                transactions=cell("transactions"),
+                source="crawled",
             )
+            count += 1
+        self.logger.info("market_stocks: %s rows for %s", count, trade_date)
 
-    def parse_article(self, response):
+    # ------------------------------------------------------------------
 
-        headline = (
-            response.css("h4::text").get()
-            or response.css("h1::text").get()
-            or response.css(
-                'meta[property="og:title"]::attr(content)'
-            ).get()
-        )
+    def _trade_date(self, response):
+        if self.forced_date:
+            return date.fromisoformat(self.forced_date)
+        match = DATE_REGEX.search(" ".join(response.css("body *::text").getall()))
+        return date.fromisoformat(match.group(1)) if match else None
 
-        body_selectors = [
-            "#ctl00_ContentPlaceHolder1_divNewsDetail p::text",
-            "#ctl00_ContentPlaceHolder1_divNewsDetail::text",
-            "div.p-3 p::text",
-            "article p::text",
-            ".news-detail p::text",
-        ]
-
-        body_parts = []
-
-        for selector in body_selectors:
-            parts = response.css(selector).getall()
-            if parts:
-                body_parts = parts
-                break
-
-        if not body_parts:
-            body_parts = response.xpath(
-                "//div[contains(@class,'news') or "
-                "contains(@id,'News')]//p//text()"
-            ).getall()
-
-        body = " ".join(
-            part.strip() for part in body_parts if part.strip()
-        )
-
-     
-        published_at = self.extract_published_at(response)
-
-        item = self.build_item(
-            response=response,
-            headline=headline,
-            body=body,
-            published_at=published_at,
-            source=self.SOURCE,
-        )
-
-        if item:
-            yield item
-
-    DATE_PATTERN = re.compile(
-        r"[A-Z][a-z]{2}\s+\d{1,2},\s*\d{4}\s+\d{1,2}:\d{2}\s*[AP]M"
-    )
-
-    def extract_published_at(self, response):
-
-        candidates = response.css(
-            "span::text, div::text, p::text"
-        ).getall()
-
-        for text in candidates:
-            match = self.DATE_PATTERN.search(text or "")
-
-            if match:
-                try:
-                    dt = date_parser.parse(match.group(0))
-                except (ValueError, TypeError, OverflowError):
-                    continue
-
-                if timezone.is_naive(dt):
-                    dt = timezone.make_aware(
-                        dt,
-                        timezone.get_current_timezone(),
-                    )
-
-                return dt
-
-        return None
-
-    def errback_article(self, failure):
-        self.logger.error(
-            "MeroLagani article request failed: %s | %s",
-            failure.request.url,
-            failure.value,
-        )
-
-    def closed(self, reason):
-        self.logger.info(
-            "MeroLagani crawl completed | reason=%s | seen=%s | "
-            "scheduled=%s | created=%s | duplicate_url=%s | failed=%s",
-            reason,
-            self.articles_seen,
-            self.articles_scheduled,
-            self.news_created,
-            self.news_duplicate_url,
-            self.news_failed,
-        )
+    @staticmethod
+    def _column_positions(headers):
+        positions = {}
+        for field, aliases in HEADER_ALIASES.items():
+            for position, header in enumerate(headers):
+                if header in aliases and field not in positions:
+                    positions[field] = position
+        return positions

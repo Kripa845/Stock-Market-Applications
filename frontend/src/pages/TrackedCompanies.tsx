@@ -1,22 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ArrowDown, ArrowDownRight, ArrowUp, ArrowUpRight, ChevronRight, Info, Minus, RefreshCw, Star } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import BrokerBadge from '../components/brokers/BrokerBadge';
 import BasketChart from '../components/market/BasketChart';
+import NepseIndices from '../components/market/NepseIndices';
 import {
   changeTone, formatCount, formatNprCompact, formatPct, formatPrice, formatTradeDate,
 } from '../components/market/format';
 import {
   marketApi,
-  type BasketIndex, type BrokerWindow, type DividendRow, type ExclusionReason, type MoverPeriod,
+  type BasketIndex, type BrokerWindow, type DividendRow, type ExclusionReason, type LiveMoversResponse, type MoverPeriod,
   type MoversResponse, type Signals, type TopMetric, type TrackedRow, type TrackedSummary, type WatchlistRow,
 } from '../api/market';
 import type { NewsArticle } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { useLiveRefresh } from '../hooks/useLiveRefresh';
 
 // Dashboard for the TRACKED COMPANIES only (/api/market/). Never labelled as the NEPSE market.
 
@@ -81,13 +83,16 @@ const REASON_LABELS: Record<ExclusionReason, string> = {
   possible_corporate_action: 'Possible corporate action (>10%, no source % change)',
 };
 
-const PERIOD_TABS: { period: MoverPeriod; label: string }[] = [
+type MoverTab = MoverPeriod | 'LIVE';
+
+const PERIOD_TABS: { period: MoverTab; label: string }[] = [
+  { period: 'LIVE', label: 'Live' },
   { period: '1D', label: '1 session' },
   { period: '5S', label: '5 sessions' },
   { period: '20S', label: '20 sessions' },
 ];
 
-function BasisBadge({ row }: { row: TrackedRow }) {
+function BasisBadge({ row }: { row: Partial<TrackedRow> }) {
   if (row.adjusted) {
     return (
       <span
@@ -113,15 +118,19 @@ function BasisBadge({ row }: { row: TrackedRow }) {
 
 const MOVERS_COLLAPSED = 5;
 
-function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onToggleWatch }: {
+// The end-of-day rows (TrackedRow) and the live rows (LiveMoverRow) share these fields.
+type MoverTableRow = Pick<TrackedRow, 'symbol' | 'name' | 'logo_url' | 'change' | 'change_pct' | 'close'> & Partial<TrackedRow>;
+
+function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onToggleWatch, emptyText }: {
   title: string;
-  rows: TrackedRow[];
+  rows: MoverTableRow[];
   total: number;
   tone: 'up' | 'down';
   onSelect: (symbol: string) => void;
   selected: string | null;
   watched: Set<string> | null;
   onToggleWatch: (symbol: string) => void;
+  emptyText?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const up = tone === 'up';
@@ -143,7 +152,7 @@ function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onT
         </div>
       </div>
       {rows.length === 0 ? (
-        <p className="py-6 text-center text-xs text-text-muted">No tracked company {up ? 'rose' : 'fell'} in this period.</p>
+        <p className="py-6 text-center text-xs text-text-muted">{emptyText ?? `No tracked company ${up ? 'rose' : 'fell'} in this period.`}</p>
       ) : (
         <table className="w-full text-sm">
           <thead>
@@ -200,6 +209,79 @@ function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onT
   );
 }
 
+const LIVE_REFRESH_MS = 60_000;
+
+function LiveMovers({ selected, onSelect, watched, onToggleWatch }: {
+  selected: string | null;
+  onSelect: (symbol: string) => void;
+  watched: Set<string> | null;
+  onToggleWatch: (symbol: string) => void;
+}) {
+  const [data, setData] = useState<LiveMoversResponse | null>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+
+  const load = useCallback(() => {
+    marketApi.liveMovers(10)
+      .then((response) => { setData(response); setState('ready'); })
+      .catch(() => { setData(null); setState('error'); }); // never keep showing numbers we could not refresh
+  }, []);
+  useEffect(() => { load(); }, [load]);
+  useLiveRefresh(load, LIVE_REFRESH_MS);
+
+  if (state === 'loading') return <div className="card py-10 text-center text-sm text-text-muted">Loading live prices…</div>;
+  if (state === 'error' || !data) {
+    return (
+      <div className="card flex items-center justify-center gap-2 py-10 text-sm text-down">
+        <AlertTriangle size={14} /> Could not load live prices. No older data is shown.
+      </div>
+    );
+  }
+  if (!data.as_of) return <EmptyState title="No live prices yet" description={`${data.reason ?? ''} ${data.action ?? ''}`} />;
+
+  const isToday = data.session_date === format(new Date(), 'yyyy-MM-dd');
+  return (
+    <>
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-secondary">
+        {data.stale ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-2 py-0.5 font-medium text-yellow-400">
+            <AlertTriangle size={12} />
+            Live prices are stale · last successful fetch{' '}
+            {data.last_successful_fetch
+              ? formatDistanceToNow(new Date(data.last_successful_fetch), { addSuffix: true })
+              : 'never'}
+          </span>
+        ) : (
+          <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-medium ${isToday ? 'bg-up/15 text-up' : 'bg-bg-elevated text-text-muted'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${isToday ? 'animate-pulse bg-up' : 'bg-text-muted'}`} />
+            {isToday ? 'Live' : 'Latest session'}
+          </span>
+        )}
+        Last trade {format(new Date(data.as_of), 'h:mm a, MMM d, yyyy')} · vs NEPSE previous close
+      </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <MoverTable title="Live gainers" rows={data.gainers} total={data.gainers_count} tone="up"
+          emptyText="No tracked company is up so far in this session."
+          onSelect={onSelect} selected={selected} watched={watched} onToggleWatch={onToggleWatch} />
+        <MoverTable title="Live losers" rows={data.losers} total={data.losers_count} tone="down"
+          emptyText="No tracked company is down so far in this session."
+          onSelect={onSelect} selected={selected} watched={watched} onToggleWatch={onToggleWatch} />
+      </div>
+      {(data.unchanged_count > 0 || data.not_traded.length > 0) && (
+        <div className="card space-y-1 text-xs text-text-secondary">
+          {data.unchanged_count > 0 && <p><span className="font-medium text-text-primary">Unchanged:</span> {data.unchanged_count}</p>}
+          {data.not_traded.length > 0 && (
+            <p><span className="font-medium text-text-primary">Not traded yet this session:</span> {data.not_traded.join(', ')}</p>
+          )}
+        </div>
+      )}
+      <p className="text-[11px] text-text-muted">
+        Source: {data.source}. Refreshed every 2 minutes in market hours; unofficial until the close.
+        The 1-session view uses the crawled closing prices.
+      </p>
+    </>
+  );
+}
+
 function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }: {
   selected: string | null;
   onSelect: (symbol: string) => void;
@@ -207,11 +289,12 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
   onToggleWatch: (symbol: string) => void;
   onLoaded: (response: MoversResponse) => void;
 }) {
-  const [period, setPeriod] = useState<MoverPeriod>('1D');
+  const [period, setPeriod] = useState<MoverTab>('1D');
   const [data, setData] = useState<MoversResponse | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
+    if (period === 'LIVE') return;
     let cancelled = false;
     setState('loading');
     setData(null); // never show the previous period's (or stale) numbers while loading
@@ -233,7 +316,9 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
         <div>
           <h2 className="text-lg font-semibold text-text-primary">Tracked gainers and losers</h2>
           <p className="text-xs text-text-muted">
-            {data?.as_of
+            {period === 'LIVE'
+              ? 'Live from NEPSE · tracked companies only'
+              : data?.as_of
               ? <>As of {formatTradeDate(data.as_of)}{data.base_date ? <> vs {formatTradeDate(data.base_date)}</> : null} · tracked companies only</>
               : 'Tracked companies only'}
           </p>
@@ -248,16 +333,17 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
         </div>
       </div>
 
-      {state === 'loading' && <div className="card py-10 text-center text-sm text-text-muted">Loading tracked movers…</div>}
-      {state === 'error' && (
+      {period === 'LIVE' && <LiveMovers selected={selected} onSelect={onSelect} watched={watched} onToggleWatch={onToggleWatch} />}
+      {period !== 'LIVE' && state === 'loading' && <div className="card py-10 text-center text-sm text-text-muted">Loading tracked movers…</div>}
+      {period !== 'LIVE' && state === 'error' && (
         <div className="card flex items-center justify-center gap-2 py-10 text-sm text-down">
           <AlertTriangle size={14} /> Could not load tracked movers. No older data is shown.
         </div>
       )}
-      {state === 'ready' && data && !data.as_of && (
+      {period !== 'LIVE' && state === 'ready' && data && !data.as_of && (
         <EmptyState title="No crawled prices yet" description={`${data.reason ?? ''}. ${data.action ?? ''}`} />
       )}
-      {state === 'ready' && data?.as_of && (
+      {period !== 'LIVE' && state === 'ready' && data?.as_of && (
         <>
           {data.warning && (
             <p className="flex items-start gap-1.5 rounded-md border border-yellow-400/30 bg-yellow-400/10 px-3 py-2 text-xs text-yellow-400">
@@ -706,6 +792,8 @@ export default function TrackedCompaniesPage() {
       )}
 
       {summary?.trade_date && <SummaryTiles summary={summary} />}
+
+      <NepseIndices key={`indices-${reloadKey}`} />
 
       <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
         <MoversSection

@@ -110,21 +110,6 @@ export interface BasketIndex { label: string; base_level: number; rows: BasketRo
 
 interface Scoped { scope: 'tracked_companies'; units: Record<string, string> }
 
-export type PublicMover = Pick<TrackedRow,
-  'symbol' | 'name' | 'sector' | 'close' | 'prev_close' | 'change' | 'change_pct' | 'adjusted' | 'unadjusted' | 'volume' | 'turnover' | 'sparkline'>;
-
-export interface PublicSnapshot extends Scoped {
-  as_of: string | null;
-  period_label: string;
-  summary: Pick<TrackedSummary, 'tracked_count' | 'advanced' | 'declined' | 'unchanged' | 'excluded_counts'
-    | 'positive_circuit' | 'negative_circuit' | 'total_turnover' | 'total_traded_shares'>;
-  gainers: PublicMover[];
-  losers: PublicMover[];
-  basket: BasketIndex;
-  provenance: Provenance;
-  reason: string | null;
-}
-
 export interface BrokerRow {
   broker: string;
   broker_name: string;
@@ -188,17 +173,54 @@ export type WatchlistRow = Partial<TrackedRow> & {
   bucket: MoverBucket | 'not_tracked';
 };
 
+/** One tracked company's intraday move from NEPSE's live feed (Backend services/live_prices.py). */
+export interface LiveMoverRow {
+  company_id: number;
+  symbol: string;
+  name: string;
+  sector: string;
+  logo_url: string | null;
+  /** Last traded price. */
+  close: number;
+  prev_close: number;
+  change: number;
+  change_pct: number;
+  last_traded_at: string;
+}
+
+export interface LiveMoversResponse {
+  live: true;
+  source: string;
+  /** Time of the latest trade seen in the feed. */
+  as_of: string | null;
+  session_date: string | null;
+  /** When the server last fetched and saved the feed successfully. */
+  last_successful_fetch: string | null;
+  /** Market open, but no successful fetch in the last 10 minutes. */
+  stale: boolean;
+  tracked_count: number;
+  gainers_count: number;
+  losers_count: number;
+  unchanged_count: number;
+  gainers: LiveMoverRow[];
+  losers: LiveMoverRow[];
+  /** Tracked companies with no trade yet in this session. */
+  not_traded: string[];
+  reason?: string;
+  action?: string;
+}
+
 export type TopMetric = 'turnover' | 'volume' | 'transactions';
 
 const get = <T,>(url: string, params?: Record<string, unknown>) =>
   apiClient.get<T>(url, { params }).then((response) => response.data);
 
 export const marketApi = {
-  publicSnapshot: () => get<PublicSnapshot>('/market/public/snapshot/'),
   summary: (date?: string) =>
     get<Scoped & { summary: TrackedSummary; circuit_threshold_pct: number; provenance: Provenance; note: string }>('/market/summary/', { date }),
   movers: (period: MoverPeriod = '1D', limit = 5, date?: string) =>
     get<Scoped & MoversResponse>('/market/movers/', { period, limit, date }),
+  liveMovers: (limit = 10) => get<Scoped & LiveMoversResponse>('/market/movers/live/', { limit }),
   top: (metric: TopMetric, limit = 10) =>
     get<Scoped & { trade_date: string | null; rows: TrackedRow[]; reason?: string }>(`/market/top-${metric}/`, { limit }),
   brokers: (symbol: string) => get<Scoped & { symbol: string; windows: BrokerWindow[]; share_denominator: string }>(`/market/brokers/${symbol}/`),

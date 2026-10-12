@@ -301,6 +301,7 @@ export default function LandingPage() {
         </div>
         <p className="mx-auto mt-12 max-w-6xl border-t border-[color:var(--l-border)] pt-6 text-center text-xs text-[color:var(--l-faint)]">
           © {new Date().getFullYear()} StockScope. All rights reserved.
+          <span className="mt-1 block">Data from ShareSansar, ShareHub and NEPSE (unofficial sources), for personal research only.</span>
         </p>
       </footer>
     </div>

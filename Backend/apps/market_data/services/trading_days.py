@@ -12,7 +12,7 @@ sessions did trade?") keep using ``trading_calendar``, which reads dates
 actually present in DailyPrice.
 """
 
-from datetime import date
+from datetime import date, datetime
 from functools import lru_cache
 
 from django.conf import settings
@@ -44,6 +44,15 @@ def is_market_day(value: date | None = None) -> bool:
     """True when ``value`` (default: today in Asia/Kathmandu) is a weekday session and not a holiday."""
     value = value or timezone.localdate()
     return is_trading_weekday(value) and not TradingHoliday.objects.filter(date=value).exists()
+
+
+def is_market_open(moment: datetime | None = None) -> bool:
+    """True during the 11:00-15:00 Asia/Kathmandu session of a market day (holidays included)."""
+    from apps.market_data.services.intraday_candles import NPT, session_bounds
+
+    moment = (moment or timezone.now()).astimezone(NPT)
+    session_open, session_close = session_bounds(moment.date())
+    return is_market_day(moment.date()) and session_open <= moment <= session_close
 
 
 def market_closed_reason(value: date | None = None) -> str | None:

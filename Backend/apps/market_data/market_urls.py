@@ -6,7 +6,7 @@ from .market_views import (
     CompanyNewsAPIView,
     CompanySignalsAPIView,
     DividendListAPIView,
-    PublicTrackedSnapshotAPIView,
+    LiveTrackedMoversAPIView,
     TrackedMoversAPIView,
     TrackedSummaryAPIView,
     TrackedTopAPIView,
@@ -15,9 +15,9 @@ from .market_views import (
 
 # Mounted at /api/market/ -- tracked companies only (see market_views).
 urlpatterns = [
-    path("public/snapshot/", PublicTrackedSnapshotAPIView.as_view(), name="market-public-snapshot"),
     path("summary/", TrackedSummaryAPIView.as_view(), name="market-summary"),
     path("movers/", TrackedMoversAPIView.as_view(), name="market-movers"),
+    path("movers/live/", LiveTrackedMoversAPIView.as_view(), name="market-movers-live"),
     path("top-turnover/", TrackedTopAPIView.as_view(metric="turnover"), name="market-top-turnover"),
     path("top-volume/", TrackedTopAPIView.as_view(metric="volume"), name="market-top-volume"),
     path("top-transactions/", TrackedTopAPIView.as_view(metric="transactions"), name="market-top-transactions"),

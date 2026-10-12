@@ -221,6 +221,23 @@ class TradingHoliday(models.Model):
         return f"{self.date} - {self.name}"
 
 
+class LiveFeedStatus(models.Model):
+    """
+    Single row: when the NEPSE live feed was last fetched AND saved successfully.
+
+    Kept in the DB (not the cache) because the Celery worker and the web server
+    are separate processes and the project uses Django's per-process cache.
+    """
+
+    last_successful_fetch = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name_plural = "Live feed status"
+
+    def __str__(self):
+        return f"Live feed last fetched {self.last_successful_fetch}"
+
+
 class DividendAnnouncement(models.Model):
     """Proposed bonus / cash dividend for a company and fiscal year. Admin-editable."""
 
