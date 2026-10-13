@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { AlertTriangle, ArrowDown, ArrowUp, Calendar, Info, Minus, RotateCcw } from 'lucide-react';
 import { getIndices, getSubIndices, type IndexRow, type IndexTable } from '../../api/marketIndices';
+import { SectionHeader } from '../common/Section';
 import { changeTone, formatCount, formatNprCompact, formatPct, formatPrice, formatTradeDate } from './format';
 
 // NEPSE main indices and the 13 sub-indices (GET /api/market-indices/indices/ and sub-indices/),
@@ -37,6 +39,8 @@ function PctChip({ pct }: { pct: number | null }) {
 function Delta({ value, format }: { value: number | null; format: (n: number) => string }) {
   return <span className={`font-mono ${toneText[changeTone(value)]}`}>{signed(value, format)}</span>;
 }
+
+const SECTION_ID = 'nepse-indices';
 
 const HEADERS = [
   'Symbol', 'Open', 'High', 'Low', 'Close', 'Ch', 'Ch %', 'Turnover', 'Tu. Ch', 'Tu. Ch %',
@@ -106,6 +110,16 @@ export default function NepseIndices() {
   const [main, setMain] = useState<IndexTable | null>(null);
   const [sub, setSub] = useState<IndexTable | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const sectionRef = useRef<HTMLElement>(null);
+  const { hash } = useLocation();
+
+  // Arriving from the Market Overview cards (/tracked#nepse-indices): scroll here once the
+  // boards have loaded, so their height is known.
+  useEffect(() => {
+    if (hash === `#${SECTION_ID}` && state !== 'loading') {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [hash, state]);
 
   useEffect(() => {
     let cancelled = false;
@@ -129,29 +143,31 @@ export default function NepseIndices() {
   const empty = state === 'ready' && !main?.rows.length && !sub?.rows.length;
 
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary">NEPSE indices</h2>
-          <p className="text-xs text-text-muted">
+    <section id={SECTION_ID} ref={sectionRef} className="scroll-mt-4 space-y-4">
+      <SectionHeader
+        title="NEPSE indices"
+        subtitle={(
+          <>
             Whole NEPSE market, not only the tracked companies
             {asOf ? <> · session {formatTradeDate(asOf)}{previous ? <> vs {formatTradeDate(previous)}</> : null}</> : null}
             {' '}· source: NEPSE
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-xs">
-          <label className="flex items-center gap-2 rounded-lg border border-bg-border bg-bg-elevated px-2.5 py-1.5 text-text-secondary">
-            <Calendar size={13} />
-            <input type="date" value={date} max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setDate(e.target.value)}
-              className="bg-transparent text-text-primary outline-none [color-scheme:dark]" aria-label="Select date" />
-          </label>
-          <button onClick={() => setDate('')} disabled={!date}
-            className="btn-ghost flex items-center gap-1.5 px-2.5 py-1.5 disabled:opacity-40">
-            <RotateCcw size={13} />Reset
-          </button>
-        </div>
-      </div>
+          </>
+        )}
+        action={(
+          <>
+            <label className="flex items-center gap-2 rounded-lg border border-bg-border bg-bg-elevated px-2.5 py-1.5 text-xs text-text-secondary">
+              <Calendar size={13} />
+              <input type="date" value={date} max={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setDate(e.target.value)}
+                className="bg-transparent text-text-primary outline-none [color-scheme:dark]" aria-label="Select date" />
+            </label>
+            <button onClick={() => setDate('')} disabled={!date}
+              className="btn-ghost flex items-center gap-1.5 px-2.5 py-1.5 text-xs disabled:opacity-40">
+              <RotateCcw size={13} />Reset
+            </button>
+          </>
+        )}
+      />
 
       {marketOpen && (
         <p className="flex items-start gap-1.5 rounded-md border border-yellow-400/30 bg-yellow-400/10 px-3 py-2 text-xs text-yellow-400">

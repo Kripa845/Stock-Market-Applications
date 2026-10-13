@@ -21,7 +21,7 @@ export default function MarketHeatmap() {
 
   const maxTurnover = Math.max(1, ...tiles.map((tile) => numeric(tile.turnover) ?? 0));
   return (
-    <section className="card space-y-3 p-4">
+    <section className="card h-full space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-text-primary">Turnover heatmap</h2>

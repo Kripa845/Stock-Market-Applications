@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from unittest import mock
 
@@ -6,6 +6,7 @@ from django.core.management import call_command
 from django.test import TestCase
 from rest_framework.test import APIClient
 
+from apps.market_data.services.live_prices import NPT
 from apps.market_indices.models import IndexDaily
 from apps.market_indices.services import aggregates, nepse_indices
 from apps.users.models import User
@@ -87,3 +88,36 @@ class IndexHistoryTests(TestCase):
             with self.assertRaises(nepse_indices.IndexFeedError):
                 nepse_indices.sync_index_history(date(2026, 10, 1))
         self.assertEqual(IndexDaily.objects.count(), before)
+
+
+class LiveIndexSnapshotTests(TestCase):
+    # Shape of /api/nots/nepse-index after the 2026-10-12 close: "previousClose" equals the
+    # current value there, so the stored previous close must come from value - change.
+    FEED = [
+        {"id": 58, "generatedTime": "2026-10-12T15:16:00.91", "index": "NEPSE Index", "close": 2591.81,
+         "previousClose": 2595.8106, "change": 4.0, "perChange": 0.15, "currentValue": 2595.81},
+        {"id": 57, "generatedTime": "2026-10-12T15:16:00.91", "index": "Sensitive Index",
+         "change": 1.96, "perChange": 0.42, "currentValue": 467.81},
+        {"id": 999, "generatedTime": "2026-10-12T15:16:00.91", "currentValue": 1},  # not catalogued
+    ]
+
+    def setUp(self):
+        call_command("seed_market_indices", stdout=mock.Mock())
+
+    def test_saves_one_point_per_catalogued_index(self):
+        from apps.market_indices.models import IndexIntradayPoint
+
+        self.assertEqual(nepse_indices.snapshot_live_index(self.FEED), {"saved": 2})
+        point = IndexIntradayPoint.objects.get(index__code="NEPSE")
+        self.assertEqual(point.value, Decimal("2595.81"))
+        self.assertEqual(point.previous_close, Decimal("2591.81"))
+        self.assertEqual(point.change_pct, Decimal("0.15"))
+        self.assertEqual(point.recorded_at, datetime(2026, 10, 12, 15, 16, 0, 910000, tzinfo=NPT))  # NEPSE time
+
+    def test_same_timestamp_is_not_duplicated(self):
+        nepse_indices.snapshot_live_index(self.FEED)
+        self.assertEqual(nepse_indices.snapshot_live_index(self.FEED), {"saved": 0})
+
+    def test_empty_feed_raises(self):
+        with self.assertRaises(nepse_indices.IndexFeedError):
+            nepse_indices.snapshot_live_index([])

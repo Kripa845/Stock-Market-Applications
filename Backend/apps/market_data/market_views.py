@@ -20,12 +20,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
+from apps.market_intelligence.services import technical_summary
 from apps.news.views import NewsArticleListAPIView
 from apps.users.company_access import get_accessible_company_ids, require_company_access
 from apps.users.models import WatchlistItem
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
-from .services import live_prices, market_stats, movers
+from .services import live_prices, market_overview, market_stats, movers
 
 CACHE_SECONDS = 60
 SCOPE = "tracked_companies"
@@ -274,3 +275,47 @@ class CompanyNewsAPIView(NewsArticleListAPIView):
         company = get_object_or_404(Company, symbol__iexact=self.kwargs["symbol"], is_active=True)
         require_company_access(self.request.user, company)
         return super().get_queryset().filter(company_tags__company=company).distinct()
+
+
+def _overview_company(request):
+    """None for the NEPSE index (default), else the tracked company named by ?symbol= (access checked)."""
+    symbol = request.query_params.get("symbol", market_overview.INDEX_SYMBOL).strip()
+    if not symbol or symbol.upper() == market_overview.INDEX_SYMBOL:
+        return None
+    return _tracked_company(request, symbol)
+
+
+class MarketOverviewAPIView(APIView):
+    """GET /api/market/overview/?symbol=NEPSE|<tracked symbol> -- card header + tracked-company stats."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        company = _overview_company(request)
+        return _cached(request, lambda ids: market_overview.market_overview(company=company, company_ids=ids))
+
+
+class MarketOverviewChartAPIView(APIView):
+    """GET /api/market/overview/chart/?symbol=&range=1D|1W|1M|3M|6M|1Y|5Y|ALL"""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        range_id = request.query_params.get("range", "1D").strip().upper()
+        if range_id not in market_overview.RANGES:
+            return Response(
+                {"detail": f"range must be one of {', '.join(market_overview.RANGES)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        company = _overview_company(request)
+        return _cached(request, lambda ids: market_overview.chart_series(range_id, company))
+
+
+class MarketOverviewTechnicalAPIView(APIView):
+    """GET /api/market/overview/technical/?symbol= -- indicators, pivots and summary signal."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        company = _overview_company(request)
+        return _cached(request, lambda ids: technical_summary.instrument_technicals(company))

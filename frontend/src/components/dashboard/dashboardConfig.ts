@@ -1,13 +1,19 @@
 import {
-  Building2,
-  Newspaper,
   Activity,
-  Users,
-  TrendingUp,
+  BarChart3,
+  Building2,
+  CheckCircle2,
+  FileText,
+  Landmark,
+  LineChart,
+  Newspaper,
+  PenLine,
   Radio,
   ShieldCheck,
-  BarChart3,
   Star,
+  TrendingUp,
+  Users,
+  XCircle,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -24,11 +30,13 @@ export interface DashboardCardData {
   type?: DashboardCardType;
   badge?: string;
   iconColor?: string;
+  /** How a stat value is shown: plain count (default) or a signed percentage. */
+  format?: 'count' | 'percent';
   /**
-   * The permission key the user must have for this card to appear.
-   * If undefined the card is always shown (e.g. the dashboard itself).
+   * Permission key(s) the user must ALL have for this card to appear. Use the same keys as
+   * the destination route in config/routePermissions.ts. Undefined = always shown.
    */
-  requiredPermission?: string;
+  requiredPermission?: string | string[];
 }
 
 export interface DashboardSectionData {
@@ -60,18 +68,18 @@ export const universalDashboardConfig: DashboardConfig = {
   subtitle: 'Your personalised market intelligence overview.',
   sections: [
     // -----------------------------------------------------------------------
-    // Section 1 — System Stats (admin-level metrics)
+    // Section 1 - At a glance: one row of headline numbers
     // -----------------------------------------------------------------------
     {
-      id: 'system-overview',
-      title: 'System Overview',
-      description: 'Key operational metrics.',
-      requiredAnyPermission: ['view_users', 'view_crawl_runs', 'view_companies'],
+      id: 'overview',
+      title: 'At a glance',
+      description: 'Headline numbers for your tracked companies and content.',
+      requiredAnyPermission: ['view_companies', 'view_market_data', 'view_watchlist', 'view_news'],
       cards: [
         {
           id: 'total-companies',
-          title: 'Total Companies',
-          description: 'View tracked companies',
+          title: 'Companies',
+          description: 'Companies in the system',
           route: '/companies',
           icon: Building2,
           type: 'stat',
@@ -80,146 +88,80 @@ export const universalDashboardConfig: DashboardConfig = {
           requiredPermission: 'view_companies',
         },
         {
-          id: 'total-news',
-          title: 'Total News Articles',
-          description: 'Browse all articles',
-          route: '/news',
-          icon: Newspaper,
-          type: 'stat',
-          dataPath: 'totalNews',
-          iconColor: 'text-accent-light',
-          requiredPermission: 'view_news',
-        },
-        {
-          id: 'crawl-runs-today',
-          title: 'Crawl Runs Today',
-          description: 'Monitor crawling activity',
-          route: '/crawl',
-          icon: Activity,
-          type: 'stat',
-          dataPath: 'activeCrawlRuns',
-          iconColor: 'text-yellow-400',
-          requiredPermission: 'view_crawl_runs',
-        },
-        {
-          id: 'total-users',
-          title: 'Total Users',
-          description: 'Manage user accounts',
-          route: '/users',
-          icon: Users,
-          type: 'stat',
-          dataPath: 'totalUsers',
-          iconColor: 'text-accent-light',
-          requiredPermission: 'view_users',
-        },
-      ],
-    },
-
-    // -----------------------------------------------------------------------
-    // Section 2 — Market Data
-    // -----------------------------------------------------------------------
-    {
-      id: 'market-data',
-      title: 'Market Data',
-      description: 'End-of-day data for the tracked companies, from crawled closing prices.',
-      requiredAnyPermission: ['view_market_data', 'view_price_history', 'view_trading_volume'],
-      cards: [
-        {
-          id: 'market-overview',
-          title: 'Tracked avg. change %',
+          id: 'market-change',
+          title: 'Tracked avg. change',
           description: 'Average latest-session change of the tracked companies',
           route: '/market',
           icon: TrendingUp,
           type: 'stat',
           dataPath: 'marketChange',
+          format: 'percent',
           badge: 'Latest close',
           iconColor: 'text-up',
-          requiredPermission: 'view_market_data',
-        },
-        {
-          id: 'top-stocks',
-          title: 'Top Gainers / Losers',
-          description: 'See stock performance',
-          route: '/companies',
-          icon: TrendingUp,
-          type: 'stat',
-          iconColor: 'text-accent-light',
-          requiredPermission: 'view_market_data',
+          requiredPermission: ['view_companies', 'view_market_data'],
         },
         {
           id: 'watchlist',
           title: 'Watchlist',
-          description: 'Companies you are tracking',
+          description: 'Companies on your watchlist',
           route: '/watchlist',
           icon: Star,
           type: 'stat',
           dataPath: 'trackedCompanies',
           iconColor: 'text-yellow-400',
-          requiredPermission: 'view_watchlist',
+          requiredPermission: ['view_watchlist', 'view_companies'],
         },
-      ],
-    },
-
-    // -----------------------------------------------------------------------
-    // Section 3 — News
-    // -----------------------------------------------------------------------
-    {
-      id: 'news',
-      title: 'News & Categorisation',
-      description: 'Latest market news and AI categorisation.',
-      requiredAnyPermission: ['view_news', 'categorize_news', 'correct_categories'],
-      cards: [
         {
-          id: 'news-feed',
-          title: 'News Feed',
-          description: 'Latest crawled articles',
+          id: 'total-news',
+          title: 'News articles',
+          description: 'Crawled and categorised articles',
           route: '/news',
           icon: Newspaper,
           type: 'stat',
           dataPath: 'totalNews',
-          iconColor: 'text-accent-light',
+          iconColor: 'text-sky-400',
           requiredPermission: 'view_news',
-        },
-        {
-          id: 'news-corrections',
-          title: 'Category Corrections',
-          description: 'Review pending corrections',
-          route: '/news',
-          icon: Newspaper,
-          type: 'stat',
-          dataPath: 'correctionsCount',
-          iconColor: 'text-yellow-400',
-          requiredPermission: 'correct_categories',
         },
       ],
     },
 
     // -----------------------------------------------------------------------
-    // Section 5 — Crawler
+    // Section 2 - Data pipeline
     // -----------------------------------------------------------------------
     {
-      id: 'crawler',
-      title: 'Crawler',
-      description: 'Data collection pipeline status.',
-      requiredAnyPermission: ['view_crawl_runs', 'run_crawler'],
+      id: 'pipeline',
+      title: 'Data pipeline',
+      description: 'Crawler runs that collect prices, floorsheets and news.',
+      requiredAnyPermission: ['view_crawl_runs'],
       cards: [
         {
-          id: 'crawl-status',
-          title: 'Crawl Status',
-          description: 'Monitor crawler runs',
+          id: 'crawl-runs-today',
+          title: 'Runs today',
+          description: 'Crawl runs started today',
           route: '/crawl',
-          icon: Radio,
+          icon: Activity,
           type: 'stat',
-          dataPath: 'activeCrawlRuns',
+          dataPath: 'crawlRunsToday',
           iconColor: 'text-accent-light',
           requiredPermission: 'view_crawl_runs',
         },
         {
-          id: 'crawl-success',
-          title: 'Successful Crawls',
-          description: 'Total successful crawl runs',
+          id: 'crawl-active',
+          title: 'Running now',
+          description: 'Crawl runs in progress',
           route: '/crawl',
-          icon: Activity,
+          icon: Radio,
+          type: 'stat',
+          dataPath: 'activeCrawlRuns',
+          iconColor: 'text-yellow-400',
+          requiredPermission: 'view_crawl_runs',
+        },
+        {
+          id: 'crawl-success',
+          title: 'Successful',
+          description: 'Crawl runs that finished',
+          route: '/crawl',
+          icon: CheckCircle2,
           type: 'stat',
           dataPath: 'successfulCrawls',
           iconColor: 'text-up',
@@ -227,10 +169,10 @@ export const universalDashboardConfig: DashboardConfig = {
         },
         {
           id: 'crawl-failed',
-          title: 'Failed Crawls',
+          title: 'Failed',
           description: 'Crawl runs that failed',
           route: '/crawl',
-          icon: Activity,
+          icon: XCircle,
           type: 'stat',
           dataPath: 'failedCrawls',
           iconColor: 'text-down',
@@ -240,56 +182,117 @@ export const universalDashboardConfig: DashboardConfig = {
     },
 
     // -----------------------------------------------------------------------
-    // Section 6 — Administration
+    // Section 3 - Administration numbers
     // -----------------------------------------------------------------------
     {
-      id: 'admin-tools',
+      id: 'admin',
       title: 'Administration',
-      description: 'User management and access control.',
-      requiredAnyPermission: ['view_users', 'view_roles'],
+      description: 'Accounts and items waiting for review.',
+      requiredAnyPermission: ['view_users', 'correct_categories'],
       cards: [
         {
-          id: 'user-management',
-          title: 'User Management',
-          description: 'Manage user accounts',
+          id: 'total-users',
+          title: 'Users',
+          description: 'Registered accounts',
           route: '/users',
           icon: Users,
           type: 'stat',
           dataPath: 'totalUsers',
-          iconColor: 'text-yellow-400',
+          iconColor: 'text-accent-light',
           requiredPermission: 'view_users',
         },
         {
-          id: 'roles-permissions',
-          title: 'Roles & Permissions',
-          description: 'Control access rights',
-          route: '/roles-permissions',
-          icon: ShieldCheck,
+          id: 'news-corrections',
+          title: 'Category corrections',
+          description: 'News categories corrected by reviewers',
+          route: '/news',
+          icon: PenLine,
           type: 'stat',
-          iconColor: 'text-accent-light',
-          requiredPermission: 'view_roles',
+          dataPath: 'correctionsCount',
+          iconColor: 'text-yellow-400',
+          requiredPermission: ['correct_categories', 'view_news'],
         },
       ],
     },
 
     // -----------------------------------------------------------------------
-    // Section 7 — Reports
+    // Section 4 - Quick links (pages without one headline number)
     // -----------------------------------------------------------------------
     {
-      id: 'reports',
-      title: 'Reports',
-      description: 'Generated reports and exports.',
-      requiredAnyPermission: ['view_reports'],
+      id: 'shortcuts',
+      title: 'Quick links',
       cards: [
         {
-          id: 'reports-overview',
-          title: 'Reports',
-          description: 'View generated reports',
-          route: '/reports',
+          id: 'link-market',
+          title: 'Market Overview',
+          description: 'NEPSE, gainers, losers, turnover, volume and trades',
+          route: '/market',
+          icon: LineChart,
+          type: 'quick-action',
+          requiredPermission: ['view_companies', 'view_market_data'],
+        },
+        {
+          id: 'link-tracked',
+          title: 'Tracked Companies',
+          description: 'Movers, signals and broker activity per company',
+          route: '/tracked',
+          icon: Building2,
+          type: 'quick-action',
+          requiredPermission: 'view_market_data',
+        },
+        {
+          id: 'link-brokers',
+          title: 'Broker Analysis',
+          description: 'Buy, sell and net activity from the floorsheet',
+          route: '/broker-analysis',
+          icon: Landmark,
+          type: 'quick-action',
+          requiredPermission: 'view_analysis',
+        },
+        {
+          id: 'link-analysis',
+          title: 'Company Analysis',
+          description: 'Price, volume and news for one company',
+          route: '/company-analysis',
           icon: BarChart3,
-          type: 'stat',
-          iconColor: 'text-accent-light',
-          requiredPermission: 'view_reports',
+          type: 'quick-action',
+          requiredPermission: ['view_analysis', 'view_companies', 'view_price_history', 'view_market_data'],
+        },
+        {
+          id: 'link-news',
+          title: 'News Feed',
+          description: 'Latest crawled articles',
+          route: '/news',
+          icon: Newspaper,
+          type: 'quick-action',
+          requiredPermission: 'view_news',
+        },
+        {
+          id: 'link-crawl',
+          title: 'Crawl Management',
+          description: 'Start and monitor crawler runs',
+          route: '/crawl',
+          icon: Activity,
+          type: 'quick-action',
+          requiredPermission: 'view_crawl_runs',
+        },
+        {
+          id: 'link-reports',
+          title: 'Reports',
+          description: 'Generated reports and exports',
+          route: '/reports',
+          icon: FileText,
+          type: 'quick-action',
+          requiredPermission: ['view_reports', 'export_reports'],
+        },
+        {
+          id: 'link-roles',
+          title: 'Roles & Permissions',
+          description: 'Control access rights',
+          route: '/roles-permissions',
+          icon: ShieldCheck,
+          type: 'quick-action',
+          requiredPermission: 'view_roles',
         },
       ],
     },

@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowDown, ArrowDownRight, ArrowUp, ArrowUpRight, Chevro
 import { format, formatDistanceToNow } from 'date-fns';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
+import Section, { SectionHeader } from '../components/common/Section';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import BrokerBadge from '../components/brokers/BrokerBadge';
 import BasketChart from '../components/market/BasketChart';
@@ -37,7 +38,7 @@ function Change({ pct }: { pct: number | null }) {
 
 function Tile({ label, value, tone, hint }: { label: string; value: React.ReactNode; tone?: string; hint?: string }) {
   return (
-    <div className="card p-4" title={hint}>
+    <div className="card h-full" title={hint}>
       <div className="truncate text-xs text-text-muted">{label}</div>
       <div className={`mt-1 whitespace-nowrap font-mono text-lg font-semibold ${tone ?? 'text-text-primary'}`}>{value}</div>
     </div>
@@ -53,7 +54,7 @@ function SummaryTiles({ summary }: { summary: TrackedSummary }) {
       {summary.warning && (
         <p className="flex items-start gap-1.5 text-xs text-yellow-400"><AlertTriangle size={13} className="mt-px shrink-0" />{summary.warning}</p>
       )}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 2xl:grid-cols-8">
         <Tile label="Tracked companies" value={summary.tracked_count} />
         <Tile label="Advanced" value={summary.advanced} tone="text-up" />
         <Tile label="Declined" value={summary.declined} tone="text-down" />
@@ -137,7 +138,7 @@ function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onT
   const shown = expanded ? rows : rows.slice(0, MOVERS_COLLAPSED);
   const canExpand = rows.length > MOVERS_COLLAPSED;
   return (
-    <div className="card">
+    <div className="card h-full">
       <div className="mb-4 flex items-center justify-between gap-2">
         <h3 className={`rounded-md px-3 py-1.5 text-sm font-semibold ${up ? 'bg-up/15 text-up' : 'bg-down/15 text-down'}`}>{title}</h3>
         <div className="flex items-center gap-2">
@@ -311,27 +312,25 @@ function MoversSection({ selected, onSelect, watched, onToggleWatch, onLoaded }:
 
   const crawl = data?.provenance.last_price_crawl;
   return (
-    <section className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold text-text-primary">Tracked gainers and losers</h2>
-          <p className="text-xs text-text-muted">
-            {period === 'LIVE'
-              ? 'Live from NEPSE · tracked companies only'
-              : data?.as_of
-              ? <>As of {formatTradeDate(data.as_of)}{data.base_date ? <> vs {formatTradeDate(data.base_date)}</> : null} · tracked companies only</>
-              : 'Tracked companies only'}
-          </p>
-        </div>
-        <div className="flex gap-1 rounded-lg bg-bg-elevated p-0.5 text-xs">
-          {PERIOD_TABS.map((tab) => (
-            <button key={tab.period} onClick={() => setPeriod(tab.period)}
-              className={`rounded-md px-2.5 py-1 ${period === tab.period ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <section className="space-y-4">
+      <SectionHeader
+        title="Gainers & losers"
+        subtitle={period === 'LIVE'
+          ? 'Live from NEPSE · tracked companies only'
+          : data?.as_of
+          ? <>As of {formatTradeDate(data.as_of)}{data.base_date ? <> vs {formatTradeDate(data.base_date)}</> : null} · tracked companies only</>
+          : 'Tracked companies only'}
+        action={(
+          <div className="flex gap-1 rounded-lg bg-bg-elevated p-0.5 text-xs">
+            {PERIOD_TABS.map((tab) => (
+              <button key={tab.period} onClick={() => setPeriod(tab.period)}
+                className={`rounded-md px-2.5 py-1 ${period === tab.period ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+      />
 
       {period === 'LIVE' && <LiveMovers selected={selected} onSelect={onSelect} watched={watched} onToggleWatch={onToggleWatch} />}
       {period !== 'LIVE' && state === 'loading' && <div className="card py-10 text-center text-sm text-text-muted">Loading tracked movers…</div>}
@@ -413,7 +412,7 @@ function TopLists() {
 
   const tab = TOP_TABS.find((t) => t.metric === metric)!;
   return (
-    <div className="card">
+    <div className="card h-full">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-text-primary">Top 5 by</h2>
         <div className="flex gap-1 rounded-lg bg-bg-elevated p-0.5 text-xs">
@@ -610,17 +609,20 @@ function CompanyDetail({ symbol, company }: { symbol: string; company?: TrackedR
   if (!canAnalyse && !canNews) return null;
   return (
     <section className="space-y-4">
-      <h2 className="text-lg font-semibold text-text-primary">
-        <span className="inline-flex items-center gap-2 align-middle">
-          <CompanyLogo symbol={symbol} name={company?.name} logoUrl={company?.logo_url ?? null} size="md" />
-          <span className="font-mono text-accent-light">{symbol}</span>
-        </span>{' '}in detail
-      </h2>
+      <SectionHeader
+        title={(
+          <>
+            <CompanyLogo symbol={symbol} name={company?.name} logoUrl={company?.logo_url ?? null} size="sm" />
+            <span className="font-mono normal-case text-accent-light">{symbol}</span> in detail
+          </>
+        )}
+        subtitle={company?.name ? `${company.name} · signals, broker activity and news` : 'Signals, broker activity and news'}
+      />
       {canAnalyse && signals && <SignalsCard signals={signals} />}
       <div className="grid gap-4 xl:grid-cols-[3fr_2fr]">
         {canAnalyse && brokers && <BrokersCard key={symbol} windows={brokers.windows} denominator={brokers.share_denominator} />}
         {canNews && (
-          <div className="card">
+          <div className="card h-full">
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Latest news about {symbol}</h3>
             {news === null ? <p className="text-xs text-text-muted">Loading…</p> : news.length === 0 ? (
               <p className="text-xs text-text-muted">No categorised news for this company yet.</p>
@@ -646,7 +648,6 @@ function CompanyDetail({ symbol, company }: { symbol: string; company?: TrackedR
 function DividendsCard({ rows }: { rows: DividendRow[] }) {
   return (
     <div className="card overflow-x-auto">
-      <h2 className="mb-3 text-sm font-semibold text-text-primary">Proposed dividends</h2>
       {rows.length === 0 ? (
         <p className="py-4 text-center text-xs text-text-muted">No dividend announcements recorded yet. Admins can add them in Django admin.</p>
       ) : (
@@ -681,7 +682,7 @@ function DividendsCard({ rows }: { rows: DividendRow[] }) {
 
 function WatchlistCard({ rows, canRemove, onRemove }: { rows: WatchlistRow[]; canRemove: boolean; onRemove: (symbol: string) => void }) {
   return (
-    <div className="card">
+    <div className="card h-full">
       <h2 className="mb-3 text-sm font-semibold text-text-primary">My watchlist</h2>
       {rows.length === 0 ? (
         <p className="py-4 text-center text-xs text-text-muted">Star a company in the table to follow it here.</p>
@@ -774,8 +775,9 @@ export default function TrackedCompaniesPage() {
   };
 
   const tradeDate = summary?.trade_date ?? null;
+  const sideCards = [basket, true, canViewWatchlist && watchlist].filter(Boolean).length;
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         title="Tracked Companies"
         subtitle={`Closing data for the companies StockScope tracks — not the whole NEPSE market.${tradeDate ? ` As of ${formatTradeDate(tradeDate)}.` : ''}`}
@@ -791,35 +793,44 @@ export default function TrackedCompaniesPage() {
         <EmptyState title="No crawled prices yet" description={`${summary.reason ?? ''}. ${summary.action ?? ''}`} />
       )}
 
-      {summary?.trade_date && <SummaryTiles summary={summary} />}
+      {summary?.trade_date && (
+        <Section title="Session summary" subtitle={`Tracked companies · ${formatTradeDate(summary.trade_date)}`}>
+          <SummaryTiles summary={summary} />
+        </Section>
+      )}
 
-      <NepseIndices key={`indices-${reloadKey}`} />
+      <MoversSection
+        key={reloadKey}
+        selected={selected}
+        onSelect={setSelected}
+        watched={canAdd || canRemove ? watched : null}
+        onToggleWatch={toggleWatch}
+        onLoaded={onMoversLoaded}
+      />
 
-      <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
-        <MoversSection
-          key={reloadKey}
-          selected={selected}
-          onSelect={setSelected}
-          watched={canAdd || canRemove ? watched : null}
-          onToggleWatch={toggleWatch}
-          onLoaded={onMoversLoaded}
-        />
-        <div className="space-y-4">
+      <Section title="Basket, top lists & watchlist" subtitle="The tracked companies as one index, their top 5, and the companies you follow">
+        <div className={`grid items-stretch gap-4 ${sideCards >= 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
           {basket && (
-            <div className="card">
+            <div className="card h-full">
               <h2 className="text-sm font-semibold text-text-primary">{basket.label}</h2>
               <p className="mb-3 text-[11px] text-text-muted">Index of the tracked companies, base 1000. Not the NEPSE index.</p>
-              <BasketChart rows={basket.rows} height={130} />
+              <BasketChart rows={basket.rows} height={180} />
             </div>
           )}
           <TopLists key={reloadKey} />
           {canViewWatchlist && watchlist && <WatchlistCard rows={watchlist} canRemove={canRemove} onRemove={toggleWatch} />}
         </div>
-      </div>
+      </Section>
 
       {selected && <CompanyDetail symbol={selected} company={companiesBySymbol[selected]} />}
 
-      {dividends && <DividendsCard rows={dividends} />}
+      {dividends && (
+        <Section title="Proposed dividends" subtitle="Bonus and cash dividends announced by the tracked companies">
+          <DividendsCard rows={dividends} />
+        </Section>
+      )}
+
+      <NepseIndices key={`indices-${reloadKey}`} />
     </div>
   );
 }

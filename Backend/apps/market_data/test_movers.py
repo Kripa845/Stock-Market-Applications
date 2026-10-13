@@ -172,6 +172,24 @@ class RankingTests(MoversFixture):
         self.assertEqual(result["gainers_count"], 4)
         self.assert_reconciles(result)
 
+    def test_top_lists_sort_numerically_desc_with_unknown_trades_last(self):
+        # Values chosen so text sorting ("9" > "10...") or ascending order would fail.
+        for symbol, volume, turnover, trades in (
+            ("A", 9, 900, None), ("B", 10000, 25_200_000, 9), ("C", 120, 4_000_000, 1000),
+        ):
+            self.add(symbol, MONDAY, 100)
+            row = self.add(symbol, TUESDAY, 100, volume=volume, turnover=turnover)
+            DailyPrice.objects.filter(pk=row.pk).update(transactions=trades)
+        self.add("IDLE", MONDAY, 100); self.add("IDLE", TUESDAY, 100, volume=0, turnover=0)
+
+        def top(metric):
+            return self.symbols(movers.top_by(metric)["rows"])
+
+        self.assertEqual(top("turnover"), ["B", "C", "A"])
+        self.assertEqual(top("volume"), ["B", "C", "A"])
+        self.assertEqual(top("transactions"), ["C", "B", "A"])   # NULL trade count last, IDLE excluded
+        self.assertEqual(movers.top_by("volume", limit=1)["rows"][0]["volume"], 10000)
+
 
 class SourceChangeTests(MoversFixture):
 

@@ -7,6 +7,9 @@ from .market_views import (
     CompanySignalsAPIView,
     DividendListAPIView,
     LiveTrackedMoversAPIView,
+    MarketOverviewAPIView,
+    MarketOverviewChartAPIView,
+    MarketOverviewTechnicalAPIView,
     TrackedMoversAPIView,
     TrackedSummaryAPIView,
     TrackedTopAPIView,
@@ -16,6 +19,9 @@ from .market_views import (
 # Mounted at /api/market/ -- tracked companies only (see market_views).
 urlpatterns = [
     path("summary/", TrackedSummaryAPIView.as_view(), name="market-summary"),
+    path("overview/", MarketOverviewAPIView.as_view(), name="market-overview"),
+    path("overview/chart/", MarketOverviewChartAPIView.as_view(), name="market-overview-chart"),
+    path("overview/technical/", MarketOverviewTechnicalAPIView.as_view(), name="market-overview-technical"),
     path("movers/", TrackedMoversAPIView.as_view(), name="market-movers"),
     path("movers/live/", LiveTrackedMoversAPIView.as_view(), name="market-movers-live"),
     path("top-turnover/", TrackedTopAPIView.as_view(metric="turnover"), name="market-top-turnover"),

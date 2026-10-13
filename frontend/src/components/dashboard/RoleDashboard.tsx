@@ -3,10 +3,21 @@ import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDashboardData, resolveDataPath } from '../../hooks/useDashboardData';
 import PageHeader from '../common/PageHeader';
+import { SectionHeader } from '../common/Section';
 import { universalDashboardConfig } from './dashboardConfig';
 import type { DashboardCardData, DashboardSectionData } from './dashboardConfig';
 import DashboardCard from './DashboardCard';
 import QuickActionCard from './QuickActionCard';
+import { formatCount, formatPct } from '../market/format';
+
+// Stat grids sized to the number of visible cards, so a row is never left ragged
+// (full class names so Tailwind keeps them).
+const STAT_GRID: Record<number, string> = {
+  1: 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4',
+  2: 'grid-cols-1 sm:grid-cols-2',
+  3: 'grid-cols-1 sm:grid-cols-3',
+  4: 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4',
+};
 
 // ---------------------------------------------------------------------------
 // Helper — resolve the best dashboard route prefix based on the user's role.
@@ -50,12 +61,11 @@ export default function RoleDashboard({ role: _roleProp }: RoleDashboardProps) {
   const isLoading = authLoading || loading;
 
   const resolveValue = useCallback(
-    (dataPath?: string): string | number => {
-      if (!stats || !dataPath) return '—';
-      const raw = resolveDataPath(stats as unknown as Record<string, unknown>, dataPath);
+    (card: DashboardCardData): string => {
+      if (!stats || !card.dataPath) return '—';
+      const raw = resolveDataPath(stats as unknown as Record<string, unknown>, card.dataPath);
       if (raw === undefined || raw === null) return '—';
-      if (typeof raw === 'number') return raw;
-      if (typeof raw === 'string') return raw;
+      if (typeof raw === 'number') return card.format === 'percent' ? formatPct(raw) : formatCount(raw);
       return String(raw);
     },
     [stats],
@@ -66,7 +76,8 @@ export default function RoleDashboard({ role: _roleProp }: RoleDashboardProps) {
   // -------------------------------------------------------------------------
   const canSeeCard = (card: DashboardCardData): boolean => {
     if (!card.requiredPermission) return true;
-    return hasPermission(card.requiredPermission);
+    const required = Array.isArray(card.requiredPermission) ? card.requiredPermission : [card.requiredPermission];
+    return required.every((permission) => hasPermission(permission));
   };
 
   const canSeeSection = (section: DashboardSectionData): boolean => {
@@ -96,7 +107,7 @@ export default function RoleDashboard({ role: _roleProp }: RoleDashboardProps) {
     (role ? role.charAt(0).toUpperCase() + role.slice(1) : 'My');
 
   return (
-    <div key={refreshKey} className="space-y-6">
+    <div key={refreshKey} className="space-y-8">
       {error && (
         <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-down">
           {error}
@@ -131,20 +142,11 @@ export default function RoleDashboard({ role: _roleProp }: RoleDashboardProps) {
         const quickActions = visibleCards.filter((c) => c.type === 'quick-action');
 
         return (
-          <div key={section.id} className="space-y-4">
-            <div>
-              <h2 className="text-base font-semibold text-text-primary">
-                {section.title}
-              </h2>
-              {section.description && (
-                <p className="text-sm text-text-secondary mt-0.5">
-                  {section.description}
-                </p>
-              )}
-            </div>
+          <section key={section.id} className="space-y-4">
+            <SectionHeader title={section.title} subtitle={section.description} />
 
             {statCards.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 xl:gap-4 gap-4">
+              <div className={`grid gap-4 ${STAT_GRID[Math.min(statCards.length, 4)]}`}>
                 {statCards.map((card) => (
                   <DashboardCard
                     key={card.id}
@@ -152,14 +154,14 @@ export default function RoleDashboard({ role: _roleProp }: RoleDashboardProps) {
                       ...card,
                       route: resolveDashboardRoute(card.route, role ?? ''),
                     }}
-                    value={resolveValue(card.dataPath)}
+                    value={resolveValue(card)}
                   />
                 ))}
               </div>
             )}
 
             {quickActions.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {quickActions.map((card) => (
                   <QuickActionCard
                     key={card.id}
@@ -171,12 +173,12 @@ export default function RoleDashboard({ role: _roleProp }: RoleDashboardProps) {
                 ))}
               </div>
             )}
-          </div>
+          </section>
         );
       })}
 
       {/* Empty state — user has no permissions at all */}
-      {config.sections.every((s) => !canSeeSection(s)) && (
+      {config.sections.every((s) => !canSeeSection(s) || !s.cards.some(canSeeCard)) && (
         <div className="card flex flex-col items-center gap-4 py-16 text-center">
           <AlertCircle size={48} className="text-text-muted" />
           <div>

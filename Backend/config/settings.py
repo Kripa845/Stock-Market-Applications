@@ -295,6 +295,17 @@ CELERY_BEAT_SCHEDULE = {
         "schedule": crontab(minute="0,5,10", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
         "options": {"expires": 100},
     },
+    # ---- Live NEPSE index (Market Overview header + 1D chart) ----
+    "snapshot-live-index-market-hours": {
+        "task": "apps.market_indices.tasks.snapshot_live_index",
+        "schedule": crontab(minute="*/2", hour="11-14", day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 100},
+    },
+    "snapshot-live-index-at-close": {
+        "task": "apps.market_indices.tasks.snapshot_live_index",
+        "schedule": crontab(minute="0,5,10", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 100},
+    },
     "finalize-intraday-candles-after-close": {
         "task": "apps.market_data.tasks.finalize_intraday_candles",
         "schedule": crontab(minute=30, hour=15, day_of_week=TRADING_DAYS_CRONTAB),

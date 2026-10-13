@@ -25,12 +25,28 @@ from celery import shared_task
 logger = logging.getLogger(__name__)
 
 
+# Recent sessions still missing a trade count are retried from NEPSE on every run;
+# older gaps are left to `manage.py backfill_price_fields --nepse`.
+NEPSE_RECENT_SESSIONS = 10
+
+
 @shared_task(name="apps.market_data.tasks.derive_price_fields_task")
 def derive_price_fields_task():
-    """Fill DailyPrice.transactions from the floorsheet after a price or floorsheet crawl."""
-    from apps.market_data.services.price_fields import derive_price_fields
+    """Fill DailyPrice.transactions after a price or floorsheet crawl (floorsheet, then NEPSE)."""
+    from apps.market_data.services.live_prices import LivePriceError
+    from apps.market_data.services.price_fields import (
+        derive_price_fields,
+        fill_transactions_from_nepse,
+        missing_transaction_dates,
+    )
 
-    result = derive_price_fields()
+    result = {"floorsheet": derive_price_fields()}
+    try:
+        result["nepse"] = fill_transactions_from_nepse(missing_transaction_dates(limit=NEPSE_RECENT_SESSIONS))
+    except LivePriceError as exc:
+        # The floorsheet counts above still stand; the next run retries these dates.
+        logger.warning("derive_price_fields_task: %s", exc)
+        result["nepse"] = {"skipped": True, "reason": str(exc)}
     logger.info("derive_price_fields_task: %s", result)
     return result
 

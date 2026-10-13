@@ -14,7 +14,7 @@ export default function MarketBreadthWidget() {
   }, []);
 
   return (
-    <section className="card space-y-3 p-4">
+    <section className="card h-full space-y-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-text-primary">Market breadth</h2>
@@ -26,7 +26,7 @@ export default function MarketBreadthWidget() {
       {!data && !error && <p className="text-xs text-text-secondary">Loading breadth…</p>}
       {data && (
         <>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-2">
             {([
               ['Advances', data.advances, 'text-up'], ['Declines', data.declines, 'text-down'],
               ['Above 50 DMA', `${pct(data.above_50_dma_pct)} (${data.valid_50_dma_count})`, 'text-text-primary'],

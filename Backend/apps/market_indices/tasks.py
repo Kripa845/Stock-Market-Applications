@@ -74,3 +74,20 @@ def sync_indices_from_nepse():
     cache.delete_many(["mi:indices:latest", "mi:sub-indices:latest"])
     logger.info("sync_indices_from_nepse: %s", result)
     return result
+
+
+@shared_task(name="apps.market_indices.tasks.snapshot_live_index")
+def snapshot_live_index_task():
+    """Every 2 minutes in the session: NEPSE's live index values (1D chart and overview header)."""
+    from apps.market_indices.services.nepse_indices import IndexFeedError, snapshot_live_index
+
+    reason = market_closed_reason()
+    if reason:
+        return {"skipped": True, "reason": reason}
+    try:
+        result = snapshot_live_index()
+    except IndexFeedError as exc:
+        logger.warning("snapshot_live_index: %s", exc)
+        return {"skipped": True, "reason": str(exc)}
+    logger.info("snapshot_live_index: %s", result)
+    return result

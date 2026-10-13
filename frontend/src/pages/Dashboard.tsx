@@ -1,38 +1,90 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { analysisApi, type BrokerAnalysisResponse } from '../api/analysis';
+import { analysisApi, type BrokerActivity, type BrokerAnalysisResponse } from '../api/analysis';
+import BrokerBadge from '../components/brokers/BrokerBadge';
+import { formatCount, formatTradeDate } from '../components/market/format';
 import RoleDashboard from '../components/dashboard/RoleDashboard';
+import Section from '../components/common/Section';
 
 /**
  * Single unified dashboard for all roles.
  * RoleDashboard reads the user's actual permissions from AuthContext and
  * renders only the widgets the user is permitted to see.
  */
-export default function Dashboard() {
-  const { hasPermission } = useAuth();
-  const canViewBrokerActivity = hasPermission('view_analysis');
+
+interface BrokerTile {
+  label: string;
+  row: BrokerActivity | undefined;
+  value: (row: BrokerActivity) => string;
+  tone: string;
+}
+
+function BrokerHighlight({ label, row, value, tone }: BrokerTile) {
+  return (
+    <div className="card flex h-full flex-col gap-3">
+      <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">{label}</p>
+      {row ? (
+        <>
+          <Link to={`/broker-analysis/${encodeURIComponent(row.broker)}`} className="min-w-0 text-sm hover:opacity-80">
+            <BrokerBadge brokerCode={row.broker_code || row.broker} name={row.broker_name || row.name}
+              shortName={row.short_name} logoUrl={row.logo_url} />
+          </Link>
+          <p className={`font-mono text-lg font-bold ${tone}`}>{value(row)}</p>
+        </>
+      ) : (
+        <p className="text-sm text-text-muted">—</p>
+      )}
+    </div>
+  );
+}
+
+function BrokerSection() {
   const [data, setData] = useState<BrokerAnalysisResponse | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!canViewBrokerActivity) return;
     analysisApi.getBrokerAnalysis({ page: 1 }).then(setData).catch(() => setError(true));
-  }, [canViewBrokerActivity]);
+  }, []);
 
-  const buyer = data?.most_active_buyers[0];
-  const seller = data?.most_active_sellers[0];
-  const netBuyer = data?.top_net_buyers[0];
-  const netSeller = data?.top_net_sellers[0];
-  const activity = [
-    ['Most Active Buyer', buyer ? `Broker #${buyer.broker} · ${buyer.buy_quantity.toLocaleString()} buy-side qty` : '—', 'text-up'],
-    ['Most Active Seller', seller ? `Broker #${seller.broker} · ${seller.sell_quantity.toLocaleString()} sell-side qty` : '—', 'text-down'],
-    ['Top Net Buyer', netBuyer ? `Broker #${netBuyer.broker} · +${netBuyer.net_quantity.toLocaleString()}` : '—', 'text-up'],
-    ['Top Net Seller', netSeller ? `Broker #${netSeller.broker} · ${netSeller.net_quantity.toLocaleString()}` : '—', 'text-down'],
-  ] as const;
+  const dates = data?.sampled_dates ?? [];
+  const range = dates.length
+    ? `${dates.length} floorsheet sessions · ${formatTradeDate(dates[dates.length - 1])} – ${formatTradeDate(dates[0])}`
+    : 'Floorsheet sessions';
+  const tiles: BrokerTile[] = data ? [
+    { label: 'Most active buyer', row: data.most_active_buyers[0], value: (r) => `${formatCount(r.buy_quantity)} shares bought`, tone: 'text-up' },
+    { label: 'Most active seller', row: data.most_active_sellers[0], value: (r) => `${formatCount(r.sell_quantity)} shares sold`, tone: 'text-down' },
+    { label: 'Top net buyer', row: data.top_net_buyers[0], value: (r) => `+${formatCount(r.net_quantity)} net`, tone: 'text-up' },
+    { label: 'Top net seller', row: data.top_net_sellers[0], value: (r) => `${formatCount(r.net_quantity)} net`, tone: 'text-down' },
+  ] : [];
 
-  return <div className="space-y-5"><RoleDashboard />{canViewBrokerActivity && <section className="card">
-    <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-semibold text-text-primary">Floorsheet / Broker Behavior</h2><p className="text-[11px] text-text-muted">Sampled trading sessions only</p></div><Link to="/broker-analysis" className="text-xs text-accent-light hover:underline">View All Broker Analysis →</Link></div>
-    {error ? <p className="text-xs text-text-muted">Broker activity is temporarily unavailable.</p> : !data ? <p className="text-xs text-text-muted">Loading sampled broker activity…</p> : data.summary.sampled_trading_days === 0 ? <p className="text-xs text-text-muted">No floorsheet data has been collected yet.</p> : <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{activity.map(([label, value, color]) => <div key={label} className="rounded border border-bg-border p-3"><p className="text-[10px] uppercase tracking-widest text-text-muted">{label}</p><p className={`mt-1 text-xs font-mono ${color}`}>{value}</p></div>)}</div>}
-  </section>}</div>;
+  return (
+    <Section
+      title="Broker activity"
+      subtitle={`${range} · tracked companies`}
+      action={<Link to="/broker-analysis" className="text-xs text-accent-light hover:underline">View broker analysis →</Link>}
+    >
+      {error ? (
+        <p className="text-xs text-text-muted">Broker activity is temporarily unavailable.</p>
+      ) : !data ? (
+        <p className="text-xs text-text-muted">Loading broker activity…</p>
+      ) : data.summary.sampled_trading_days === 0 ? (
+        <p className="text-xs text-text-muted">No floorsheet data has been collected yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {tiles.map((tile) => <BrokerHighlight key={tile.label} {...tile} />)}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+export default function Dashboard() {
+  const { hasPermission } = useAuth();
+  return (
+    <div className="space-y-8">
+      <RoleDashboard />
+      {hasPermission('view_analysis') && <BrokerSection />}
+    </div>
+  );
 }

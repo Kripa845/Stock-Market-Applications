@@ -238,6 +238,13 @@ class MomentumTests(IndicatorAssertions, SimpleTestCase):
         self.assertSeries(result["k"], k)
         self.assertSeries(result["d"], k.rolling(3).mean())
 
+    def test_slow_stochastic(self):
+        hh, ll = H.rolling(14).max(), L.rolling(14).min()
+        k = ((C - ll) / (hh - ll) * 100).rolling(3).mean()
+        result = momentum.stochastic(DATA["high"], DATA["low"], DATA["close"], 14, 3, smooth_k=3)
+        self.assertSeries(result["k"], k)
+        self.assertSeries(result["d"], k.rolling(3).mean())
+
     def test_stoch_rsi(self):
         r = r_rsi(C, 14)
         self.assertSeries(out("stoch_rsi"), (r - r.rolling(14).min()) / (r.rolling(14).max() - r.rolling(14).min()))

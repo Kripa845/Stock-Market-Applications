@@ -114,3 +114,17 @@ class StaleLivePricesTests(TestCase):
     def test_trading_holiday_is_never_stale(self):
         TradingHoliday.objects.create(date=self.OPEN.date(), name="Test holiday")
         self.assertFalse(live_prices.is_stale(None, now=self.OPEN))
+
+
+class DaySummaryFetcherTests(TestCase):
+
+    def test_empty_day_is_retried_once_with_a_fresh_login(self):
+        from datetime import date
+        day = date(2026, 10, 12)
+        expired, fresh = mock.Mock(), mock.Mock()
+        expired.get_today_price.return_value = []          # what the library returns on a 401
+        fresh.get_today_price.return_value = [{"symbol": "NABIL", "businessDate": "2026-10-12", "totalTrades": 401}]
+        with mock.patch.object(live_prices, "_nepse_client", side_effect=[expired, fresh]) as login:
+            rows = live_prices.day_summary_fetcher()(day)
+        self.assertEqual(rows["NABIL"]["totalTrades"], 401)
+        self.assertEqual(login.call_count, 2)

@@ -176,12 +176,22 @@
    ========================= */
 
   .card {
-    @apply bg-bg-card border border-bg-border rounded-md p-4;
+    @apply bg-bg-card border border-bg-border rounded-md p-4 transition-[border-color,box-shadow] duration-200;
+  }
+
+  /* One hover treatment for every card: blue border and a soft glow. */
+  .card:hover {
+    border-color: rgba(59, 130, 246, 0.55);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.18), 0 6px 18px -8px rgba(59, 130, 246, 0.4);
   }
 
   html[data-theme="light"] .card {
     background-color: #FFFFFF !important;
     border-color: #E2E8F0 !important;
+  }
+
+  html[data-theme="light"] .card:hover {
+    border-color: rgba(37, 99, 235, 0.5) !important;
   }
 
   .card-elevated {
@@ -380,6 +390,25 @@
   100% {
     transform: translateX(-50%);
   }
+}
+
+/* Market Overview card: overview <-> technical view switch. */
+@keyframes overview-slide-next {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes overview-slide-back {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: none; }
+}
+
+.overview-slide-next { animation: overview-slide-next 0.25s ease-out; }
+.overview-slide-back { animation: overview-slide-back 0.25s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-slide-next,
+  .overview-slide-back { animation: none; }
 }
 
 /* Keep the legacy company manager aligned with the dark application shell. */

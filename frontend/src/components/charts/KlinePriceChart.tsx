@@ -6,6 +6,7 @@ import {
 } from 'klinecharts';
 import { paneOf } from './customIndicators';
 import RangeBar from './RangeBar';
+import DrawingToolbar from './DrawingToolbar';
 import {
   defaultRange, rangeAvailable, rangeCalendarDays, rangeStart as rangeStartFor, type RangeId,
 } from './chartRanges';
@@ -79,17 +80,6 @@ const defaultParams = (def: IndicatorDef): IndicatorParams =>
 const isoDay = (ts: number) => new Date(ts).toISOString().slice(0, 10);
 let uidCounter = 0;
 const newUid = () => `ind${++uidCounter}`;
-
-const TOOLS = [
-  { id: 'cursor', icon: '✛', title: 'Cursor',            overlay: null },
-  { id: 'seg',    icon: '╱', title: 'Trend line',        overlay: 'segment' },
-  { id: 'ray',    icon: '↗', title: 'Ray',               overlay: 'rayLine' },
-  { id: 'hor',    icon: '―', title: 'Horizontal line',   overlay: 'horizontalStraightLine' },
-  { id: 'chan',   icon: '▤', title: 'Parallel channel',  overlay: 'parallelStraightLine' },
-  { id: 'fib',    icon: '≡', title: 'Fib retracement',   overlay: 'fibonacciLine' },
-  { id: 'pchan',  icon: '⇕', title: 'Price channel',     overlay: 'priceChannelLine' },
-  { id: 'clear',  icon: '🗑', title: 'Remove drawings',   overlay: null },
-] as const;
 
 type Interval = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '2h' | '1D' | '1W' | '1M';
 // Candle size, worded differently from the 1D / 5D / 1M *ranges* in the bottom bar so the two never look alike.
@@ -221,7 +211,6 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   const [interval, setIntervalMode] = useState<Interval>('1D');
   const [rangeChoice, setRange] = useState<RangeId | null>(null);
-  const [tool, setTool] = useState<string>('cursor');
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<string[]>(DEFAULT_ON);
 
@@ -498,14 +487,6 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       : a.filter((n) => n !== ind.name)));
   };
 
-  const pickTool = (t: (typeof TOOLS)[number]) => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    if (t.id === 'clear') { chart.removeOverlay(); setTool('cursor'); return; }
-    setTool(t.id);
-    if (t.overlay) chart.createOverlay({ name: t.overlay, onDrawEnd: () => { setTool('cursor'); return false; } } as any);
-  };
-
   const btn = (on: boolean) =>
     `px-2.5 py-1 rounded text-xs font-medium transition-all ${on ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'}`;
 
@@ -577,14 +558,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
       {/* Middle: left drawing toolbar + chart */}
       <div className="flex min-h-0 flex-1">
-        <div className="flex flex-col gap-0.5 border-r border-border p-1">
-          {TOOLS.map((t) => (
-            <button key={t.id} title={t.title} onClick={() => pickTool(t)}
-              className={`h-8 w-8 rounded text-base ${tool === t.id ? 'bg-accent text-white' : 'text-text-secondary hover:bg-bg-elevated'}`}>
-              {t.icon}
-            </button>
-          ))}
-        </div>
+        <DrawingToolbar key={symbol} getChart={() => chartRef.current} />
         <div className="relative min-w-0 flex-1">
           <div ref={hostRef} className="h-full w-full" aria-label={`${symbol} candlestick chart`} />
           {status && (

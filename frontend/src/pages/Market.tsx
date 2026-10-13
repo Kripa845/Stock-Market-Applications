@@ -9,8 +9,11 @@ import type { Company } from '../types/company';
 import { useLiveRefresh } from '../hooks/useLiveRefresh';
 import MarketBreadthWidget from '../components/market-intelligence/MarketBreadthWidget';
 import MarketHeatmap from '../components/market-intelligence/MarketHeatmap';
-import MarketRankings from '../components/market-intelligence/MarketRankings';
+import TrackedTopCards from '../components/market/TrackedTopCards';
 import CompanyLogo from '../components/companies/CompanyLogo';
+import Section from '../components/common/Section';
+import IndexSummaryCards from '../components/market/IndexSummaryCards';
+import MarketOverviewCard from '../components/market/MarketOverviewCard';
 import { changeTone, formatCount, formatPct, formatPrice } from '../components/market/format';
 
 export default function MarketPage() {
@@ -32,89 +35,112 @@ export default function MarketPage() {
   useLiveRefresh(loadCompanies);
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Market Overview" subtitle="Latest close, not live. Metrics cover tracked stocks." />
-      <MarketBreadthWidget />
-      <MarketRankings />
-      <MarketHeatmap />
-      <div className="relative max-w-md">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search companies"
-          className="w-full bg-bg-card border border-bg-border rounded-lg pl-9 pr-3 py-2 text-sm text-text-primary"
-        />
-      </div>
-      {error && (
-        <div className="text-sm text-down">
-          {error}{' '}
-          <button onClick={loadCompanies} className="underline">Retry</button>
+    <div className="space-y-8">
+      <PageHeader title="Market Overview" subtitle="NEPSE index and sub-indices, plus the session for the companies you track." />
+
+      <Section title="NEPSE & indices" subtitle="Index chart and technicals, NEPSE main and sub-indices · source: NEPSE">
+        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+          <MarketOverviewCard />
+          <IndexSummaryCards />
         </div>
-      )}
-      {loading && <p className="text-text-secondary">Loading companies...</p>}
-      {!loading && !error && companies.length === 0 && (
-        <EmptyState
-          title="No companies found"
-          description="The backend returned no active companies for this search."
-        />
-      )}
-      {!loading && companies.length > 0 && (
-        <div className="card overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="border-b border-bg-border text-text-secondary">
-                <th className="text-left py-3">Symbol</th>
-                <th className="text-left py-3">Company</th>
-                <th className="text-left py-3">Sector</th>
-                <th className="text-right py-3">Price</th>
-                <th className="text-right py-3">Change</th>
-                <th className="text-right py-3">Volume</th>
-                <th className="text-right py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((company) => {
-                const tone = changeTone(company.price_change_percent);
-                return (
-                  <tr
-                    key={company.id}
-                    onClick={() => navigate(`/companies/${company.symbol}`)}
-                    className="table-row cursor-pointer"
-                  >
-                    <td className="py-3">
-                      <span className="flex items-center gap-2 font-mono font-semibold text-accent-light">
-                        <CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="sm" />
-                        {company.symbol}
-                      </span>
-                    </td>
-                    <td className="py-3 text-text-primary">{company.name}</td>
-                    <td className="py-3">
-                      <Badge variant="gray">{company.sector}</Badge>
-                    </td>
-                    <td className="py-3 text-right font-mono">
-                      {company.latest_price === null ? '—' : `Rs. ${formatPrice(company.latest_price)}`}
-                    </td>
-                    <td className={`py-3 text-right font-mono ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : 'text-text-muted'}`}>
-                      {tone === 'up' && <TrendingUp size={13} className="inline" />}
-                      {tone === 'down' && <TrendingDown size={13} className="inline" />}
-                      {' '}{formatPct(company.price_change_percent)}
-                    </td>
-                    <td className="py-3 text-right font-mono">
-                      {formatCount(company.volume_24h)}
-                    </td>
-                    <td className="py-3 text-right">
-                      <Badge variant={company.is_tracked ? 'green' : 'gray'}>
-                        {company.is_tracked ? 'Tracked' : 'Untracked'}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      </Section>
+
+      <Section title="Your companies · top lists" subtitle="Gainers, losers, turnover, volume and trades of the tracked companies · latest close">
+        <TrackedTopCards />
+      </Section>
+
+      <Section title="Breadth & sectors" subtitle="How many tracked stocks rose, and where the turnover went">
+        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <MarketBreadthWidget />
+          <MarketHeatmap />
         </div>
-      )}
+      </Section>
+
+      <Section
+        title="All companies"
+        subtitle="Every active company in the system"
+        action={(
+          <div className="relative w-64 max-w-full">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search companies"
+              className="w-full bg-bg-card border border-bg-border rounded-lg pl-9 pr-3 py-2 text-sm text-text-primary"
+            />
+          </div>
+        )}
+      >
+        {error && (
+          <div className="text-sm text-down">
+            {error}{' '}
+            <button onClick={loadCompanies} className="underline">Retry</button>
+          </div>
+        )}
+        {loading && <p className="text-text-secondary">Loading companies...</p>}
+        {!loading && !error && companies.length === 0 && (
+          <EmptyState
+            title="No companies found"
+            description="The backend returned no active companies for this search."
+          />
+        )}
+        {!loading && companies.length > 0 && (
+          <div className="card overflow-x-auto">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead>
+                <tr className="border-b border-bg-border text-text-secondary">
+                  <th className="text-left py-3">Symbol</th>
+                  <th className="text-left py-3">Company</th>
+                  <th className="text-left py-3">Sector</th>
+                  <th className="text-right py-3">Price</th>
+                  <th className="text-right py-3">Change</th>
+                  <th className="text-right py-3">Volume</th>
+                  <th className="text-right py-3">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {companies.map((company) => {
+                  const tone = changeTone(company.price_change_percent);
+                  return (
+                    <tr
+                      key={company.id}
+                      onClick={() => navigate(`/companies/${company.symbol}`)}
+                      className="table-row cursor-pointer"
+                    >
+                      <td className="py-3">
+                        <span className="flex items-center gap-2 font-mono font-semibold text-accent-light">
+                          <CompanyLogo symbol={company.symbol} name={company.name} logoUrl={company.logo_url} size="sm" />
+                          {company.symbol}
+                        </span>
+                      </td>
+                      <td className="py-3 text-text-primary">{company.name}</td>
+                      <td className="py-3">
+                        <Badge variant="gray">{company.sector}</Badge>
+                      </td>
+                      <td className="py-3 text-right font-mono">
+                        {company.latest_price === null ? '—' : `Rs. ${formatPrice(company.latest_price)}`}
+                      </td>
+                      <td className={`py-3 text-right font-mono ${tone === 'up' ? 'text-up' : tone === 'down' ? 'text-down' : 'text-text-muted'}`}>
+                        {tone === 'up' && <TrendingUp size={13} className="inline" />}
+                        {tone === 'down' && <TrendingDown size={13} className="inline" />}
+                        {' '}{formatPct(company.price_change_percent)}
+                      </td>
+                      <td className="py-3 text-right font-mono">
+                        {formatCount(company.volume_24h)}
+                      </td>
+                      <td className="py-3 text-right">
+                        <Badge variant={company.is_tracked ? 'green' : 'gray'}>
+                          {company.is_tracked ? 'Tracked' : 'Untracked'}
+                        </Badge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Section>
     </div>
   );
 }

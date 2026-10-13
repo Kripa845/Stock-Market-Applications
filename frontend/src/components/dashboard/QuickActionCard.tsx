@@ -33,11 +33,7 @@ export default function QuickActionCard({
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className={clsx(
-        'flex w-full items-center justify-between',
-        'p-4 rounded-xl border',
-        'bg-bg-card border-bg-border',
-        'hover:border-accent/40 hover:bg-bg-elevated/50',
-        'transition-all duration-200',
+        'card flex h-full w-full items-center justify-between gap-3',
         'cursor-pointer text-left',
         'focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-1 focus:ring-offset-bg-primary',
       )}

@@ -29,8 +29,11 @@ def rsi(close, period=14):
     ]
 
 
-def stochastic(high, low, close, k_period=14, d_period=3):
+def stochastic(high, low, close, k_period=14, d_period=3, smooth_k=1):
+    """Fast stochastic by default; ``smooth_k`` > 1 averages %K first (slow stochastic, e.g. 14,3,3)."""
     k = combine(lambda c, hh, ll: (c - ll) / (hh - ll) * 100, close, highest(high, k_period), lowest(low, k_period))
+    if smooth_k > 1:
+        k = sma(k, smooth_k)
     return {"k": k, "d": sma(k, d_period)}
 
 

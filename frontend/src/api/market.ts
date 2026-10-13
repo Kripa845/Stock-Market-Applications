@@ -212,6 +212,99 @@ export interface LiveMoversResponse {
 
 export type TopMetric = 'turnover' | 'volume' | 'transactions';
 
+// --- Market Overview card (/api/market/overview/) ---------------------------------------------
+
+export type OverviewRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '5Y' | 'ALL';
+export type MarketStatus = 'OPEN' | 'CLOSE';
+
+export interface OverviewInstrument { symbol: string; name: string; kind: 'index' | 'company' }
+
+export interface OverviewQuote extends OverviewInstrument {
+  /** True when the value comes from today's live feed rather than the last stored session. */
+  live: boolean;
+  value: number | null;
+  change: number | null;
+  change_pct: number | null;
+  as_of: string | null;
+}
+
+/** Session stats for the tracked companies (same buckets as /market/summary/). */
+export interface OverviewStats {
+  advanced: number;
+  declined: number;
+  unchanged: number;
+  positive_circuit: number;
+  negative_circuit: number;
+  not_ranked: number;
+  total_turnover: number | null;
+  /** Nepali digit grouping, e.g. "4,46,52,46,360.73". */
+  total_turnover_display: string | null;
+  total_traded_shares: number | null;
+  total_transactions: number | null;
+  transactions_reported: number;
+  total_scrips_traded: number;
+  tracked_count: number;
+  circuit_threshold_pct: number;
+}
+
+export interface MarketOverview {
+  instrument: OverviewQuote;
+  status: MarketStatus;
+  timestamp: string | null;
+  stats_label: string;
+  trade_date: string | null;
+  stats: OverviewStats | null;
+  instruments: OverviewInstrument[];
+  reason: string | null;
+}
+
+export interface ChartPoint {
+  t: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number;
+  volume: number | null;
+}
+
+export interface OverviewChart {
+  symbol: string;
+  range: OverviewRange;
+  interval: 'intraday' | 'daily';
+  date?: string | null;
+  available_ranges: OverviewRange[];
+  points: ChartPoint[];
+  reason?: string;
+}
+
+export type TechnicalSignal = 'Buy' | 'Sell' | 'Neutral';
+export type OverallSignal = TechnicalSignal | 'Strong Buy' | 'Strong Sell';
+
+export interface TechnicalIndicator {
+  key: string;
+  name: string;
+  value: number | null;
+  signal: TechnicalSignal | null;
+  /** False for ATR: shown, but not counted in the summary. */
+  votes: boolean;
+  values: Record<string, number | null>;
+}
+
+export interface TechnicalAnalysis {
+  symbol: string;
+  kind: 'index' | 'company';
+  as_of: string | null;
+  sessions_used: number;
+  history_start: string | null;
+  adjusted_sessions: string[];
+  corporate_action_cutoff: string | null;
+  close: number | null;
+  indicators: TechnicalIndicator[];
+  pivots: { session: string; based_on: string; method: string; levels: Record<'p' | 'r1' | 's1' | 'r2' | 's2' | 'r3' | 's3', number | null> } | null;
+  summary: { buy: number; neutral: number; sell: number; total: number; signal: OverallSignal | null };
+  disclaimer: string;
+}
+
 const get = <T,>(url: string, params?: Record<string, unknown>) =>
   apiClient.get<T>(url, { params }).then((response) => response.data);
 
@@ -231,4 +324,7 @@ export const marketApi = {
   addToWatchlist: (symbol: string) => apiClient.post<WatchlistRow>('/market/watchlist/', { symbol }).then((r) => r.data),
   removeFromWatchlist: (symbol: string) => apiClient.delete(`/market/watchlist/${symbol}/`),
   companyNews: (symbol: string) => get<PaginatedResponse<NewsArticle>>(`/market/news/${symbol}/`),
+  overview: (symbol: string) => get<Scoped & MarketOverview>('/market/overview/', { symbol }),
+  overviewChart: (symbol: string, range: OverviewRange) => get<Scoped & OverviewChart>('/market/overview/chart/', { symbol, range }),
+  overviewTechnical: (symbol: string) => get<Scoped & TechnicalAnalysis>('/market/overview/technical/', { symbol }),
 };

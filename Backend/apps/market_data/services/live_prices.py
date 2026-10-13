@@ -108,6 +108,54 @@ def fetch_live_rows():
     return by_symbol
 
 
+def fetch_day_summary(day, client=None):
+    """
+    NEPSE's end-of-day row per security for ``day`` (``/api/nots/nepse-data/today-price``),
+    keyed by symbol: closePrice, previousDayClosePrice, totalTradedQuantity,
+    totalTradedValue, totalTrades, ...  Empty dict for a day NEPSE has no data for.
+    Rows for another business date (NEPSE falls back to the latest day) are dropped.
+    """
+    try:
+        rows = (client or _nepse_client()).get_today_price(size=500, date=day.isoformat(), use_cache=False)
+    except Exception as exc:
+        raise LivePriceError(f"NEPSE day summary failed for {day}: {exc}") from exc
+    if isinstance(rows, dict):
+        rows = rows.get("content", [])
+    return {
+        str(row["symbol"]).upper(): row
+        for row in (rows if isinstance(rows, list) else [])
+        if isinstance(row, dict) and row.get("symbol") and str(row.get("businessDate", ""))[:10] == day.isoformat()
+    }
+
+
+def day_summary_fetcher():
+    """
+    ``fetch_day_summary`` bound to one lazily created, authenticated client (for many dates).
+
+    NEPSE's token expires during a long run and the library then returns [] instead of
+    raising, so an empty day is retried once with a fresh login before it counts as empty.
+    """
+    client = None
+
+    def login():
+        try:
+            return _nepse_client()
+        except Exception as exc:
+            raise LivePriceError(f"NEPSE login failed: {exc}") from exc
+
+    def fetch(day):
+        nonlocal client
+        if client is None:
+            client = login()
+        rows = fetch_day_summary(day, client)
+        if not rows:
+            client = login()
+            rows = fetch_day_summary(day, client)
+        return rows
+
+    return fetch
+
+
 def sync_live_prices(companies=None, rows=None):
     """Copy LTP / previous close / last-trade time onto the tracked companies."""
     companies = list(companies if companies is not None else tracked_companies())

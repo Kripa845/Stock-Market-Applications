@@ -10,8 +10,13 @@ from apps.companies.models import Company, TrackedCompany
 from apps.crawler_runs.models import CrawlRun
 from apps.crawler_runs.tasks import crawl_daily_prices, crawl_floorsheet
 from apps.market_data.models import DailyPrice, DividendAnnouncement, FloorsheetTransaction, TradingHoliday
-from apps.market_data.services import market_stats
-from apps.market_data.services.price_fields import derive_price_fields
+from apps.market_data.services import live_prices, market_stats
+from apps.market_data.services.price_fields import (
+    derive_price_fields,
+    fill_transactions_from_nepse,
+    missing_transaction_dates,
+)
+from apps.market_data.tasks import derive_price_fields_task
 from apps.market_data.services.trading_days import is_market_day, market_closed_reason
 from apps.market_intelligence.models import ProxyIndexSnapshot
 from apps.market_intelligence.services.snapshots import compute_market_snapshots
@@ -71,14 +76,84 @@ class DerivePriceFieldsTests(TrackedMarketFixture):
 
     def test_transactions_counted_from_real_floorsheet(self):
         gain = self.companies["GAIN"]
-        self.add_trade(gain, TUESDAY, "1", "10", "20", 5, 105)
-        self.add_trade(gain, TUESDAY, "2", "10", "30", 5, 105)
+        self.add_trade(gain, TUESDAY, "1", "10", "20", 400, 105)
+        self.add_trade(gain, TUESDAY, "2", "10", "30", 600, 105)       # 400 + 600 = the stored volume
         self.add_trade(gain, TUESDAY, "TX-demo", "10", "30", 5, 105)  # synthetic, not counted
 
         derive_price_fields()
 
         self.assertEqual(DailyPrice.objects.get(company=gain, date=TUESDAY).transactions, 2)
         self.assertIsNone(DailyPrice.objects.get(company=gain, date=MONDAY).transactions)  # NULL, never 0
+
+    def test_partial_floorsheet_is_not_counted(self):
+        gain = self.companies["GAIN"]
+        self.add_trade(gain, TUESDAY, "1", "10", "20", 400, 105)       # 400 of 1000 shares crawled
+
+        result = derive_price_fields()
+
+        self.assertIsNone(DailyPrice.objects.get(company=gain, date=TUESDAY).transactions)
+        self.assertEqual(result["incomplete_floorsheets"], 1)
+
+    def test_partial_floorsheet_keeps_an_existing_count(self):
+        gain = self.companies["GAIN"]
+        DailyPrice.objects.filter(company=gain, date=TUESDAY).update(transactions=7)  # e.g. from NEPSE
+        self.add_trade(gain, TUESDAY, "1", "10", "20", 400, 105)
+
+        derive_price_fields()
+
+        self.assertEqual(DailyPrice.objects.get(company=gain, date=TUESDAY).transactions, 7)
+
+
+def nepse_row(symbol, day, quantity, trades):
+    return {"symbol": symbol, "businessDate": day.isoformat(), "totalTradedQuantity": quantity, "totalTrades": trades}
+
+
+class NepseTransactionsTests(TrackedMarketFixture):
+
+    def feed(self, rows_by_day):
+        return lambda day: {row["symbol"]: row for row in rows_by_day.get(day, [])}
+
+    def transactions(self, symbol, day):
+        return DailyPrice.objects.get(company=self.companies[symbol], date=day).transactions
+
+    def test_trades_filled_when_volume_matches(self):
+        result = fill_transactions_from_nepse([TUESDAY], fetch_day=self.feed({TUESDAY: [
+            nepse_row("GAIN", TUESDAY, 1000, 42),
+            nepse_row("LOSE", TUESDAY, 999, 30),     # different volume: not the same session data
+        ]}))
+        self.assertEqual(self.transactions("GAIN", TUESDAY), 42)
+        self.assertIsNone(self.transactions("LOSE", TUESDAY))
+        self.assertEqual(result["filled"], 1)
+        self.assertEqual(result["volume_mismatch"], [f"LOSE {TUESDAY}"])
+        self.assertEqual(result["not_in_feed"], len(self.CLOSES) + 1 - 2)   # + the untracked company's row
+
+    def test_rerun_is_idempotent_and_empty_day_is_reported(self):
+        fetch = self.feed({TUESDAY: [nepse_row("GAIN", TUESDAY, 1000, 42)]})
+        fill_transactions_from_nepse([TUESDAY], fetch_day=fetch)
+        result = fill_transactions_from_nepse([TUESDAY, MONDAY], fetch_day=fetch)
+        self.assertEqual((result["filled"], result["unchanged"]), (0, 1))
+        self.assertEqual(result["empty_days"], [MONDAY])
+
+    def test_missing_dates_newest_first(self):
+        DailyPrice.objects.filter(date=TUESDAY).update(transactions=1)
+        self.assertEqual(missing_transaction_dates(), [MONDAY])
+        DailyPrice.objects.filter(company=self.companies["GAIN"], date=TUESDAY).update(transactions=None)
+        self.assertEqual(missing_transaction_dates(), [TUESDAY, MONDAY])
+        self.assertEqual(missing_transaction_dates(limit=1), [TUESDAY])
+
+    def test_day_summary_drops_rows_for_another_business_date(self):
+        client = mock.Mock()
+        client.get_today_price.return_value = [nepse_row("GAIN", TUESDAY, 1, 1), nepse_row("LOSE", MONDAY, 1, 1)]
+        rows = live_prices.fetch_day_summary(TUESDAY, client)
+        self.assertEqual(list(rows), ["GAIN"])
+        client.get_today_price.assert_called_once_with(size=500, date="2026-09-29", use_cache=False)
+
+    def test_task_keeps_floorsheet_counts_when_nepse_is_down(self):
+        failing = mock.Mock(side_effect=live_prices.LivePriceError("down"))
+        with mock.patch("apps.market_data.services.live_prices.day_summary_fetcher", return_value=failing):
+            result = derive_price_fields_task()
+        self.assertTrue(result["nepse"]["skipped"])
+        self.assertIn("transactions_filled", result["floorsheet"])
 
 
 class DividendRowsTests(TrackedMarketFixture):

@@ -69,6 +69,30 @@ class IndexDaily(models.Model):
         return f"{self.index.code} | {self.date} | close: {self.close}"
 
 
+class IndexIntradayPoint(models.Model):
+    """
+    NEPSE's live index value during a session, saved every couple of minutes by
+    ``snapshot_live_index`` (NEPSE serves no intraday history once the session is
+    over).  ``recorded_at`` is NEPSE's own ``generatedTime``, not our fetch time.
+    """
+
+    index = models.ForeignKey(MarketIndex, on_delete=models.CASCADE, related_name="intraday")
+    recorded_at = models.DateTimeField(db_index=True)
+    value = models.DecimalField(max_digits=14, decimal_places=2)
+    previous_close = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    change = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
+    change_pct = models.DecimalField(max_digits=9, decimal_places=4, null=True, blank=True)
+
+    class Meta:
+        ordering = ["index", "recorded_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["index", "recorded_at"], name="unique_index_intraday_point"),
+        ]
+
+    def __str__(self):
+        return f"{self.index.code} | {self.recorded_at} | {self.value}"
+
+
 class StockSector(models.Model):
     """symbol -> normalised sub-index sector, for every listed stock (not only tracked)."""
 
