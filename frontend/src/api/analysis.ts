@@ -234,8 +234,49 @@ export interface BrokerAnalysisResponse {
   note: string;
 }
 
+// GET /api/analysis/brokers/top/ — one day's brokers ranked by turnover (buy + sell).
+export interface TopBrokerStock {
+  symbol: string;
+  logo_url: string | null;
+  buy_amount: string;
+  sell_amount: string;
+  turnover: string;
+}
+
+export interface TopBrokerRow extends BrokerActivity {
+  top_stock: TopBrokerStock | null;
+}
+
+export interface TopBrokerResponse {
+  date: string | null;
+  is_complete: boolean;
+  companies: number;
+  expected_companies: number;
+  available_dates: Array<{ date: string; companies: number; is_complete: boolean }>;
+  summary: {
+    total_amount: string;     // each trade counted once
+    total_quantity: number;
+    transaction_count: number;
+    active_brokers: number;
+  };
+  podium: TopBrokerRow[];
+  results: TopBrokerRow[];
+}
+
+export interface BrokerProfile {
+  broker_code: string;
+  broker_no: number | null;
+  name: string;
+  short_name: string;
+  logo_url: string | null;
+  website: string;
+  tms_link: string;
+  in_directory: boolean;
+}
+
 export interface BrokerDetailResponse {
   broker: string;
+  profile: BrokerProfile;
   company_options: BrokerCompanyChoice[];
   summary: BrokerActivity;
   daily_activity: Array<{
@@ -265,6 +306,7 @@ export interface BrokerDetailResponse {
     trades: number;
   }>;
   sampled_dates: string[];
+  trading_sessions: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -580,6 +622,10 @@ export const analysisApi = {
     page?: number;
   }) => apiClient
     .get<BrokerAnalysisResponse>('/analysis/brokers/', { params })
+    .then((r) => r.data),
+
+  getTopBrokers: (date?: string) => apiClient
+    .get<TopBrokerResponse>('/analysis/brokers/top/', { params: date ? { date } : undefined })
     .then((r) => r.data),
 
   getBrokerDetail: (broker: string, params?: {

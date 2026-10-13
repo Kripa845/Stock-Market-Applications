@@ -16,7 +16,7 @@ export default function SummaryCard({
   title, value, change, changePositive, icon: Icon, iconColor = 'text-accent-light', sub,
 }: SummaryCardProps) {
   return (
-    <div className="card flex flex-col gap-3 hover:border-accent/30 transition-colors">
+    <div className="card flex flex-col gap-3 hover:border-blue-500/50 transition-colors">
       <div className="flex items-start justify-between">
         <p className="text-xs text-text-secondary font-medium uppercase tracking-wide">{title}</p>
         <span className={clsx('p-1.5 rounded-lg bg-bg-elevated', iconColor)}>

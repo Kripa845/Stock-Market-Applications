@@ -1,13 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, Minus } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Minus } from 'lucide-react';
 import { getIndices, getSubIndices, type IndexRow, type IndexTable } from '../../api/marketIndices';
 import { changeTone, formatPct, formatPrice, formatTradeDate } from './format';
 
 // Compact Indices / Sub Indices cards for the Market Overview page (latest NEPSE session).
-// The arrow opens the full index board on the Tracked Companies page (#nepse-indices).
 
-const BOARD_LINK = '/tracked#nepse-indices';
 const toneText = { up: 'text-up', down: 'text-down', flat: 'text-text-muted' };
 const toneChip = { up: 'bg-up/10 text-up', down: 'bg-down/10 text-down', flat: 'bg-bg-elevated text-text-muted' };
 const ToneArrow = { up: ArrowUp, down: ArrowDown, flat: Minus };
@@ -20,10 +17,6 @@ function IndexCard({ title, label, table }: { title: string; label: string; tabl
     <div className="card h-full">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h3 className="rounded-md bg-accent/10 px-3 py-1.5 text-sm font-semibold text-accent-light">{title}</h3>
-        <Link to={BOARD_LINK} title={`Open the full ${title.toLowerCase()} board`} aria-label={`Open the full ${title.toLowerCase()} board`}
-          className="flex h-7 w-7 items-center justify-center rounded-full bg-bg-elevated text-text-secondary hover:text-text-primary">
-          <ChevronRight size={15} />
-        </Link>
       </div>
       {!table?.rows.length ? (
         <p className="py-6 text-center text-xs text-text-muted">No index values stored yet.</p>
@@ -43,7 +36,7 @@ function IndexCard({ title, label, table }: { title: string; label: string; tabl
               const Arrow = ToneArrow[tone];
               const ch = row.ch == null ? null : Number(row.ch);
               return (
-                <tr key={row.code} className="border-b border-bg-border hover:bg-bg-elevated/50">
+                <tr key={row.code} className="border-b border-bg-border hover:bg-blue-500/10">
                   <td className="max-w-[170px] truncate py-2.5 font-medium text-accent-light" title={row.name}>{shortName(row)}</td>
                   <td className={`py-2.5 text-right font-mono ${toneText[tone]}`}>
                     {ch === null ? '—' : `${ch > 0 ? '+' : ''}${ch.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}

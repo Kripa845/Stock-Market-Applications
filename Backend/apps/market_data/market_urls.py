@@ -12,6 +12,8 @@ from .market_views import (
     MarketOverviewTechnicalAPIView,
     TrackedMoversAPIView,
     TrackedSummaryAPIView,
+    TopActivityAPIView,
+    TopMoversAPIView,
     TrackedTopAPIView,
     WatchlistAPIView,
 )
@@ -24,6 +26,8 @@ urlpatterns = [
     path("overview/technical/", MarketOverviewTechnicalAPIView.as_view(), name="market-overview-technical"),
     path("movers/", TrackedMoversAPIView.as_view(), name="market-movers"),
     path("movers/live/", LiveTrackedMoversAPIView.as_view(), name="market-movers-live"),
+    path("top-gainers/", TopMoversAPIView.as_view(), name="market-top-gainers"),
+    path("top-activity/", TopActivityAPIView.as_view(), name="market-top-activity"),
     path("top-turnover/", TrackedTopAPIView.as_view(metric="turnover"), name="market-top-turnover"),
     path("top-volume/", TrackedTopAPIView.as_view(metric="volume"), name="market-top-volume"),
     path("top-transactions/", TrackedTopAPIView.as_view(metric="transactions"), name="market-top-transactions"),

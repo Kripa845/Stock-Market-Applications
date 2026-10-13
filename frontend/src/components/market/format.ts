@@ -17,6 +17,15 @@ export function formatNprCompact(value: number | string | null | undefined, digi
   return n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 }
 
+const ARAB = 1e9;
+
+/** 1.25 Arab above 100 Cr, otherwise the same as formatNprCompact. */
+export function formatNprArab(value: number | string | null | undefined, digits = 2): string {
+  const n = toNumber(value);
+  if (n !== null && !Number.isNaN(n) && Math.abs(n) >= ARAB) return `${(n / ARAB).toFixed(digits)} Arab`;
+  return formatNprCompact(value, digits);
+}
+
 /** Shares / counts with Indian digit grouping (5,73,825). */
 export function formatCount(value: number | string | null | undefined): string {
   const n = toNumber(value);

@@ -26,7 +26,7 @@ from apps.users.company_access import get_accessible_company_ids, require_compan
 from apps.users.models import WatchlistItem
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
-from .services import live_prices, market_overview, market_stats, movers
+from .services import live_prices, market_overview, market_stats, movers, top_movers
 
 CACHE_SECONDS = 60
 SCOPE = "tracked_companies"
@@ -131,6 +131,82 @@ class LiveTrackedMoversAPIView(APIView):
     def get(self, request):
         limit = _limit(request, 10)
         return _cached(request, lambda ids: live_prices.live_movers(ids, limit))
+
+
+class TopMoversAPIView(APIView):
+    """
+    GET /api/market/top-gainers/?type=gainers|losers&period=today|2d|3d|5d|7d|1w|1m|3m|4m|6m|1y
+        &sector=&adjusted=true|false&page=1&page_size=20
+
+    One page of the tracked companies' top gainers or losers (services.top_movers).
+    Today is live from NEPSE's feed until the day's prices are crawled.
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+    PAGE_SIZES = (10, 20, 50, 100)
+
+    def get(self, request):
+        q = request.query_params
+        side = q.get("type", "gainers").strip().lower()
+        period = q.get("period", "today").strip().lower()
+        adjusted = q.get("adjusted", "true").strip().lower()
+        errors = {}
+        if side not in top_movers.SIDES:
+            errors["type"] = f"must be one of {', '.join(top_movers.SIDES)}."
+        if period not in top_movers.PERIODS:
+            errors["period"] = f"must be one of {', '.join(top_movers.PERIODS)}."
+        if adjusted not in ("true", "false"):
+            errors["adjusted"] = "must be true or false."
+        page, page_size, page_errors = _page_params(q, self.PAGE_SIZES)
+        errors.update(page_errors)
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        sector = q.get("sector", "").strip() or None
+        return _cached(request, lambda ids: top_movers.top_movers(
+            side, period, sector, adjusted == "true", page, page_size, ids,
+        ))
+
+
+def _page_params(q, page_sizes):
+    """(page, page_size, errors) from the query string."""
+    errors = {}
+    try:
+        page, page_size = int(q.get("page", 1)), int(q.get("page_size", 20))
+    except ValueError:
+        page, page_size = 0, 0
+    if page < 1:
+        errors["page"] = "must be a positive integer."
+    if page_size not in page_sizes:
+        errors["page_size"] = f"must be one of {', '.join(map(str, page_sizes))}."
+    return page, page_size, errors
+
+
+class TopActivityAPIView(APIView):
+    """
+    GET /api/market/top-activity/?metric=turnover|volume|transactions
+        &period=today|2d|3d|5d|7d|1w|1m|3m|4m|6m|1y&sector=&page=1&page_size=20
+
+    Tracked companies ranked by the metric summed over the period (services.top_movers).
+    Official end-of-day data only.
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        q = request.query_params
+        metric = q.get("metric", "turnover").strip().lower()
+        period = q.get("period", "today").strip().lower()
+        page, page_size, errors = _page_params(q, TopMoversAPIView.PAGE_SIZES)
+        if metric not in top_movers.METRICS:
+            errors["metric"] = f"must be one of {', '.join(top_movers.METRICS)}."
+        if period not in top_movers.PERIODS:
+            errors["period"] = f"must be one of {', '.join(top_movers.PERIODS)}."
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+
+        sector = q.get("sector", "").strip() or None
+        return _cached(request, lambda ids: top_movers.top_activity(metric, period, sector, page, page_size, ids))
 
 
 class TrackedTopAPIView(APIView):

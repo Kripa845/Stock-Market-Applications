@@ -186,7 +186,7 @@ export default function TopStocks() {
                 return (
                   <tr
                     key={company.id}
-                    className="table-row cursor-pointer hover:bg-bg-hover transition-colors"
+                    className="table-row cursor-pointer hover:bg-blue-500/10 transition-colors"
                     onClick={() => navigate(`/stocks/${company.symbol.toLowerCase()}`)}
                   >
                     <td className="py-2.5">

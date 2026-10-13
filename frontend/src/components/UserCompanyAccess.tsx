@@ -175,7 +175,7 @@ export default function UserCompanyAccess({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100"
+              className="rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-blue-500/10"
             >
               Close
             </button>
@@ -196,7 +196,7 @@ export default function UserCompanyAccess({
             type="button"
             onClick={enableAll}
             disabled={loading || saving || companies.length === 0}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Enable All
           </button>
@@ -205,7 +205,7 @@ export default function UserCompanyAccess({
             type="button"
             onClick={disableAll}
             disabled={loading || saving || companies.length === 0}
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Disable All
           </button>
@@ -256,7 +256,7 @@ export default function UserCompanyAccess({
                 return (
                   <div
                     key={company.company_id}
-                    className="grid grid-cols-[1fr_180px] items-center px-4 py-4 hover:bg-gray-50"
+                    className="grid grid-cols-[1fr_180px] items-center px-4 py-4 hover:bg-blue-500/10"
                   >
                     <div>
                       <div className="font-medium text-gray-900">
@@ -310,7 +310,7 @@ export default function UserCompanyAccess({
           type="button"
           onClick={loadCompanyAccess}
           disabled={loading || saving}
-          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-blue-500/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
           Refresh
         </button>

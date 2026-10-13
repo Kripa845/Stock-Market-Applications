@@ -1,20 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, ArrowDown, ArrowUp, CandlestickChart, ChevronLeft, ChevronRight, CircleDollarSign,
+  AlertTriangle, ArrowDown, ArrowUp, CandlestickChart, ChevronRight, CircleDollarSign,
   IndianRupee, LineChart as LineChartIcon, Maximize2, MonitorCheck, RotateCcw, TrendingDown, TrendingUp,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import type { OverviewRange, OverviewStats } from '../../api/market';
-import { useMarketChart, useMarketOverview, useMarketTechnical } from '../../hooks/useMarketOverview';
+import { useMarketChart, useMarketOverview } from '../../hooks/useMarketOverview';
 import { changeTone, formatCount, formatPrice, formatTradeDate } from './format';
 import OverviewPriceChart, { type ChartMode } from './OverviewPriceChart';
-import TechnicalSummaryView from './TechnicalSummaryView';
 
 // Market Overview card: header for the picked instrument (NEPSE index or a tracked company),
-// price chart, and the tracked companies' session stats; the header arrow flips to the
-// technical summary of the same instrument.
+// price chart, and the tracked companies' session stats; the header arrow opens the
+// Technical Charts page (preselecting the company when one is picked).
 
 const RANGES: OverviewRange[] = ['1D', '1W', '1M', '3M', '6M', '1Y', '5Y', 'ALL'];
-type View = 'overview' | 'technical';
 
 const toneText = { up: 'text-up', down: 'text-down', flat: 'text-text-primary' };
 const tonePill = { up: 'bg-up/15 text-up', down: 'bg-down/15 text-down', flat: 'bg-bg-elevated text-text-muted' };
@@ -88,12 +87,11 @@ export default function MarketOverviewCard() {
   const [symbol, setSymbol] = useState('NEPSE');
   const [range, setRange] = useState<OverviewRange>('1D');
   const [mode, setMode] = useState<ChartMode>('area');
-  const [view, setView] = useState<View>('overview');
+  const navigate = useNavigate();
   const chartBox = useRef<HTMLDivElement>(null);
 
   const overview = useMarketOverview(symbol);
   const chart = useMarketChart(symbol, range);
-  const technical = useMarketTechnical(symbol, view === 'technical');
 
   // Refresh the intraday chart together with the 60s summary poll while the session is open.
   const { reload: reloadChart } = chart;
@@ -114,7 +112,9 @@ export default function MarketOverviewCard() {
   const previousClose = quote?.value != null && quote.change != null ? Number(quote.value) - Number(quote.change) : null;
   const canCandle = !!chart.data?.points.length && chart.data.points.every((p) => p.open != null);
 
-  const refresh = () => { overview.reload(); chart.reload(); if (view === 'technical') technical.reload(); };
+  const refresh = () => { overview.reload(); chart.reload(); };
+  const isIndex = data?.instruments.find((item) => item.symbol === symbol)?.kind === 'index' || symbol === 'NEPSE';
+  const openTechnical = () => navigate(isIndex ? '/company-analysis' : `/company-analysis?symbol=${encodeURIComponent(symbol)}`);
   const fullscreen = () => { chartBox.current?.requestFullscreen?.().catch(() => undefined); };
 
   return (
@@ -123,16 +123,14 @@ export default function MarketOverviewCard() {
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <select value={symbol} onChange={(e) => setSymbol(e.target.value)} aria-label="Instrument"
-            className="max-w-[9rem] cursor-pointer appearance-none rounded-md bg-transparent pr-1 text-lg font-bold text-text-primary hover:bg-bg-elevated focus:outline-none">
+            className="max-w-[9rem] cursor-pointer appearance-none rounded-md bg-transparent pr-1 text-lg font-bold text-text-primary hover:bg-blue-500/10 focus:outline-none">
             {(data?.instruments ?? [{ symbol: 'NEPSE', name: 'NEPSE Index', kind: 'index' as const }]).map((item) => (
               <option key={item.symbol} value={item.symbol} className="bg-bg-card text-sm">{item.symbol}</option>
             ))}
           </select>
-          <button onClick={() => setView(view === 'overview' ? 'technical' : 'overview')}
-            aria-label={view === 'overview' ? 'Show technical analysis' : 'Back to overview'}
-            title={view === 'overview' ? 'Technical analysis' : 'Overview'}
-            className="flex h-6 w-6 items-center justify-center rounded-md bg-bg-elevated text-text-primary hover:bg-accent/20 hover:text-accent-light">
-            {view === 'overview' ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+          <button onClick={openTechnical} aria-label="Open technical analysis" title="Technical analysis"
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-bg-elevated text-text-primary hover:bg-blue-500/10 hover:text-blue-400">
+            <ChevronRight size={15} />
           </button>
         </div>
         <span className="pt-1 text-right text-xs text-sky-400">{stamp(data?.timestamp ?? null)}</span>
@@ -166,79 +164,64 @@ export default function MarketOverviewCard() {
         </p>
       )}
 
-      {view === 'overview' ? (
-        <div key={`overview-${symbol}`} className="overview-slide-back space-y-3">
-          {/* Chart controls */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-wrap gap-0.5 text-xs">
-              {RANGES.map((r) => {
-                const disabled = !!available && !available.includes(r);
-                return (
-                  <button key={r} onClick={() => setRange(r)} disabled={disabled}
-                    title={disabled ? 'Not enough stored data for this range' : undefined}
-                    className={`rounded px-1.5 py-1 font-medium ${range === r ? 'text-text-primary underline decoration-2 underline-offset-4' : 'text-text-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-35`}>
-                    {r}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <div className="flex rounded-full border border-bg-border p-0.5">
-                <button onClick={() => setMode('area')} aria-label="Area chart"
-                  className={`rounded-full px-2 py-0.5 ${mode === 'area' ? 'bg-up/30 text-up' : 'text-text-secondary'}`}>
-                  <LineChartIcon size={13} />
+      <div className="space-y-3">
+        {/* Chart controls */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap gap-0.5 text-xs">
+            {RANGES.map((r) => {
+              const disabled = !!available && !available.includes(r);
+              return (
+                <button key={r} onClick={() => setRange(r)} disabled={disabled}
+                  title={disabled ? 'Not enough stored data for this range' : undefined}
+                  className={`rounded px-1.5 py-1 font-medium ${range === r ? 'text-text-primary underline decoration-2 underline-offset-4' : 'text-text-secondary hover:text-text-primary'} disabled:cursor-not-allowed disabled:opacity-35`}>
+                  {r}
                 </button>
-                <button onClick={() => setMode('candle')} aria-label="Candlestick chart" disabled={!canCandle}
-                  title={canCandle ? undefined : 'No open / high / low for these points'}
-                  className={`rounded-full px-2 py-0.5 ${mode === 'candle' ? 'bg-up/30 text-up' : 'text-text-secondary'} disabled:opacity-35`}>
-                  <CandlestickChart size={13} />
-                </button>
-              </div>
-              <button onClick={refresh} aria-label="Refresh" className="rounded-full border border-bg-border p-1.5 text-text-secondary hover:text-text-primary">
-                <RotateCcw size={12} />
+              );
+            })}
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <div className="flex rounded-full border border-bg-border p-0.5">
+              <button onClick={() => setMode('area')} aria-label="Area chart"
+                className={`rounded-full px-2 py-0.5 ${mode === 'area' ? 'bg-up/30 text-up' : 'text-text-secondary'}`}>
+                <LineChartIcon size={13} />
               </button>
-              <button onClick={fullscreen} aria-label="Full screen" className="rounded-full border border-bg-border p-1.5 text-text-secondary hover:text-text-primary">
-                <Maximize2 size={12} />
+              <button onClick={() => setMode('candle')} aria-label="Candlestick chart" disabled={!canCandle}
+                title={canCandle ? undefined : 'No open / high / low for these points'}
+                className={`rounded-full px-2 py-0.5 ${mode === 'candle' ? 'bg-up/30 text-up' : 'text-text-secondary'} disabled:opacity-35`}>
+                <CandlestickChart size={13} />
               </button>
             </div>
+            <button onClick={refresh} aria-label="Refresh" className="rounded-full border border-bg-border p-1.5 text-text-secondary hover:text-text-primary">
+              <RotateCcw size={12} />
+            </button>
+            <button onClick={fullscreen} aria-label="Full screen" className="rounded-full border border-bg-border p-1.5 text-text-secondary hover:text-text-primary">
+              <Maximize2 size={12} />
+            </button>
           </div>
-
-          <div ref={chartBox} className="h-56 bg-bg-card">
-            {chart.loading && !chart.data ? (
-              <p className="flex h-full items-center justify-center text-xs text-text-muted">Loading chart…</p>
-            ) : chart.error ? (
-              <p className="flex h-full items-center justify-center text-xs text-down">Could not load the chart.</p>
-            ) : chart.data && chart.data.points.length > 0 ? (
-              <OverviewPriceChart points={chart.data.points} intraday={intraday} mode={mode} previousClose={previousClose} />
-            ) : (
-              <p className="flex h-full items-center justify-center px-6 text-center text-xs text-text-muted">
-                {chart.data?.reason ?? 'No chart data.'}
-              </p>
-            )}
-          </div>
-
-          {data?.stats ? (
-            <StatsPanel stats={data.stats} label={data.stats_label} tradeDate={data.trade_date} />
-          ) : data?.reason ? (
-            <p className="text-xs text-text-muted">{data.reason}</p>
-          ) : overview.loading ? (
-            <p className="text-xs text-text-muted">Loading stats…</p>
-          ) : null}
         </div>
-      ) : (
-        <div key={`technical-${symbol}`} className="overview-slide-next">
-          {technical.error ? (
-            <p className="flex items-center gap-1.5 text-xs text-down">
-              <AlertTriangle size={13} /> Could not load the technical analysis.
-              <button onClick={() => technical.reload()} className="underline">Retry</button>
-            </p>
-          ) : technical.data && technical.data.symbol === symbol ? (
-            <TechnicalSummaryView data={technical.data} />
+
+        <div ref={chartBox} className="h-56 bg-bg-card">
+          {chart.loading && !chart.data ? (
+            <p className="flex h-full items-center justify-center text-xs text-text-muted">Loading chart…</p>
+          ) : chart.error ? (
+            <p className="flex h-full items-center justify-center text-xs text-down">Could not load the chart.</p>
+          ) : chart.data && chart.data.points.length > 0 ? (
+            <OverviewPriceChart points={chart.data.points} intraday={intraday} mode={mode} previousClose={previousClose} />
           ) : (
-            <p className="py-10 text-center text-xs text-text-muted">Loading technical analysis…</p>
+            <p className="flex h-full items-center justify-center px-6 text-center text-xs text-text-muted">
+              {chart.data?.reason ?? 'No chart data.'}
+            </p>
           )}
         </div>
-      )}
+
+        {data?.stats ? (
+          <StatsPanel stats={data.stats} label={data.stats_label} tradeDate={data.trade_date} />
+        ) : data?.reason ? (
+          <p className="text-xs text-text-muted">{data.reason}</p>
+        ) : overview.loading ? (
+          <p className="text-xs text-text-muted">Loading stats…</p>
+        ) : null}
+      </div>
     </section>
   );
 }

@@ -204,7 +204,7 @@ export default function NewsPage() {
                 <article
                   key={article.id}
                   onClick={() => navigate(`/news/${article.id}`)}
-                  className="card h-fit cursor-pointer hover:border-accent/40 transition-colors space-y-3"
+                  className="card h-fit cursor-pointer hover:border-blue-500/50 transition-colors space-y-3"
                 >
                   <NewsImage
                     src={article.image_url}
@@ -256,7 +256,7 @@ export default function NewsPage() {
                         {canCategorize && (
                           <button
                             onClick={(e) => handleRecategorize(e, article.id)}
-                            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-accent/10 text-accent-light hover:bg-accent/20 transition-colors"
+                            className="flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-accent/10 text-accent-light hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
                             title="Re-run auto-categorisation"
                           >
                             <Tag size={10} />

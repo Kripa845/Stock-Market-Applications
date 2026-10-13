@@ -115,6 +115,11 @@ class FloorsheetTransaction(models.Model):
                 fields=["company", "trade_time"],
                 name="floorsheet_company_time_idx",
             ),
+            # Market-wide one-day reads (top brokers) filter on date alone.
+            models.Index(
+                fields=["date"],
+                name="floorsheet_date_idx",
+            ),
         ]
 
         constraints = [

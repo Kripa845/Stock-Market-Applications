@@ -39,7 +39,7 @@ export default function Header() {
         <ThemeToggle />
 
         {/* Notification */}
-        <button className="relative p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors">
+        <button className="relative p-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-blue-500/10 transition-colors">
           <Bell size={16} />
           <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-accent" />
         </button>
@@ -48,7 +48,7 @@ export default function Header() {
         <div className="relative">
           <button
             onClick={() => setProfileOpen(o => !o)}
-            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-bg-elevated transition-colors"
+            className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-blue-500/10 transition-colors"
           >
             <div className="w-7 h-7 rounded-full bg-accent-dim flex items-center justify-center">
               <User size={14} className="text-accent-light" />
@@ -63,13 +63,13 @@ export default function Header() {
                 <p className="text-sm font-medium text-text-primary">{displayName}</p>
                 <p className="text-xs text-text-muted mt-0.5">{roleLabel}</p>
               </div>
-              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-bg-card transition-colors">
+              <button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-blue-500/10 transition-colors">
                 <User size={13} /> Profile
               </button>
               <div className="h-px bg-bg-border my-1" />
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-down hover:bg-bg-card transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-down hover:bg-blue-500/10 transition-colors"
               >
                 <LogOut size={13} /> Sign out
               </button>

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import CompanyPriceList,FloorsheetListAPIView, TrackedMoversListView, TrackedMoversView
+from .views import CompanyPriceList, FloorsheetListAPIView
 
 
 urlpatterns = [
@@ -14,6 +14,4 @@ urlpatterns = [
     FloorsheetListAPIView.as_view(),
     name="floorsheet-list",
 ),
-  path("movers/tracked/", TrackedMoversView.as_view()),
-path("movers/tracked/list/", TrackedMoversListView.as_view()),  
 ]

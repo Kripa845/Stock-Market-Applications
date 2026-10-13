@@ -661,7 +661,7 @@ export default function StockDetail() {
             <p className="text-sm text-text-muted">No price data</p>
           )}
         </div>
-        <button className="p-2 rounded-lg hover:bg-bg-elevated transition-colors text-text-muted hover:text-yellow-400">
+        <button className="p-2 rounded-lg hover:bg-blue-500/10 transition-colors text-text-muted hover:text-yellow-400">
           <Star size={16} />
         </button>
       </div>
@@ -756,7 +756,7 @@ export default function StockDetail() {
             <EmptyState title="No news found" description="No articles categorized for this company yet." />
           ) : (
             relatedNews.map(article => (
-              <div key={article.id} className="card hover:border-accent/30 transition-all cursor-pointer group">
+              <div key={article.id} className="card hover:border-blue-500/50 transition-all cursor-pointer group">
                 <p className="text-sm font-medium text-text-primary group-hover:text-accent-light line-clamp-2">{article.headline}</p>
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   <SentimentBadge label={article.sentiment_label} />

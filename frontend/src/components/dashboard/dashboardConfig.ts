@@ -251,7 +251,7 @@ export const universalDashboardConfig: DashboardConfig = {
         },
         {
           id: 'link-analysis',
-          title: 'Company Analysis',
+          title: 'Technical Charts',
           description: 'Price, volume and news for one company',
           route: '/company-analysis',
           icon: BarChart3,

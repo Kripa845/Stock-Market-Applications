@@ -34,7 +34,7 @@ export default function MarketRankings() {
       <div className="flex flex-wrap gap-1">
         {TABS.map((tab) => (
           <button key={tab.id} onClick={() => setMetric(tab.id)}
-            className={`rounded px-2.5 py-1 text-xs ${metric === tab.id ? 'bg-accent text-white' : 'text-text-secondary hover:bg-bg-elevated'}`}>
+            className={`rounded px-2.5 py-1 text-xs ${metric === tab.id ? 'bg-accent text-white' : 'text-text-secondary hover:bg-blue-500/10'}`}>
             {tab.label}
           </button>
         ))}

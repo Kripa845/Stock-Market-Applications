@@ -13,7 +13,6 @@ from rest_framework.filters import SearchFilter, OrderingFilter
 from apps.companies.models import Company
 from .models import DailyPrice, FloorsheetTransaction, IntradayCandle
 from .services.intraday_candles import NPT, latest_candle_date
-from .services.movers import normalize_period, tracked_movers, tracked_movers_page
 from .services.price_source import requested_price_source
 from .serializers import (
     DailyPriceSerializers,
@@ -140,48 +139,3 @@ class StockIntradayCandlesAPIView(APIView):
                 "candles": data,
             }
         )
-
-CARD = ("symbol", "name", "logo_url", "close", "change", "change_pct")
-FULL = CARD + ("sector", "adjusted", "volume", "turnover", "last_updated")
-
-
-def _pick(rows, keys):
-    return [{k: r.get(k) for k in keys} for r in rows]
-
-
-def _int(v, d, lo, hi):
-    try:
-        return max(lo, min(int(v), hi))
-    except (TypeError, ValueError):
-        return d
-
-
-class TrackedMoversView(APIView):            # dashboard cards
-    def get(self, request):
-        data = tracked_movers(
-            period=normalize_period(request.query_params.get("period")) or "1D",
-            limit=_int(request.query_params.get("limit"), 5, 1, 20),
-            lean=True,
-        )
-        return Response({
-            "as_of": data["as_of"], "reason": data.get("reason"), "warning": data.get("warning"),
-            "gainers": _pick(data["gainers"], CARD),
-            "losers": _pick(data["losers"], CARD),
-        })
-
-
-class TrackedMoversListView(APIView):        # full page
-    def get(self, request):
-        q = request.query_params
-        d = q.get("date")
-        data = tracked_movers_page(
-            side="loser" if q.get("side") == "loser" else "gainer",
-            period=q.get("period", "1D"),
-            sector=q.get("sector") or None,
-            adjusted=q.get("adjusted", "true").lower() != "false",
-            requested_date=date.fromisoformat(d) if d else None,
-            page=_int(q.get("page"), 1, 1, 10_000),
-            page_size=_int(q.get("page_size"), 20, 1, 100),
-        )
-        data["rows"] = _pick(data["rows"], FULL)
-        return Response(data)

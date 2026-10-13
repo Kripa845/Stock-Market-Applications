@@ -21,6 +21,7 @@ import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
 import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
 import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage';
+import TopBrokerPage from './pages/TopBrokerPage';
 
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
@@ -31,6 +32,8 @@ import RolesPermissionsPage from './pages/admin/RolesPermissionPage';
 
 import CrawlerStatusPage from './pages/CrawlerStatus';
 import MarketPage from './pages/Market';
+import TopMoversPage from './pages/TopMoversPage';
+import TopActivityPage from './pages/TopActivityPage';
 import TrackedCompaniesPage from './pages/TrackedCompanies';
 import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
@@ -233,6 +236,62 @@ function AppRoutes() {
 
 
           <Route
+            path="/market/gainers"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/gainers']}
+              >
+                <TopMoversPage key="gainers" side="gainers" />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/losers"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/losers']}
+              >
+                <TopMoversPage key="losers" side="losers" />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/turnover"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/turnover']}
+              >
+                <TopActivityPage key="turnover" metric="turnover" />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/volume"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/volume']}
+              >
+                <TopActivityPage key="volume" metric="volume" />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/transactions"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/transactions']}
+              >
+                <TopActivityPage key="transactions" metric="transactions" />
+              </PermissionRoute>
+            }
+          />
+
+
+          <Route
             path="/tracked"
             element={
               <PermissionRoute
@@ -292,6 +351,10 @@ function AppRoutes() {
           <Route
             path="/broker-analysis/:brokerId"
             element={<PermissionRoute rule={ROUTE_RULES['/broker-analysis']}><BrokerDetailPage /></PermissionRoute>}
+          />
+          <Route
+            path="/top-brokers"
+            element={<PermissionRoute rule={ROUTE_RULES['/top-brokers']}><TopBrokerPage /></PermissionRoute>}
           />
 
 

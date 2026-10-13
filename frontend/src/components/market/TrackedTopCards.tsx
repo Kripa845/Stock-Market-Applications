@@ -19,28 +19,29 @@ interface CardSpec {
   border: string;   // coloured top edge
   tint: string;     // icon colour
   valueLabel: string;
+  link: string;     // full page under Market Overview
   value: (row: TrackedRow) => React.ReactNode;
 }
 
 const CARDS: Record<'gainers' | 'losers' | TopMetric, CardSpec> = {
   gainers: {
-    title: 'Top Gainers', icon: TrendingUp, border: 'border-t-up', tint: 'text-up', valueLabel: '% Change',
+    title: 'Top Gainers', icon: TrendingUp, border: 'border-t-up', tint: 'text-up', valueLabel: '% Change', link: '/market/gainers',
     value: (row) => <span className="text-up">{formatPct(row.change_pct)}</span>,
   },
   losers: {
-    title: 'Top Losers', icon: TrendingDown, border: 'border-t-down', tint: 'text-down', valueLabel: '% Change',
+    title: 'Top Losers', icon: TrendingDown, border: 'border-t-down', tint: 'text-down', valueLabel: '% Change', link: '/market/losers',
     value: (row) => <span className="text-down">{formatPct(row.change_pct)}</span>,
   },
   turnover: {
-    title: 'Top Turnover', icon: Coins, border: 'border-t-amber-400', tint: 'text-amber-400', valueLabel: 'Turnover',
+    title: 'Top Turnover', icon: Coins, border: 'border-t-amber-400', tint: 'text-amber-400', valueLabel: 'Turnover', link: '/market/turnover',
     value: (row) => formatNprCompact(row.turnover),
   },
   volume: {
-    title: 'Top Volume', icon: Layers, border: 'border-t-sky-400', tint: 'text-sky-400', valueLabel: 'Volume',
+    title: 'Top Volume', icon: Layers, border: 'border-t-sky-400', tint: 'text-sky-400', valueLabel: 'Volume', link: '/market/volume',
     value: (row) => formatNprCompact(row.volume),
   },
   transactions: {
-    title: 'Top Transactions', icon: BarChart3, border: 'border-t-violet-400', tint: 'text-violet-400', valueLabel: 'Trades',
+    title: 'Top Transactions', icon: BarChart3, border: 'border-t-violet-400', tint: 'text-violet-400', valueLabel: 'Trades', link: '/market/transactions',
     value: (row) => (row.transactions === null ? <span className="text-text-muted">—</span> : formatCount(row.transactions)),
   },
 };
@@ -52,6 +53,7 @@ function RankCard({ spec, rows, emptyText }: { spec: CardSpec; rows: TrackedRow[
     <div className={`card flex h-full flex-col border-t-2 !p-0 ${spec.border}`}>
       <h3 className="flex items-center gap-2 border-b border-bg-border px-4 py-3 text-sm font-semibold text-text-primary">
         <Icon size={15} className={spec.tint} /> {spec.title}
+        <Link to={spec.link} className="ml-auto text-xs font-normal text-accent-light hover:underline">View all →</Link>
       </h3>
       {rows.length === 0 ? (
         <p className="px-4 py-8 text-center text-xs text-text-muted">{emptyText}</p>
@@ -67,7 +69,7 @@ function RankCard({ spec, rows, emptyText }: { spec: CardSpec; rows: TrackedRow[
           <tbody>
             {rows.map((row) => (
               <tr key={row.symbol} onClick={() => navigate(`/companies/${row.symbol}`)}
-                className="cursor-pointer border-b border-bg-border last:border-0 hover:bg-bg-elevated/50">
+                className="cursor-pointer border-b border-bg-border last:border-0 hover:bg-blue-500/10">
                 <td className="px-4 py-2.5 font-semibold text-text-primary">{row.symbol}</td>
                 <td className="py-2.5 text-right font-mono text-text-secondary">{ltp(row.close)}</td>
                 <td className="px-4 py-2.5 text-right font-mono font-semibold text-text-primary">{spec.value(row)}</td>

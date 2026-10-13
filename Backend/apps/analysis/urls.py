@@ -4,6 +4,7 @@ from .views import (
     CompanyBrokerActivityAPIView,
     BrokerAnalysisAPIView,
     BrokerDetailAPIView,
+    TopBrokerAPIView,
     CompanyCategorizedNewsAPIView,
     CompanyNewsPriceCorrelationAPIView,
     CrossCompanyAnalysisAPIView,
@@ -13,6 +14,8 @@ from .views import (
 
 urlpatterns = [
     path("brokers/", BrokerAnalysisAPIView.as_view(), name="broker-analysis"),
+    # Before brokers/<broker_id>/ so "top" is not read as a broker id.
+    path("brokers/top/", TopBrokerAPIView.as_view(), name="top-brokers"),
     path("brokers/<str:broker_id>/", BrokerDetailAPIView.as_view(), name="broker-detail"),
     path("companies/<int:pk>/categorized-news/", CompanyCategorizedNewsAPIView.as_view(), name="company-categorized-news"),
     path(

@@ -30,7 +30,7 @@ export default function MarketHeatmap() {
         <div className="flex gap-1">
           {(['sector', 'company'] as const).map((value) => (
             <button key={value} onClick={() => setGroup(value)}
-              className={`rounded px-2 py-1 text-xs capitalize ${group === value ? 'bg-accent text-white' : 'text-text-secondary hover:bg-bg-elevated'}`}>
+              className={`rounded px-2 py-1 text-xs capitalize ${group === value ? 'bg-accent text-white' : 'text-text-secondary hover:bg-blue-500/10'}`}>
               {value}
             </button>
           ))}

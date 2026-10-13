@@ -196,7 +196,7 @@ newsApi.getNewsById(Number(id)),
           <button
             onClick={handleTriggerCategorize}
             disabled={actionLoading}
-            className="flex items-center gap-1.5 text-xs bg-bg-elevated hover:bg-bg-border text-text-secondary hover:text-text-primary px-3 py-1.5 rounded-lg border border-bg-border transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs bg-bg-elevated hover:bg-blue-500/10 text-text-secondary hover:text-text-primary px-3 py-1.5 rounded-lg border border-bg-border transition-colors disabled:opacity-50"
             title="Run background ML categorization on this article"
           >
             <RefreshCw size={12} className={actionLoading ? 'animate-spin' : ''} />
@@ -280,7 +280,7 @@ newsApi.getNewsById(Number(id)),
                 return (
                   <div
                     key={tag.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-bg-elevated/30 border border-bg-border hover:border-accent/20 transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg bg-bg-elevated/30 border border-bg-border hover:border-blue-500/50 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-16 font-mono font-bold text-accent-light text-sm">
@@ -322,14 +322,14 @@ newsApi.getNewsById(Number(id)),
                         <div className="flex items-center gap-1 border-l border-bg-border pl-3">
                           <button
                             onClick={() => handleOpenUpdateModal(tag)}
-                            className="p-1 text-text-muted hover:text-accent-light rounded hover:bg-bg-elevated transition-colors"
+                            className="p-1 text-text-muted hover:text-accent-light rounded hover:bg-blue-500/10 transition-colors"
                             title="Edit Confidence / Reason"
                           >
                             <Edit3 size={13} />
                           </button>
                           <button
                             onClick={() => handleOpenRemoveModal(tag)}
-                            className="p-1 text-text-muted hover:text-down rounded hover:bg-bg-elevated transition-colors"
+                            className="p-1 text-text-muted hover:text-down rounded hover:bg-blue-500/10 transition-colors"
                             title="Remove Company Tag"
                           >
                             <Trash2 size={13} />
@@ -365,7 +365,7 @@ newsApi.getNewsById(Number(id)),
                 </thead>
                 <tbody className="divide-y divide-bg-border">
                   {corrections.map((c) => (
-                    <tr key={c.id} className="text-text-secondary hover:bg-bg-elevated/20">
+                    <tr key={c.id} className="text-text-secondary hover:bg-blue-500/10">
                       <td className="py-2 px-3 font-semibold capitalize">
                         <span
                           className={
@@ -498,7 +498,7 @@ newsApi.getNewsById(Number(id)),
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors"
+                  className="px-3 py-2 rounded-lg text-text-secondary hover:text-text-primary hover:bg-blue-500/10 transition-colors"
                 >
                   Cancel
                 </button>

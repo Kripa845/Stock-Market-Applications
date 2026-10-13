@@ -7,9 +7,9 @@ import EmptyState from '../components/common/EmptyState';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
 import { useLiveRefresh } from '../hooks/useLiveRefresh';
-import MarketBreadthWidget from '../components/market-intelligence/MarketBreadthWidget';
 import MarketHeatmap from '../components/market-intelligence/MarketHeatmap';
 import TrackedTopCards from '../components/market/TrackedTopCards';
+import TopMoversCards from '../components/market/TopMoversCards';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import Section from '../components/common/Section';
 import IndexSummaryCards from '../components/market/IndexSummaryCards';
@@ -45,16 +45,13 @@ export default function MarketPage() {
         </div>
       </Section>
 
-      <Section title="Your companies · top lists" subtitle="Gainers, losers, turnover, volume and trades of the tracked companies · latest close">
-        <TrackedTopCards />
+      <Section title="Top gainers & losers" subtitle="Biggest price moves among the tracked companies">
+        <TopMoversCards />
       </Section>
 
-      <Section title="Breadth & sectors" subtitle="How many tracked stocks rose, and where the turnover went">
-        <div className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-          <MarketBreadthWidget />
-          <MarketHeatmap />
-        </div>
-      </Section>
+      <TrackedTopCards />
+
+      <MarketHeatmap />
 
       <Section
         title="All companies"

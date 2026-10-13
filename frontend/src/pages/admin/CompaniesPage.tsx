@@ -613,7 +613,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                   return (
                     <tr
                       key={company.id}
-                      className="transition hover:bg-bg-elevated/70"
+                      className="transition hover:bg-blue-500/10"
                     >
 
                       <td className="px-5 py-4">
@@ -667,7 +667,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                           <button
                             type="button"
                             onClick={() => toggleTracking(company)}
-                            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-text-secondary transition hover:bg-bg-elevated"
+                            className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-medium text-text-secondary transition hover:bg-blue-500/10"
                           >
                             {tracked ? (
                               <><ToggleRight size={22} className="text-purple-600" /><span className="text-purple-700">Tracked</span></>
@@ -693,7 +693,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
                             <button
                               type="button"
                               onClick={() => openEditModal(company)}
-                              className="rounded-lg border border-bg-border p-2 text-text-muted transition hover:bg-bg-elevated hover:text-text-primary"
+                              className="rounded-lg border border-bg-border p-2 text-text-muted transition hover:bg-blue-500/10 hover:text-text-primary"
                               title="Edit company"
                             >
                               <Pencil size={16} />
@@ -753,7 +753,7 @@ export default function CompaniesPage({ trackedOnly = false }: { trackedOnly?: b
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg p-2 text-text-muted hover:bg-bg-elevated hover:text-text-primary"
+                className="rounded-lg p-2 text-text-muted hover:bg-blue-500/10 hover:text-text-primary"
               >
                 <X size={19} />
               </button>

@@ -401,7 +401,7 @@
 //               'px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all',
 //               c.id === selectedId
 //                 ? 'bg-accent text-white shadow-md'
-//                 : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-bg-card',
+//                 : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-blue-500/10',
 //             )}
 //           >
 //             {c.symbol}
@@ -598,6 +598,7 @@ import Badge from '../components/common/Badge';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import VolumeAnomalyChart from '../components/analysis/VolumeAnomalyChart';
 import { NewsSentimentScatter } from '../components/analysis/NewsSentimentScatter';
+import { useSearchParams } from 'react-router-dom';
 import { getCompanies } from '../api/companies';
 import {
   analysisApi,
@@ -643,6 +644,8 @@ function computeVwap(prices: PricePoint[]) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CompanyAnalysisDashboard() {
+  const [searchParams] = useSearchParams();
+  const requestedSymbol = searchParams.get('symbol')?.toUpperCase();
   const [companies,   setCompanies]   = useState<Company[]>([]);
   const [selectedId,  setSelectedId]  = useState<number | null>(null);
   const [prices,      setPrices]      = useState<PricePoint[]>([]);
@@ -665,11 +668,12 @@ export default function CompanyAnalysisDashboard() {
     getCompanies({ status: 'active' })
       .then(r => {
         setCompanies(r.results);
-        setSelectedId(r.results[0]?.id ?? null);
+        const requested = r.results.find(c => c.symbol.toUpperCase() === requestedSymbol);
+        setSelectedId((requested ?? r.results[0])?.id ?? null);
       })
       .catch(() => setError('Unable to load companies.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [requestedSymbol]);
 
   // Load extended historical prices once per company; the selected range is filtered from this history.
   const loadData = useCallback(() => {
@@ -761,7 +765,7 @@ export default function CompanyAnalysisDashboard() {
 
       {/* ── Page header ──────────────────────────────────────────────────── */}
       <PageHeader
-        title="Company Behavior Analysis"
+        title="Technical Charts"
         subtitle="Price / volume trends, VWAP, broker activity, and categorized company news."
         actions={
           <button
@@ -791,7 +795,7 @@ export default function CompanyAnalysisDashboard() {
               'px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all',
               c.id === selectedId
                 ? 'bg-accent text-white shadow-md'
-                : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-bg-card',
+                : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-blue-500/10',
             )}
           >
             {c.symbol}

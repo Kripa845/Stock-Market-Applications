@@ -21,7 +21,7 @@ export default function RangeBar({ dates, value, onChange, shownFrom, shownCount
           <button key={id} type="button" disabled={!available} onClick={() => onChange(id)}
             title={available ? RANGE_TITLES[id] : unavailableReason(dates, id)}
             className={clsx('rounded px-2.5 py-1 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-35',
-              value === id ? 'bg-accent text-white' : 'text-text-secondary enabled:hover:bg-bg-elevated enabled:hover:text-text-primary')}>
+              value === id ? 'bg-accent text-white' : 'text-text-secondary enabled:hover:bg-blue-500/10 enabled:hover:text-text-primary')}>
             {id}
           </button>
         );

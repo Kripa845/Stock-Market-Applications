@@ -109,7 +109,7 @@ export default function LatestNews() {
             <div
               key={article.id}
               onClick={() => navigate(`/news/${article.id}`)}
-              className="flex gap-3 p-3 rounded-lg bg-bg-elevated border border-bg-border hover:border-accent/30 cursor-pointer transition-all group"
+              className="flex gap-3 p-3 rounded-lg bg-bg-elevated border border-bg-border hover:border-blue-500/50 cursor-pointer transition-all group"
             >
               <NewsImage src={article.image_url} className="h-16 w-24 shrink-0 rounded-md" />
               <div className="min-w-0 flex-1">

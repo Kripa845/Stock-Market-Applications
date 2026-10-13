@@ -198,7 +198,7 @@ export default function DrawingToolbar({ getChart }: Props) {
   const btn = (on: boolean, toggle = false) =>
     `flex h-8 w-8 items-center justify-center rounded transition-colors ${
       on ? (toggle ? 'bg-accent/15 text-accent' : 'bg-accent text-white')
-        : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'}`;
+        : 'text-text-secondary hover:bg-blue-500/10 hover:text-text-primary'}`;
 
   // Small corner arrow that opens a group's flyout, like TradingView.
   const flyoutToggle = (id: string) => (
@@ -217,7 +217,7 @@ export default function DrawingToolbar({ getChart }: Props) {
 
   const item = (on: boolean, Icon: LucideIcon, text: string, onClick: () => void, key?: string) => (
     <button key={key ?? text} type="button" role="menuitem" onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${on ? 'bg-accent text-white' : 'text-text-primary hover:bg-bg-elevated'}`}>
+      className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs ${on ? 'bg-accent text-white' : 'text-text-primary hover:bg-blue-500/10'}`}>
       <Icon size={14} className="shrink-0" /> {text}
     </button>
   );
@@ -264,7 +264,7 @@ export default function DrawingToolbar({ getChart }: Props) {
             {EMOJIS.map((e) => (
               <button key={e} type="button" title={e}
                 onClick={() => { setEmoji(e); setOpen(null); start({ id: EMOJI_GROUP, label: 'Emoji', overlay: 'emojiMark', icon: Smile, extendData: e }); }}
-                className={`flex h-7 w-7 items-center justify-center rounded text-base hover:bg-bg-elevated ${e === emoji ? 'bg-bg-elevated' : ''}`}>
+                className={`flex h-7 w-7 items-center justify-center rounded text-base hover:bg-blue-500/10 ${e === emoji ? 'bg-bg-elevated' : ''}`}>
                 {e}
               </button>
             ))}

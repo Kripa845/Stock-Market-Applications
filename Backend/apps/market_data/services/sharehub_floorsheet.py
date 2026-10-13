@@ -15,6 +15,8 @@ import urllib.parse
 import urllib.request
 from decimal import Decimal, InvalidOperation
 
+from django.db import transaction
+
 from apps.market_data.models import FloorsheetTransaction
 from apps.market_data.services.sharehub_time import parse_sharehub_time
 
@@ -122,13 +124,15 @@ def build_transactions(company, day, items):
 
 def save_transactions(objs):
     """Bulk upsert on the contract number; existing rows only gain trade_time and amount."""
-    FloorsheetTransaction.objects.bulk_create(
-        objs,
-        batch_size=2000,
-        update_conflicts=True,
-        unique_fields=["company", "date", "transaction_id"],
-        update_fields=["trade_time", "amount"],
-    )
+    # One transaction, so an interrupted run never leaves a half-written company-day behind.
+    with transaction.atomic():
+        FloorsheetTransaction.objects.bulk_create(
+            objs,
+            batch_size=2000,
+            update_conflicts=True,
+            unique_fields=["company", "date", "transaction_id"],
+            update_fields=["trade_time", "amount"],
+        )
 
 
 def sync_company_day(company, day, incremental=False):

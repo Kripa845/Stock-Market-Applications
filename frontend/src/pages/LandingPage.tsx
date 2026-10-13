@@ -16,7 +16,7 @@ import LandingNews from '../components/landing/LandingNews';
 const FEATURES = [
   { icon: LineChart, title: 'Technical Indicators', text: '110 indicators — moving averages, oscillators, trend, volatility and volume — calculated from crawled NEPSE prices.' },
   { icon: Newspaper, title: 'News Intelligence', text: 'Financial news from four Nepali portals, tagged to companies automatically and scored for sentiment.' },
-  { icon: Building2, title: 'Company Analysis', text: 'Price action, VWAP, volume anomalies and news reaction for every tracked company in one view.' },
+  { icon: Building2, title: 'Technical Charts', text: 'Price action, VWAP, volume anomalies and news reaction for every tracked company in one view.' },
   { icon: BarChart3, title: 'Broker Analysis', text: 'Floorsheet-based broker activity: who is buying, who is selling and how concentrated it is.' },
 ];
 

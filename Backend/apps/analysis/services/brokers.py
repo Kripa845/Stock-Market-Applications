@@ -265,6 +265,21 @@ def sampled_floorsheet_dates(
     
     
 
+def floorsheet_day_coverage(company_ids=None):
+    """
+    ``[(date, companies_with_trades), ...]`` newest first, so callers can tell
+    a full session from a partial crawl (one company crawled on a given day).
+    """
+    return [
+        (row["date"], row["companies"])
+        for row in _base_queryset(company_ids=company_ids)
+        .order_by()
+        .values("date")
+        .annotate(companies=Count("company", distinct=True))
+        .order_by("-date")
+    ]
+
+
 def build_top_stock_by_broker(
     company=None, start_date=None, end_date=None, company_ids=None, broker=None,
 ):

@@ -275,7 +275,7 @@ export default function ExportPage() {
                     'flex flex-col items-start text-left px-4 py-3 rounded-lg border transition-colors',
                     form.dataType === opt.value
                       ? 'border-accent bg-accent/10 text-accent-light'
-                      : 'border-bg-border bg-bg-secondary hover:bg-bg-elevated text-text-secondary hover:text-text-primary',
+                      : 'border-bg-border bg-bg-secondary hover:bg-blue-500/10 text-text-secondary hover:text-text-primary',
                   ].join(' ')}
                 >
                   <span className="text-sm font-medium">{opt.label}</span>
@@ -304,7 +304,7 @@ export default function ExportPage() {
                   {companies.map((c) => (
                     <label
                       key={c.id}
-                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-bg-secondary cursor-pointer"
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-blue-500/10 cursor-pointer"
                     >
                       <input
                         type="checkbox"
@@ -390,7 +390,7 @@ export default function ExportPage() {
                     'flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors',
                     form.format === fmt
                       ? 'border-accent bg-accent/10 text-accent-light'
-                      : 'border-bg-border bg-bg-secondary hover:bg-bg-elevated text-text-secondary',
+                      : 'border-bg-border bg-bg-secondary hover:bg-blue-500/10 text-text-secondary',
                   ].join(' ')}
                 >
                   {FORMAT_ICONS[fmt]}

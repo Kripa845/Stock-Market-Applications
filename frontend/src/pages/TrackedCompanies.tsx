@@ -6,15 +6,14 @@ import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import Section, { SectionHeader } from '../components/common/Section';
 import CompanyLogo from '../components/companies/CompanyLogo';
-import BrokerBadge from '../components/brokers/BrokerBadge';
+import NewsImage from '../components/common/NewsImage';
 import BasketChart from '../components/market/BasketChart';
-import NepseIndices from '../components/market/NepseIndices';
 import {
   changeTone, formatCount, formatNprCompact, formatPct, formatPrice, formatTradeDate,
 } from '../components/market/format';
 import {
   marketApi,
-  type BasketIndex, type BrokerWindow, type DividendRow, type ExclusionReason, type LiveMoversResponse, type MoverPeriod,
+  type BasketIndex, type DividendRow, type ExclusionReason, type LiveMoversResponse, type MoverPeriod,
   type MoversResponse, type Signals, type TopMetric, type TrackedRow, type TrackedSummary, type WatchlistRow,
 } from '../api/market';
 import type { NewsArticle } from '../types';
@@ -172,7 +171,7 @@ function MoverTable({ title, rows, total, tone, onSelect, selected, watched, onT
               const Arrow = up ? ArrowUp : ArrowDown;
               return (
                 <tr key={row.symbol} onClick={() => onSelect(row.symbol)}
-                  className={`cursor-pointer border-b border-bg-border hover:bg-bg-elevated/50 ${selected === row.symbol ? 'bg-accent/5' : ''}`}>
+                  className={`cursor-pointer border-b border-bg-border hover:bg-blue-500/10 ${selected === row.symbol ? 'bg-accent/5' : ''}`}>
                   <td className="py-3">
                     <div className="flex items-center gap-2.5">
                       {watched && (
@@ -496,109 +495,18 @@ function SignalsCard({ signals }: { signals: Signals }) {
   );
 }
 
-function BrokerSide({ title, rows, side }: { title: string; rows: BrokerWindow['top_buyers']; side: 'buy' | 'sell' }) {
-  return (
-    <div>
-      <h4 className="mb-2 text-xs font-medium text-text-secondary">{title}</h4>
-      <ul className="space-y-1.5">
-        {rows.map((row) => (
-          <li key={row.broker} className="flex items-center justify-between gap-2 text-xs">
-            <BrokerBadge brokerCode={row.broker} name={row.broker_name} />
-            <span className={`font-mono ${side === 'buy' ? 'text-up' : 'text-down'}`}>
-              {formatCount(side === 'buy' ? row.buy_quantity : row.sell_quantity)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function BrokersCard({ windows, denominator }: { windows: BrokerWindow[]; denominator: string }) {
-  const [index, setIndex] = useState(0);
-  const window = windows[index];
-  if (!window) return null;
-  return (
-    <div className="card">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-text-primary">Broker activity</h3>
-        <div className="flex gap-1 rounded-lg bg-bg-elevated p-0.5 text-xs">
-          {windows.map((w, i) => (
-            <button
-              key={w.sessions}
-              onClick={() => setIndex(i)}
-              className={`rounded-md px-2.5 py-1 ${i === index ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary'}`}
-            >
-              {w.sessions} sessions
-            </button>
-          ))}
-        </div>
-      </div>
-      {window.total_trades === 0 ? (
-        <p className="py-6 text-center text-xs text-text-muted">No floorsheet trades collected for this company yet.</p>
-      ) : (
-        <>
-          <p className="text-[11px] text-text-muted">
-            {window.sessions_available < window.sessions && `Only ${window.sessions_available} floorsheet sessions available. `}
-            {formatTradeDate(window.start_date)} – {formatTradeDate(window.end_date)} · {formatCount(window.total_trades)} trades ·
-            Rs {formatNprCompact(window.total_amount)}
-          </p>
-          {window.concentration && (
-            <p className="mt-2 text-xs text-text-secondary">
-              Top {window.concentration.top_n} brokers handled{' '}
-              <span className="font-mono font-semibold text-text-primary">{Number(window.concentration.volume_share_pct).toFixed(1)}%</span>{' '}
-              of the traded volume.
-            </p>
-          )}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <BrokerSide title="Top buyers (shares)" rows={window.top_buyers} side="buy" />
-            <BrokerSide title="Top sellers (shares)" rows={window.top_sellers} side="sell" />
-          </div>
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[520px] text-xs">
-              <thead>
-                <tr className="border-b border-bg-border text-text-secondary">
-                  <th className="py-2 text-left font-medium">Broker</th>
-                  <th className="py-2 text-right font-medium">Net shares</th>
-                  <th className="py-2 text-right font-medium">Net amount</th>
-                  <th className="py-2 text-right font-medium">Share of turnover</th>
-                </tr>
-              </thead>
-              <tbody>
-                {window.brokers.slice(0, 10).map((row) => (
-                  <tr key={row.broker} className="table-row">
-                    <td className="py-1.5"><BrokerBadge brokerCode={row.broker} name={row.broker_name} /></td>
-                    <td className={`py-1.5 text-right font-mono ${toneText[changeTone(row.net_quantity)]}`}>{formatCount(row.net_quantity)}</td>
-                    <td className={`py-1.5 text-right font-mono ${toneText[changeTone(row.net_amount)]}`}>{formatNprCompact(row.net_amount)}</td>
-                    <td className="py-1.5 text-right font-mono text-text-primary">{row.share_pct === null ? '—' : `${Number(row.share_pct).toFixed(2)}%`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-2 text-[10px] text-text-muted" title={denominator}>
-            Share of turnover = (buy + sell amount) ÷ (2 × company turnover in the window), so all brokers add up to 100%.
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
 function CompanyDetail({ symbol, company }: { symbol: string; company?: TrackedRow }) {
   const { hasPermission } = useAuth();
   const canAnalyse = hasPermission('view_analysis');
   const canNews = hasPermission('view_news');
   const [signals, setSignals] = useState<Signals | null | undefined>(undefined);
-  const [brokers, setBrokers] = useState<{ windows: BrokerWindow[]; share_denominator: string } | null>(null);
   const [news, setNews] = useState<NewsArticle[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setSignals(undefined); setBrokers(null); setNews(null);
+    setSignals(undefined); setNews(null);
     if (canAnalyse) {
       marketApi.signals(symbol).then((d) => { if (!cancelled) setSignals(d.signals); }).catch(() => { if (!cancelled) setSignals(null); });
-      marketApi.brokers(symbol).then((d) => { if (!cancelled) setBrokers(d); }).catch(() => undefined);
     }
     if (canNews) {
       marketApi.companyNews(symbol).then((d) => { if (!cancelled) setNews(d.results.slice(0, 5)); }).catch(() => { if (!cancelled) setNews([]); });
@@ -616,13 +524,11 @@ function CompanyDetail({ symbol, company }: { symbol: string; company?: TrackedR
             <span className="font-mono normal-case text-accent-light">{symbol}</span> in detail
           </>
         )}
-        subtitle={company?.name ? `${company.name} · signals, broker activity and news` : 'Signals, broker activity and news'}
+        subtitle={company?.name ? `${company.name} · signals and news` : 'Signals and news'}
       />
       {canAnalyse && signals && <SignalsCard signals={signals} />}
-      <div className="grid gap-4 xl:grid-cols-[3fr_2fr]">
-        {canAnalyse && brokers && <BrokersCard key={symbol} windows={brokers.windows} denominator={brokers.share_denominator} />}
-        {canNews && (
-          <div className="card h-full">
+      {canNews && (
+          <div className="card">
             <h3 className="mb-3 text-sm font-semibold text-text-primary">Latest news about {symbol}</h3>
             {news === null ? <p className="text-xs text-text-muted">Loading…</p> : news.length === 0 ? (
               <p className="text-xs text-text-muted">No categorised news for this company yet.</p>
@@ -630,17 +536,21 @@ function CompanyDetail({ symbol, company }: { symbol: string; company?: TrackedR
               <ul className="space-y-3">
                 {news.map((article) => (
                   <li key={article.id}>
-                    <Link to={`/news/${article.id}`} className="text-sm leading-snug text-text-primary hover:text-accent-light">{article.headline}</Link>
-                    <div className="text-[11px] text-text-muted">
-                      {article.source}{article.published_at ? ` · ${format(new Date(article.published_at), 'MMM d, yyyy')}` : ''}
-                    </div>
+                    <Link to={`/news/${article.id}`} className="group flex gap-3">
+                      <NewsImage src={article.image_url} className="h-16 w-24 shrink-0 rounded-md" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm leading-snug text-text-primary line-clamp-2 group-hover:text-accent-light">{article.headline}</p>
+                        <div className="mt-1 text-[11px] text-text-muted">
+                          {article.source}{article.published_at ? ` · ${format(new Date(article.published_at), 'MMM d, yyyy')}` : ''}
+                        </div>
+                      </div>
+                    </Link>
                   </li>
                 ))}
               </ul>
             )}
           </div>
         )}
-      </div>
     </section>
   );
 }
@@ -830,7 +740,6 @@ export default function TrackedCompaniesPage() {
         </Section>
       )}
 
-      <NepseIndices key={`indices-${reloadKey}`} />
     </div>
   );
 }

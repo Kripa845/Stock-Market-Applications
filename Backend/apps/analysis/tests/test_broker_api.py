@@ -83,6 +83,51 @@ class BrokerAnalysisApiTests(TestCase):
         })
         self.assertEqual(response.status_code, 400)
 
+    def test_top_brokers_defaults_to_latest_complete_day_and_ranks_by_turnover(self):
+        # 2026-09-12: 52 buys 60 TST2 (6,000) and sells 40 TEST (4,000) -> 10,000;
+        # 88 sells 6,000; 17 buys 4,000.
+        response = self.client.get("/api/analysis/brokers/top/")
+        self.assertEqual(response.status_code, 200, response.content[:500])
+        self.assertEqual(response.data["date"], "2026-09-12")
+        self.assertTrue(response.data["is_complete"])
+        self.assertEqual(response.data["companies"], 2)
+        self.assertEqual([row["broker"] for row in response.data["results"]], ["52", "88", "17"])
+        self.assertEqual([row["broker"] for row in response.data["podium"]], ["52", "88", "17"])
+        self.assertEqual(Decimal(response.data["results"][0]["total_value"]), Decimal("10000"))
+
+        summary = response.data["summary"]
+        self.assertEqual(Decimal(summary["total_amount"]), Decimal("10000"))  # each trade once
+        self.assertEqual(summary["total_quantity"], 100)
+        self.assertEqual(summary["transaction_count"], 2)
+        self.assertEqual(summary["active_brokers"], 3)
+
+    def test_top_brokers_top_stock_is_highest_turnover_symbol(self):
+        response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-12"})
+        top = response.data["results"][0]["top_stock"]
+        self.assertEqual(top["symbol"], "TST2")
+        self.assertEqual(Decimal(top["buy_amount"]), Decimal("6000"))
+        self.assertEqual(Decimal(top["sell_amount"]), Decimal("0"))
+        self.assertEqual(Decimal(top["turnover"]), Decimal("6000"))
+
+    def test_top_brokers_flags_partial_day_and_lists_available_dates(self):
+        response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-10"})
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data["is_complete"])
+        self.assertEqual(response.data["companies"], 1)
+        self.assertEqual(response.data["expected_companies"], 2)
+        self.assertEqual(
+            [(d["date"], d["is_complete"]) for d in response.data["available_dates"]],
+            [("2026-09-12", True), ("2026-09-10", False)],
+        )
+
+    def test_top_brokers_rejects_bad_date_and_returns_empty_for_day_without_trades(self):
+        self.assertEqual(self.client.get("/api/analysis/brokers/top/", {"date": "12-09-2026"}).status_code, 400)
+        response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-11"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"], [])
+        self.assertEqual(response.data["podium"], [])
+        self.assertEqual(response.data["summary"]["transaction_count"], 0)
+
     def test_detail_returns_daily_trend_and_existing_company_breakdown(self):
         response = self.client.get("/api/analysis/brokers/52/")
         self.assertEqual(response.status_code, 200)
@@ -91,6 +136,36 @@ class BrokerAnalysisApiTests(TestCase):
         self.assertEqual(response.data["summary"]["net_quantity"], 140)
         self.assertEqual(len(response.data["daily_activity"]), 2)
         self.assertEqual({row["symbol"] for row in response.data["companies"]}, {"TEST", "TST2"})
+
+    def test_detail_lists_every_session_including_days_broker_did_not_trade(self):
+        response = self.client.get("/api/analysis/brokers/88/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["sampled_dates"], ["2026-09-12"])
+        self.assertEqual(response.data["trading_sessions"], ["2026-09-10", "2026-09-12"])
+
+    def test_detail_includes_broker_profile_from_directory(self):
+        Broker.objects.create(
+            broker_no=52,
+            broker_code="52",
+            name="Sweta Securities Pvt. Ltd.",
+            short_name="Sweta",
+            logo="52.png",
+            website="https://example.test",
+            tms_link="tms52.nepsetms.com.np",
+        )
+        response = self.client.get("/api/analysis/brokers/52/")
+        self.assertEqual(response.status_code, 200)
+        profile = response.data["profile"]
+        self.assertEqual(profile["name"], "Sweta Securities Pvt. Ltd.")
+        self.assertEqual(profile["logo_url"], "/broker-logos/52.png")
+        self.assertEqual(profile["tms_link"], "tms52.nepsetms.com.np")
+        self.assertTrue(profile["in_directory"])
+
+    def test_detail_profile_falls_back_for_unlisted_broker(self):
+        profile = self.client.get("/api/analysis/brokers/52/").data["profile"]
+        self.assertEqual(profile["name"], "Broker 52")
+        self.assertIsNone(profile["logo_url"])
+        self.assertFalse(profile["in_directory"])
 
     def test_missing_broker_returns_empty_not_fake_data(self):
         response = self.client.get("/api/analysis/brokers/9999/")

@@ -212,6 +212,96 @@ export interface LiveMoversResponse {
 
 export type TopMetric = 'turnover' | 'volume' | 'transactions';
 
+// --- Top Gainers / Losers pages (/api/market/top-gainers/) -------------------------------------
+
+export type TopMoversSide = 'gainers' | 'losers';
+export type TopMoversPeriod = 'today' | '2d' | '3d' | '5d' | '7d' | '1w' | '1m' | '3m' | '4m' | '6m' | '1y';
+
+export interface TopMoversRow {
+  symbol: string;
+  name: string;
+  logo_url: string | null;
+  sector: string;
+  /** Last traded price (live) or the session close. */
+  ltp: number;
+  change: number;
+  change_pct: number;
+  /** % measured against an exchange-adjusted previous close (bonus / right shares). */
+  adjusted: boolean;
+  /** ISO time in Nepal time of the last trade; null when not known for that session. */
+  last_updated: string | null;
+}
+
+export interface TopMoversParams {
+  type: TopMoversSide;
+  period: TopMoversPeriod;
+  sector?: string;
+  adjusted: boolean;
+  page: number;
+  page_size: number;
+}
+
+export interface TopMoversResponse {
+  side: TopMoversSide;
+  period: TopMoversPeriod;
+  period_label: string;
+  adjusted: boolean;
+  sectors: string[];
+  /** Today from NEPSE's live feed (unofficial until the close). */
+  live: boolean;
+  stale?: boolean;
+  market_open: boolean;
+  as_of: string | null;
+  base_date: string | null;
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+  rows: TopMoversRow[];
+  reason?: string;
+  action?: string;
+}
+
+// --- Top Turnover / Volume / Transactions pages (/api/market/top-activity/) -------------------
+
+export type ActivityMetric = 'turnover' | 'volume' | 'transactions';
+
+export interface TopActivityRow {
+  symbol: string;
+  name: string;
+  logo_url: string | null;
+  sector: string;
+  /** Close on the latest session; null when the company did not trade that day. */
+  ltp: number | null;
+  /** Price change over the period; null when it cannot be measured (no trade, new listing). */
+  change_pct: number | null;
+  /** The metric summed over the period's sessions. */
+  value: number;
+  sessions_traded: number;
+  /** False when some traded sessions have no trade count yet (transactions only). */
+  complete: boolean;
+}
+
+export interface TopActivityResponse {
+  metric: ActivityMetric;
+  period: TopMoversPeriod;
+  period_label: string;
+  sectors: string[];
+  market_open: boolean;
+  as_of: string | null;
+  base_date: string | null;
+  /** First session included in the sum. */
+  first_session: string | null;
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+  rows: TopActivityRow[];
+  reason?: string;
+  warning?: string;
+}
+
+
 // --- Market Overview card (/api/market/overview/) ---------------------------------------------
 
 export type OverviewRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '5Y' | 'ALL';
@@ -314,6 +404,10 @@ export const marketApi = {
   movers: (period: MoverPeriod = '1D', limit = 5, date?: string) =>
     get<Scoped & MoversResponse>('/market/movers/', { period, limit, date }),
   liveMovers: (limit = 10) => get<Scoped & LiveMoversResponse>('/market/movers/live/', { limit }),
+  topMovers: ({ sector, ...params }: TopMoversParams) =>
+    get<Scoped & TopMoversResponse>('/market/top-gainers/', { ...params, sector: sector || undefined }),
+  topActivity: (params: { metric: ActivityMetric; period: TopMoversPeriod; sector?: string; page: number; page_size: number }) =>
+    get<Scoped & TopActivityResponse>('/market/top-activity/', { ...params, sector: params.sector || undefined }),
   top: (metric: TopMetric, limit = 10) =>
     get<Scoped & { trade_date: string | null; rows: TrackedRow[]; reason?: string }>(`/market/top-${metric}/`, { limit }),
   brokers: (symbol: string) => get<Scoped & { symbol: string; windows: BrokerWindow[]; share_denominator: string }>(`/market/brokers/${symbol}/`),

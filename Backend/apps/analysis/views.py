@@ -10,11 +10,6 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from .services.brokers import (
-    build_broker_activity,
-    build_top_stock_by_broker,   # add this line
-    sampled_floorsheet_dates,
-)
 from apps.market_data.services.price_source import with_crawled_price
 from apps.news.selectors import real_articles, real_tags
 from apps.companies.models import Company
@@ -23,14 +18,19 @@ from apps.users.company_access import (
     get_accessible_company_ids,
     require_company_access,
 )
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import Broker, DailyPrice, FloorsheetTransaction
 from apps.market_data.services.trading_calendar import rolling_window_bounds
 from apps.news.models import ArticleCompanyTag, NewsArticle
 from apps.users.permissions import HasAppPermission
 
 from .models import DailyAnalysis, VolumeAnomaly, NewsPriceCorrelation
 from .serializers import BrokerActivitySerializer, DailyAnalysisSerializer, VolumeAnomalySerializer, NewsPriceCorrelationSerializer
-from .services.brokers import build_broker_activity, sampled_floorsheet_dates
+from .services.brokers import (
+    build_broker_activity,
+    build_top_stock_by_broker,
+    floorsheet_day_coverage,
+    sampled_floorsheet_dates,
+)
 from .services.daily_metrics import PRESSURE_METHOD
 from .services.news_market_reaction import build_news_market_reaction
 
@@ -457,7 +457,7 @@ class BrokerAnalysisAPIView(APIView):
             for code in broker_options
         ]
 
-        # NEW: top stock per broker, merged in after serialization
+        # Top stock per broker, merged in after serialization.
         top_stocks = build_top_stock_by_broker(
             company=company,
             company_ids=company_ids,
@@ -484,8 +484,8 @@ class BrokerAnalysisAPIView(APIView):
             "page_size": self.PAGE_SIZE,
             "next": page + 1 if end < len(rows) else None,
             "previous": page - 1 if page > 1 else None,
-            "results": serialize_with_top_stock(rows[start:end]),   # CHANGED
-            "top_brokers": serialize_with_top_stock(rows[:3]),      # NEW (podium)
+            "results": serialize_with_top_stock(rows[start:end]),
+            "top_brokers": serialize_with_top_stock(rows[:3]),
             "broker_options": broker_options,
             "broker_directory": broker_directory,
             "companies": list(companies),
@@ -495,7 +495,7 @@ class BrokerAnalysisAPIView(APIView):
                 "total_activity": activity["total_buy_quantity"] + activity["total_sell_quantity"],
                 "total_buy_value": str(activity["total_buy_value"]),
                 "total_sell_value": str(activity["total_sell_value"]),
-                "total_turnover": str(activity["total_buy_value"]),  # CHANGED: each trade once
+                "total_turnover": str(activity["total_buy_value"]),  # each trade counted once
                 "active_brokers": activity["broker_count"],
                 "sampled_trading_days": len(sampled_dates),
                 "transaction_count": activity["transaction_count"],
@@ -523,6 +523,125 @@ class BrokerAnalysisAPIView(APIView):
             "sampled_dates": [day.isoformat() for day in sampled_dates],
             "note": "Floorsheet data covers sampled trading sessions only.",
         })
+
+class TopBrokerAPIView(APIView):
+    """
+    One trading day's broker ranking by turnover (buy + sell amount) across
+    the user's accessible companies, with a top-3 podium and each broker's
+    highest-turnover stock.
+
+    ``?date=YYYY-MM-DD`` picks the day; without it the latest *complete* day
+    is used.  A day counts as complete when it has trades for at least
+    COMPLETE_RATIO of the most companies seen on any day, so a partial crawl
+    (one company on a given day) is never shown as the market's day by default.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+    COMPLETE_RATIO = 0.9
+
+    def get(self, request):
+        company_ids = get_accessible_company_ids(request.user)
+        coverage = floorsheet_day_coverage(company_ids=company_ids)
+        expected = max((count for _, count in coverage), default=0)
+
+        def is_complete(count):
+            return expected > 0 and count >= expected * self.COMPLETE_RATIO
+
+        available_dates = [
+            {"date": day.isoformat(), "companies": count, "is_complete": is_complete(count)}
+            for day, count in coverage
+        ]
+
+        raw = request.query_params.get("date", "").strip()
+        if raw:
+            try:
+                day = datetime.strptime(raw, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"detail": "date must use YYYY-MM-DD format."}, status=400)
+        else:
+            day = next((d for d, count in coverage if is_complete(count)), None)
+            if day is None and coverage:
+                day = coverage[0][0]
+
+        empty = {
+            "date": day.isoformat() if day else None,
+            "is_complete": False,
+            "companies": 0,
+            "expected_companies": expected,
+            "available_dates": available_dates,
+            "summary": {
+                "total_amount": "0",
+                "total_quantity": 0,
+                "transaction_count": 0,
+                "active_brokers": 0,
+            },
+            "podium": [],
+            "results": [],
+        }
+        if day is None:
+            return Response(empty)
+
+        activity = build_broker_activity(date=day, company_ids=company_ids)
+        rows = sorted(activity["brokers"], key=lambda item: (-item["total_value"], item["broker"]))
+        if not rows:
+            return Response(empty)
+
+        from apps.market_data.serializers import broker_metadata
+
+        top_stocks = build_top_stock_by_broker(start_date=day, end_date=day, company_ids=company_ids)
+        logos = dict(
+            Company.objects.filter(symbol__in={t["symbol"] for t in top_stocks.values()})
+            .values_list("symbol", "logo_url")
+        )
+        data = BrokerActivitySerializer(
+            rows, many=True, context={"broker_metadata": broker_metadata(r["broker"] for r in rows)}
+        ).data
+        results = []
+        for raw_row, row in zip(rows, data):
+            row = dict(row)
+            top = top_stocks.get(raw_row["broker"])
+            row["top_stock"] = {
+                "symbol": top["symbol"],
+                "logo_url": logos.get(top["symbol"]) or None,
+                "buy_amount": str(top["buy_amt"]),
+                "sell_amount": str(top["sell_amt"]),
+                "turnover": str(top["turnover"]),
+            } if top else None
+            results.append(row)
+
+        companies = dict(coverage).get(day, 0)
+        return Response({
+            **empty,
+            "is_complete": is_complete(companies),
+            "companies": companies,
+            "summary": {
+                # Each trade has one buyer and one seller, so the buy side alone
+                # is the day's traded amount and quantity (no double counting).
+                "total_amount": str(activity["total_buy_value"]),
+                "total_quantity": activity["total_buy_quantity"],
+                "transaction_count": activity["transaction_count"],
+                "active_brokers": activity["broker_count"],
+            },
+            "podium": results[:3],
+            "results": results,
+        })
+
+
+def _broker_profile(broker_code):
+    """Directory details for one broker, with a name fallback when it is unlisted."""
+    from apps.market_data.serializers import broker_metadata, broker_payload
+
+    profile = broker_payload(broker_code, broker_metadata([broker_code]))
+    broker = Broker.objects.filter(broker_code=profile["broker_code"]).first()
+    profile.update({
+        "broker_no": broker.broker_no if broker else None,
+        "website": broker.website if broker else "",
+        "tms_link": broker.tms_link if broker else "",
+        "in_directory": broker is not None,
+    })
+    return profile
+
 
 class BrokerDetailAPIView(APIView):
     """Real broker-side totals, daily activity, and company breakdown."""
@@ -597,6 +716,7 @@ class BrokerDetailAPIView(APIView):
 
         return Response({
             "broker": broker_id,
+            "profile": _broker_profile(broker_id),
             "summary": BrokerActivitySerializer([row], many=True).data[0],
             "daily_activity": [{
                 "date": item["date"].isoformat(),
@@ -628,6 +748,13 @@ class BrokerDetailAPIView(APIView):
                 Company.objects.filter(is_active=True), request.user, "id"
             ).order_by("symbol").values("id", "symbol", "name")),
             "sampled_dates": [item["date"].isoformat() for item in daily],
+            # Every session with floorsheet data in scope, so charts can show days this broker sat out.
+            "trading_sessions": [day.isoformat() for day in sorted(sampled_floorsheet_dates(
+                company=company,
+                company_ids=company_ids,
+                start_date=dates["start_date"],
+                end_date=dates["end_date"],
+            ))],
         })
 
 

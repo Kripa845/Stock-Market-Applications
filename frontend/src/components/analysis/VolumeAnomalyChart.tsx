@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import clsx from 'clsx';
 import type { VolumeAnomaly } from '../../api/analysis';
 
 interface VolumeAnomalyChartProps {
@@ -7,59 +8,75 @@ interface VolumeAnomalyChartProps {
   error?: string;
 }
 
-const formatVolume = (volume: number | null) =>
-  volume === null ? '—' : new Intl.NumberFormat().format(Math.round(volume));
+const RECENT_ANOMALY_LIMIT = 6;
 
-const flagStyle: Record<NonNullable<VolumeAnomaly['anomaly_flag']>, string> = {
-  Normal: 'text-text-secondary',
-  Anomaly: 'text-down font-semibold',
-};
+const formatVolume = (volume: number | null) =>
+  volume === null ? '—' : new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(volume);
+
+const formatRvol = (rvol: number | null) => (rvol === null ? '—' : `${rvol.toFixed(2)}×`);
+
+function Tile({ label, value, className }: { label: string; value: string; className?: string }) {
+  return (
+    <div className="bg-bg-elevated rounded-lg p-3">
+      <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">{label}</p>
+      <p className={clsx('text-sm font-semibold font-mono', className ?? 'text-text-primary')}>{value}</p>
+    </div>
+  );
+}
 
 export default function VolumeAnomalyChart({ data, loading = false, error }: VolumeAnomalyChartProps) {
-  const rows = useMemo(() => [...data].sort((a, b) => b.date.localeCompare(a.date)), [data]);
+  const sorted = useMemo(() => [...data].sort((a, b) => b.date.localeCompare(a.date)), [data]);
+  const anomalies = useMemo(() => sorted.filter(r => r.anomaly_flag === 'Anomaly'), [sorted]);
+  const latest = sorted[0];
+  const latestIsAnomaly = latest?.anomaly_flag === 'Anomaly';
 
   return (
-    <section className="card space-y-4" aria-label="Volume anomaly analysis">
-      <div>
-        <h3 className="text-sm font-semibold text-text-primary">Volume Anomaly Detection</h3>
-        <p className="mt-1 text-xs text-text-muted">
-          Baseline = SMA of the prior 20 trading sessions (current day excluded). Flag an anomaly when current volume is at least 2.5× the baseline. Incomplete baselines are unclassified.
-        </p>
-      </div>
+    <section className="card space-y-3" aria-label="Volume anomaly analysis">
+      <h3
+        className="text-sm font-semibold text-text-primary"
+        title="Baseline = SMA of prior 20 sessions (current day excluded). Anomaly when volume ≥ 2.5× baseline."
+      >
+        Volume Anomalies
+      </h3>
 
       {loading ? (
-        <p className="py-8 text-center text-xs text-text-muted">Loading volume history…</p>
+        <p className="py-4 text-center text-xs text-text-muted">Loading volume history…</p>
       ) : error ? (
-        <p className="py-8 text-center text-xs text-down">{error}</p>
-      ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-xs text-text-muted">No volume history available for this company.</p>
+        <p className="py-4 text-center text-xs text-down">{error}</p>
+      ) : !latest ? (
+        <p className="py-4 text-center text-xs text-text-muted">No volume history available.</p>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-bg-border text-left text-text-muted">
-                <th className="py-2 pr-4 font-medium">Date</th>
-                <th className="py-2 pr-4 text-right font-medium">Volume</th>
-                <th className="py-2 pr-4 text-right font-medium">20-day Average Volume</th>
-                <th className="py-2 pr-4 text-right font-medium">RVOL</th>
-                <th className="py-2 text-right font-medium">Anomaly Flag</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(row => (
-                <tr key={row.date} className="border-b border-bg-border/60 last:border-0">
-                  <td className="py-2 pr-4 font-mono text-text-primary">{row.date}</td>
-                  <td className="py-2 pr-4 text-right font-mono">{formatVolume(row.volume)}</td>
-                  <td className="py-2 pr-4 text-right font-mono">{formatVolume(row.average_volume_20d)}</td>
-                  <td className="py-2 pr-4 text-right font-mono">{row.rvol === null ? '—' : `${row.rvol.toFixed(2)}×`}</td>
-                  <td className={`py-2 text-right ${row.anomaly_flag ? flagStyle[row.anomaly_flag] : 'text-text-muted'}`}>
-                    {row.anomaly_flag ?? 'Insufficient history'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <Tile
+              label={`Latest RVOL · ${latest.date}`}
+              value={latestIsAnomaly ? `⚡ ${formatRvol(latest.rvol)}` : formatRvol(latest.rvol)}
+              className={latestIsAnomaly ? 'text-down' : latest.anomaly_flag === 'Normal' ? 'text-up' : 'text-text-muted'}
+            />
+            <Tile label="Latest Volume" value={formatVolume(latest.volume)} />
+            <Tile label="20D Avg Volume" value={formatVolume(latest.average_volume_20d)} />
+            <Tile
+              label="Anomaly Days"
+              value={`${anomalies.length} / ${sorted.length}`}
+              className={anomalies.length > 0 ? 'text-down' : 'text-up'}
+            />
+          </div>
+
+          {anomalies.length > 0 && (
+            <div>
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-2">Recent anomaly days</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2">
+                {anomalies.slice(0, RECENT_ANOMALY_LIMIT).map(row => (
+                  <div key={row.date} className="bg-bg-elevated rounded-lg px-3 py-2 border-l-2 border-down">
+                    <p className="text-[11px] font-mono text-text-secondary">{row.date}</p>
+                    <p className="text-sm font-semibold font-mono text-down">{formatRvol(row.rvol)}</p>
+                    <p className="text-[10px] text-text-muted">Vol {formatVolume(row.volume)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </section>
   );

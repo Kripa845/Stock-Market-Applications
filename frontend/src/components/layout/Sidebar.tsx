@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -13,13 +14,17 @@ import {
   Radio,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Users,
   ShieldCheck,
   Gauge,
+  Trophy,
+  Search,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROUTE_RULES } from '../../config/routePermissions';
+import { TOP_LIST_PAGES } from '../market/TopListControls';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -32,6 +37,10 @@ interface NavItem {
   to?: string;
   type?: 'divider';
   requiredPermissions?: string[];
+  /** Active only on this exact path, not on its sub-pages. */
+  end?: boolean;
+  /** Sub-pages shown in a dropdown under this item. */
+  children?: NavItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -50,6 +59,8 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Market Overview',
     icon: TrendingUp,
     to: '/market',
+    end: true,
+    children: TOP_LIST_PAGES,
   },
   {
     label: 'Tracked Companies',
@@ -62,15 +73,18 @@ const NAV_ITEMS: NavItem[] = [
     to: '/companies',
   },
   {
-    label: 'Company Analysis',
+    label: 'Technical Charts',
     icon: Activity,
     to: '/company-analysis',
   },
   {
     label: 'Broker Analysis',
     icon: Landmark,
-    to: '/broker-analysis',
     requiredPermissions: ['view_analysis'],
+    children: [
+      { label: 'Top Brokers', icon: Trophy, to: '/top-brokers' },
+      { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
+    ],
   },
   {
     label: 'Watchlist',
@@ -137,9 +151,53 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     return rule.mode === 'all' ? hasAllPermissions(rule.permissions) : hasAnyPermission(rule.permissions);
   };
 
-  const isActive = (to: string): boolean => {
-    if (to === '/dashboard') return pathname === '/dashboard';
+  const isActive = (to: string, end = false): boolean => {
+    if (end || to === '/dashboard') return pathname === to;
     return pathname === to || pathname.startsWith(to + '/');
+  };
+
+  // Dropdowns: open while one of their sub-pages is showing, otherwise as the user left them.
+  // A group without its own page (no `to`) is keyed by its label.
+  const groupKey = (item: NavItem) => item.to ?? item.label;
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    NAV_ITEMS.forEach((item) => {
+      if (item.children?.some((child) => child.to && isActive(child.to))) {
+        const key = groupKey(item);
+        setOpenGroups((groups) => (groups[key] ? groups : { ...groups, [key]: true }));
+      }
+    });
+  }, [pathname]);
+
+  const renderLink = (item: NavItem, sub = false) => {
+    const Icon = item.icon;
+    const active = item.to ? isActive(item.to, item.end) : false;
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to!}
+        title={collapsed ? item.label : undefined}
+        className={clsx(
+          'flex min-w-0 flex-1 items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors',
+          sub && 'py-1.5 text-[13px]',
+          active
+            ? 'bg-accent/10 text-accent-light font-medium'
+            : 'text-text-secondary hover:text-text-primary hover:bg-blue-500/10',
+          collapsed && 'justify-center',
+        )}
+      >
+        {Icon && (
+          <Icon
+            size={sub ? 15 : 17}
+            className={clsx(
+              'shrink-0',
+              active ? 'text-accent-light' : 'text-text-muted',
+            )}
+          />
+        )}
+        {!collapsed && <span className="truncate">{item.label}</span>}
+      </NavLink>
+    );
   };
 
   return (
@@ -184,33 +242,51 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
           if (!canSeeItem(item)) return null;
 
-          const Icon = item.icon;
-          const active = item.to ? isActive(item.to) : false;
+          const children = (item.children ?? []).filter(canSeeItem);
+          if (!children.length) return item.to ? renderLink(item) : null;
+          // Collapsed: a group with its own page shows just that icon; one without shows its pages' icons.
+          if (collapsed) return item.to ? renderLink(item) : children.map((child) => renderLink(child));
 
+          const key = groupKey(item);
+          const open = !!openGroups[key];
+          const toggle = () => setOpenGroups((groups) => ({ ...groups, [key]: !open }));
+          const chevron = <ChevronDown size={15} className={clsx('shrink-0 transition-transform', open && 'rotate-180')} />;
+          const GroupIcon = item.icon;
+          const childActive = children.some((child) => child.to && isActive(child.to));
           return (
-            <NavLink
-              key={item.to}
-              to={item.to!}
-              title={collapsed ? item.label : undefined}
-              className={clsx(
-                'flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors',
-                active
-                  ? 'bg-accent/10 text-accent-light font-medium'
-                  : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated',
-                collapsed && 'justify-center',
-              )}
-            >
-              {Icon && (
-                <Icon
-                  size={17}
+            <div key={key}>
+              {item.to ? (
+                <div className="flex items-center gap-0.5">
+                  {renderLink(item)}
+                  <button
+                    onClick={toggle}
+                    aria-expanded={open}
+                    aria-label={`${open ? 'Hide' : 'Show'} ${item.label} pages`}
+                    className="rounded-lg p-2 text-text-muted transition-colors hover:bg-blue-500/10 hover:text-text-primary"
+                  >
+                    {chevron}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={toggle}
+                  aria-expanded={open}
                   className={clsx(
-                    'shrink-0',
-                    active ? 'text-accent-light' : 'text-text-muted',
+                    'flex w-full items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors hover:bg-blue-500/10',
+                    childActive ? 'text-accent-light font-medium' : 'text-text-secondary hover:text-text-primary',
                   )}
-                />
+                >
+                  {GroupIcon && <GroupIcon size={17} className={clsx('shrink-0', childActive ? 'text-accent-light' : 'text-text-muted')} />}
+                  <span className="flex-1 truncate text-left">{item.label}</span>
+                  {chevron}
+                </button>
               )}
-              {!collapsed && <span className="truncate">{item.label}</span>}
-            </NavLink>
+              {open && (
+                <div className="ml-4 mt-0.5 space-y-0.5 border-l border-bg-border pl-2">
+                  {children.map((child) => renderLink(child, true))}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>
@@ -221,7 +297,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           to="/dashboard"
           title={collapsed ? 'Dashboard' : undefined}
           className={clsx(
-            'flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-bg-elevated transition-colors',
+            'flex items-center gap-3 px-2 py-2 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-blue-500/10 transition-colors',
             collapsed && 'justify-center',
           )}
         >

@@ -488,7 +488,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   };
 
   const btn = (on: boolean) =>
-    `px-2.5 py-1 rounded text-xs font-medium transition-all ${on ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'}`;
+    `px-2.5 py-1 rounded text-xs font-medium transition-all ${on ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-blue-500/10'}`;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -521,7 +521,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
                       <button key={i.id} disabled={disabled}
                         title={disabled ? 'Needs an intraday data source' : undefined}
                         onClick={() => { setIntervalMode(i.id); setIvOpen(false); }}
-                        className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-bg-elevated'} disabled:cursor-not-allowed disabled:opacity-40`}>
+                        className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-blue-500/10'} disabled:cursor-not-allowed disabled:opacity-40`}>
                         {INTERVAL_LABELS[i.id]}
                       </button>
                     );

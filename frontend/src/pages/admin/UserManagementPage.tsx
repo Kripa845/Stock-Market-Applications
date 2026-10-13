@@ -2282,7 +2282,7 @@ export default function UserManagementPage() {
                                     targetUser
                                   )
                                 }
-                                className="rounded-md p-2 text-text-muted transition hover:bg-bg-secondary hover:text-accent-light"
+                                className="rounded-md p-2 text-text-muted transition hover:bg-blue-500/10 hover:text-accent-light"
                                 title="Manage company access"
                               >
                                 <Building2
@@ -2303,7 +2303,7 @@ export default function UserManagementPage() {
                                     targetUser
                                   )
                                 }
-                                className="rounded-md p-2 text-text-muted transition hover:bg-bg-secondary hover:text-accent-light"
+                                className="rounded-md p-2 text-text-muted transition hover:bg-blue-500/10 hover:text-accent-light"
                                 title="Edit user"
                               >
                                 <Edit3
@@ -2324,7 +2324,7 @@ export default function UserManagementPage() {
                                     targetUser
                                   )
                                 }
-                                className="rounded-md p-2 text-text-muted transition hover:bg-bg-secondary hover:text-red-400"
+                                className="rounded-md p-2 text-text-muted transition hover:bg-blue-500/10 hover:text-red-400"
                                 title="Delete user"
                               >
                                 <Trash2
@@ -2387,7 +2387,7 @@ export default function UserManagementPage() {
                   setShowForm(false)
                 }
                 disabled={saving}
-                className="rounded-md p-2 text-text-muted hover:bg-bg-secondary hover:text-text-primary"
+                className="rounded-md p-2 text-text-muted hover:bg-blue-500/10 hover:text-text-primary"
               >
                 <X size={18} />
               </button>
@@ -2711,7 +2711,7 @@ export default function UserManagementPage() {
                 type="button"
                 onClick={closeCompanyAccess}
                 disabled={companyAccessSaving}
-                className="rounded-md p-2 text-text-muted hover:bg-bg-secondary hover:text-text-primary"
+                className="rounded-md p-2 text-text-muted hover:bg-blue-500/10 hover:text-text-primary"
               >
                 <X size={18} />
               </button>

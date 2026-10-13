@@ -44,7 +44,7 @@ export default function StatCard({
         'flex flex-col gap-3 p-4 rounded-xl border',
         'bg-bg-card border-bg-border',
         'transition-all duration-200',
-        isClickable && 'cursor-pointer hover:border-accent/40 hover:bg-bg-elevated/50',
+        isClickable && 'cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/10',
         isClickable && 'focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-1 focus:ring-offset-bg-primary',
       )}
       role={isClickable ? 'link' : undefined}

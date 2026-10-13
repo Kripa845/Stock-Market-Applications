@@ -94,13 +94,13 @@ function ActiveCard({ def, item, error, onRemove, onParams, onToggleHidden }: {
         </button>
         {def.params.length > 0 && (
           <button type="button" onClick={() => setOpen((v) => !v)} title="Settings" aria-label={`${def.name} settings`}
-            className={clsx('rounded p-1 transition hover:bg-bg-elevated', open ? 'text-accent' : 'text-text-secondary hover:text-text-primary')}>
+            className={clsx('rounded p-1 transition hover:bg-blue-500/10', open ? 'text-accent' : 'text-text-secondary hover:text-text-primary')}>
             <SlidersHorizontal size={13} />
           </button>
         )}
         <button type="button" onClick={onToggleHidden} title={item.hidden ? 'Show' : 'Hide'}
           aria-label={`${item.hidden ? 'Show' : 'Hide'} ${def.name}`}
-          className="rounded p-1 text-text-secondary transition hover:bg-bg-elevated hover:text-text-primary">
+          className="rounded p-1 text-text-secondary transition hover:bg-blue-500/10 hover:text-text-primary">
           {item.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
         </button>
         <button type="button" onClick={onRemove} title="Remove" aria-label={`Remove ${def.name}`}
@@ -199,7 +199,7 @@ export default function IndicatorPicker(props: Props) {
           )}
         </div>
         <button type="button" onClick={props.onClose} aria-label="Close"
-          className="rounded-md p-1 text-text-secondary transition hover:bg-bg-elevated hover:text-text-primary">
+          className="rounded-md p-1 text-text-secondary transition hover:bg-blue-500/10 hover:text-text-primary">
           <X size={16} />
         </button>
       </div>
@@ -239,7 +239,7 @@ export default function IndicatorPicker(props: Props) {
                   const count = addedCount.get(def.id) ?? 0;
                   return (
                     <button key={def.id} type="button" onClick={() => props.onAdd(def)} title={def.notes || undefined}
-                      className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition hover:bg-bg-elevated">
+                      className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition hover:bg-blue-500/10">
                       <span className={clsx('min-w-0 flex-1 truncate text-xs', count ? 'font-medium text-text-primary' : 'text-text-primary')}>
                         {def.name}
                       </span>

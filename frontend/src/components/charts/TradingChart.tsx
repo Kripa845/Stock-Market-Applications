@@ -425,7 +425,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   };
 
   const btn = (on: boolean) =>
-    `px-2.5 py-1 rounded text-xs font-medium transition-all ${on ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-bg-elevated'}`;
+    `px-2.5 py-1 rounded text-xs font-medium transition-all ${on ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-blue-500/10'}`;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -458,7 +458,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
                       <button key={i.id} disabled={disabled}
                         title={disabled ? 'Needs an intraday data source' : undefined}
                         onClick={() => { setIntervalMode(i.id); setIvOpen(false); }}
-                        className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-bg-elevated'} disabled:cursor-not-allowed disabled:opacity-40`}>
+                        className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-blue-500/10'} disabled:cursor-not-allowed disabled:opacity-40`}>
                         {INTERVAL_LABELS[i.id]}
                       </button>
                     );
@@ -495,7 +495,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
                   {main ? 'On price chart' : 'In separate pane'}
                 </p>
                 {INDICATORS.filter((i) => i.main === main).map((ind) => (
-                  <label key={ind.name} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-text-primary hover:bg-bg-elevated">
+                  <label key={ind.name} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs text-text-primary hover:bg-blue-500/10">
                     <input type="checkbox" checked={active.includes(ind.name)}
                       onChange={(e) => toggleIndicator(ind, e.target.checked)} />
                     {ind.label}
@@ -512,7 +512,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         <div className="flex flex-col gap-0.5 border-r border-bg-border p-1">
           {TOOLS.map((t) => (
             <button key={t.id} title={t.title} onClick={() => pickTool(t)}
-              className={`h-8 w-8 rounded text-base ${tool === t.id ? 'bg-accent text-white' : 'text-text-secondary hover:bg-bg-elevated'}`}>
+              className={`h-8 w-8 rounded text-base ${tool === t.id ? 'bg-accent text-white' : 'text-text-secondary hover:bg-blue-500/10'}`}>
               {t.icon}
             </button>
           ))}

@@ -616,7 +616,7 @@ const openCreate = () => {
           <button
             type="button"
             onClick={() => navigate("/dashboard")}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-bg-border bg-bg-card px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-bg-elevated hover:text-text-primary"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-bg-border bg-bg-card px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-blue-500/10 hover:text-text-primary"
           >
             <ArrowLeft size={18} />
             Back to Dashboard
@@ -657,7 +657,7 @@ const openCreate = () => {
                 className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                   selectedRole?.key === role.key
                     ? "border-accent bg-accent/15 text-accent-light"
-                    : "border-bg-border bg-bg-card text-text-secondary hover:bg-bg-elevated"
+                    : "border-bg-border bg-bg-card text-text-secondary hover:bg-blue-500/10"
                 }`}
               >
                 {role.name}
@@ -680,7 +680,7 @@ const openCreate = () => {
                       className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
                         selectedCustomRole?.id === role.id
                           ? "border-accent bg-accent/15 text-accent-light"
-                          : "border-bg-border bg-bg-card text-text-secondary hover:bg-bg-elevated"
+                          : "border-bg-border bg-bg-card text-text-secondary hover:bg-blue-500/10"
                       }`}
                     >
                       {role.name}
@@ -741,7 +741,7 @@ const openCreate = () => {
                         className={`flex items-center gap-3 px-4 py-2.5 text-sm select-none ${
                           isAdminRole || locked
                             ? "cursor-default opacity-50"
-                            : "cursor-pointer hover:bg-bg-elevated"
+                            : "cursor-pointer hover:bg-blue-500/10"
                         }`}
                         title={locked && prerequisiteName ? `"${prerequisiteName}" is required first.` : undefined}
                       >
@@ -811,7 +811,7 @@ const openCreate = () => {
             <button
               type="button"
               onClick={closeRoleEditor}
-              className="rounded-lg border border-bg-border px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-bg-elevated"
+              className="rounded-lg border border-bg-border px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-blue-500/10"
             >
               Cancel
             </button>
@@ -902,7 +902,7 @@ const openCreate = () => {
                   return (
                     <tr
                       key={user.id}
-                      className="hover:bg-bg-elevated"
+                      className="hover:bg-blue-500/10"
                     >
                       <td className="px-4 py-3">
                         <div className="font-medium">
@@ -1044,7 +1044,7 @@ const openCreate = () => {
                       onClick={() =>
                         selectCustomRole(role)
                       }
-                      className="rounded-lg p-2 text-text-muted hover:bg-bg-elevated hover:text-text-primary"
+                      className="rounded-lg p-2 text-text-muted hover:bg-blue-500/10 hover:text-text-primary"
                       title="Edit role"
                     >
                       <Edit3 size={16} />
@@ -1109,7 +1109,7 @@ const openCreate = () => {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-lg p-2 hover:bg-bg-elevated"
+                className="rounded-lg p-2 hover:bg-blue-500/10"
               >
                 <X size={20} />
               </button>
@@ -1296,7 +1296,7 @@ const openCreate = () => {
                                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 select-none ${
                                       locked
                                         ? "cursor-default opacity-50"
-                                        : "cursor-pointer hover:bg-bg-elevated"
+                                        : "cursor-pointer hover:bg-blue-500/10"
                                     }`}
                                     title={locked && prerequisiteName ? `"${prerequisiteName}" is required first.` : undefined}
                                   >
@@ -1343,7 +1343,7 @@ const openCreate = () => {
                 type="button"
                 onClick={closeModal}
                 disabled={saving}
-                className="rounded-lg border border-bg-border px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-bg-elevated"
+                className="rounded-lg border border-bg-border px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-blue-500/10"
               >
                 Cancel
               </button>
