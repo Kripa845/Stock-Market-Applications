@@ -13,6 +13,8 @@ index or one tracked company.
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.db.models import Count
+from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from apps.market_data.models import DailyPrice, IntradayCandle
@@ -25,6 +27,9 @@ from apps.market_indices.models import IndexDaily, IndexIntradayPoint
 INDEX_SYMBOL = "NEPSE"
 STATS_LABEL = "Your Companies"
 INTRADAY_INTERVAL = "5m"
+# A 1D index chart needs a line: a session with a single tick (e.g. one pre-open snapshot)
+# is skipped in favour of the last session with at least this many.
+MIN_SESSION_TICKS = 2
 
 # Calendar months back from the latest session (same idea as the frontend's chartRanges).
 RANGE_MONTHS = {"1W": None, "1M": 1, "3M": 3, "6M": 6, "1Y": 12, "5Y": 60}
@@ -205,30 +210,41 @@ def range_start(latest, earliest, range_id):
     return start if earliest <= start else None
 
 
+def _nepal_day_bounds(day):
+    """[start, end) of a Nepal calendar day as aware datetimes; the database compares them in UTC
+    (Nepal midnight is 18:15 UTC the day before)."""
+    start = datetime.combine(day, datetime.min.time(), tzinfo=NPT)
+    return start, start + timedelta(days=1)
+
+
 def _intraday_points(company):
     if company is None:
         points = IndexIntradayPoint.objects.filter(index__code=INDEX_SYMBOL)
-        last = points.order_by("-recorded_at").first()
-        if last is None:
+        day = (
+            points.annotate(day=TruncDate("recorded_at", tzinfo=NPT))
+            .values("day").annotate(ticks=Count("id"))
+            .filter(ticks__gte=MIN_SESSION_TICKS)
+            .order_by("-day").values_list("day", flat=True).first()
+        )
+        if day is None:
             return None, []
-        day = last.recorded_at.astimezone(NPT).date()
-        start = datetime.combine(day, datetime.min.time(), tzinfo=NPT)
-        rows = points.filter(recorded_at__gte=start, recorded_at__lt=start + timedelta(days=1)).order_by("recorded_at")
+        start, end = _nepal_day_bounds(day)
+        rows = points.filter(recorded_at__gte=start, recorded_at__lt=end).order_by("recorded_at")
         return day, [{"t": p.recorded_at, "open": None, "high": None, "low": None, "close": p.value, "volume": None}
                      for p in rows]
     day = latest_candle_date(company)
     if day is None:
         return None, []
-    start = datetime.combine(day, datetime.min.time(), tzinfo=NPT)
+    start, end = _nepal_day_bounds(day)
     candles = IntradayCandle.objects.filter(
         company=company, interval=INTRADAY_INTERVAL,
-        bucket_start__gte=start, bucket_start__lt=start + timedelta(days=1),
+        bucket_start__gte=start, bucket_start__lt=end,
     ).order_by("bucket_start")
     return day, [{"t": c.bucket_start, "open": c.open, "high": c.high, "low": c.low, "close": c.close,
                   "volume": c.volume} for c in candles]
 
 
-def chart_series(range_id="1D", company=None):
+def chart_series(range_id="1D", company=None, now=None):
     """Points for the card's chart; ``available_ranges`` lists the ranges the stored data covers."""
     symbol = company.symbol if company else INDEX_SYMBOL
     if company is None:
@@ -245,10 +261,16 @@ def chart_series(range_id="1D", company=None):
 
     result = {"symbol": symbol, "range": range_id, "available_ranges": available, "points": []}
     if range_id == "1D":
-        result.update(interval="intraday", date=intraday_day, points=intraday)
+        now = timezone.localtime(now or timezone.now(), NPT)
+        # The latest session with ticks: today's while it trades, otherwise the last one before it.
+        result.update(
+            interval="intraday", date=intraday_day, session_date=intraday_day, points=intraday,
+            is_live=bool(intraday) and intraday_day == now.date() and is_market_open(now),
+        )
         if not intraday:
             result["reason"] = (
-                "No intraday NEPSE index values stored yet: they are saved during market hours."
+                "Not enough intraday NEPSE index values stored yet: they are saved every minute "
+                "during market hours (11:00-15:00)."
                 if company is None else "No intraday candles stored for this company yet."
             )
         return result

@@ -3,18 +3,11 @@
  *
  * Export Data / Reports page.
  *
- * UI permission gate: renders the export form only when the current user
- * holds the "export_reports" permission (checked via the existing
- * useAuth().hasPermission() hook — same mechanism used by every other
- * permission-gated UI in the application).
+ * UI permission gate: "view_reports" opens the page and its company list
+ * (/api/reports/export/companies/); "export_reports" enables the download.
  *
  * Backend permission gate: every API call is independently authorised
- * server-side by the existing HasAppPermission("export_reports") class.
- * Hiding the UI is NOT the security mechanism.
- *
- * The company list is populated from /api/reports/export/companies/,
- * which also requires export_reports, so a non-permitted user would see
- * neither the UI nor get any data from the backend.
+ * server-side (HasAppPermission). Hiding the UI is NOT the security mechanism.
  */
 
 import { useEffect, useState } from 'react';
@@ -86,6 +79,7 @@ const FORMAT_ICONS: Record<ExportFormat, React.ReactNode> = {
 
 export default function ExportPage() {
   const { hasPermission } = useAuth();
+  const canView = hasPermission('view_reports');
   const canExport = hasPermission('export_reports');
 
   // ── state ────────────────────────────────────────────────────────────────
@@ -107,7 +101,7 @@ export default function ExportPage() {
 
   // ── load company list (only if user has permission) ──────────────────────
   useEffect(() => {
-    if (!canExport) return;
+    if (!canView) return;
     setLoadingCompanies(true);
     exportsApi
       .getCompanies()
@@ -116,7 +110,7 @@ export default function ExportPage() {
         // Non-fatal — list will just be empty; user can still export all
       })
       .finally(() => setLoadingCompanies(false));
-  }, [canExport]);
+  }, [canView]);
 
   // ── keep format valid when data type changes ─────────────────────────────
   useEffect(() => {
@@ -222,7 +216,7 @@ export default function ExportPage() {
   };
 
   // ── render: no permission ────────────────────────────────────────────────
-  if (!canExport) {
+  if (!canView) {
     return (
       <div className="space-y-6">
         <PageHeader
@@ -235,7 +229,7 @@ export default function ExportPage() {
             <p className="text-lg font-semibold text-text-primary">Access Restricted</p>
             <p className="text-sm text-text-secondary mt-1">
               You do not have the{' '}
-              <span className="font-medium text-text-primary">Export Reports</span>{' '}
+              <span className="font-medium text-text-primary">View Reports</span>{' '}
               permission. Contact your administrator to request access.
             </p>
           </div>
@@ -412,11 +406,18 @@ export default function ExportPage() {
             </div>
           )}
 
+          {!canExport && (
+            <div className="flex items-center gap-2 rounded-lg border border-bg-border bg-bg-elevated px-4 py-3 text-sm text-text-secondary">
+              <Lock size={14} className="shrink-0" />
+              Downloading needs the Export Reports permission. Contact your administrator to request it.
+            </div>
+          )}
+
           {/* Export button */}
           <button
             type="button"
             onClick={handleExport}
-            disabled={submitting}
+            disabled={submitting || !canExport}
             className="btn-primary flex items-center gap-2 px-6 py-2.5 w-full sm:w-auto justify-center"
           >
             {submitting ? (

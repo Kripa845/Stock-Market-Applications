@@ -1,6 +1,6 @@
 """Tests for services.market_overview and the /api/market/overview/ endpoints."""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from django.test import SimpleTestCase
@@ -144,6 +144,71 @@ class ChartSeriesTests(OverviewFixture):
         self.assertEqual(result["interval"], "intraday")
         self.assertEqual([p["close"] for p in result["points"]], [2590, 2595])
         self.assertIn("1D", result["available_ranges"])
+
+    def test_session_is_the_nepal_day_not_the_utc_day(self):
+        # Nepal midnight 14 Oct = 18:15 UTC on 13 Oct.  Ticks just either side of it,
+        # and around UTC midnight, must land on the Nepal day they belong to.
+        utc = timezone.utc
+        ticks = [
+            (datetime(2026, 10, 13, 18, 10, tzinfo=utc), 1),   # 13 Oct 23:55 NPT -> previous day
+            (datetime(2026, 10, 13, 18, 15, tzinfo=utc), 2),   # 14 Oct 00:00 NPT -> included
+            (datetime(2026, 10, 13, 23, 59, tzinfo=utc), 3),   # 14 Oct 05:44 NPT, before UTC midnight
+            (datetime(2026, 10, 14, 0, 1, tzinfo=utc), 4),     # 14 Oct 05:46 NPT, after UTC midnight
+            (datetime(2026, 10, 14, 5, 15, tzinfo=utc), 5),    # 14 Oct 11:00 NPT, session open
+            (datetime(2026, 10, 14, 18, 14, tzinfo=utc), 6),   # 14 Oct 23:59 NPT -> included
+            (datetime(2026, 10, 14, 18, 15, tzinfo=utc), 7),   # 15 Oct 00:00 NPT -> next day
+        ]
+        for at, value in reversed(ticks):                       # insertion order must not matter
+            IndexIntradayPoint.objects.create(index=self.nepse, recorded_at=at, value=value)
+        IndexIntradayPoint.objects.filter(value=7).delete()     # make 14 Oct the latest session
+        result = market_overview.chart_series("1D", now=datetime(2026, 10, 14, 13, 0, tzinfo=NPT))
+        self.assertEqual(result["session_date"], date(2026, 10, 14))
+        self.assertEqual([p["close"] for p in result["points"]], [2, 3, 4, 5, 6])
+        times = [p["t"] for p in result["points"]]
+        self.assertEqual(times, sorted(times))
+        self.assertTrue(result["is_live"])                      # Wednesday 13:00, trading
+
+    def test_falls_back_to_latest_session_with_ticks(self):
+        tuesday_11 = datetime.combine(TUESDAY, datetime.min.time(), tzinfo=NPT) + timedelta(hours=11)
+        for minutes, value in ((0, 2590), (1, 2591)):
+            IndexIntradayPoint.objects.create(
+                index=self.nepse, recorded_at=tuesday_11 + timedelta(minutes=minutes), value=value)
+        for label, now in (
+            ("before the open", datetime.combine(TUESDAY + timedelta(days=1), datetime.min.time(), tzinfo=NPT)
+                + timedelta(hours=10)),
+            ("weekend", datetime(2026, 10, 3, 12, 0, tzinfo=NPT)),
+            ("same day after the close", tuesday_11 + timedelta(hours=5)),
+        ):
+            with self.subTest(label):
+                result = market_overview.chart_series("1D", now=now)
+                self.assertEqual(result["session_date"], TUESDAY)
+                self.assertEqual([p["close"] for p in result["points"]], [2590, 2591])
+                self.assertFalse(result["is_live"])
+
+    def test_lone_tick_session_is_skipped_for_the_last_full_session(self):
+        tuesday_11 = datetime.combine(TUESDAY, datetime.min.time(), tzinfo=NPT) + timedelta(hours=11)
+        for minutes, value in ((0, 2590), (1, 2591)):
+            IndexIntradayPoint.objects.create(
+                index=self.nepse, recorded_at=tuesday_11 + timedelta(minutes=minutes), value=value)
+        wednesday_pre_open = tuesday_11 + timedelta(days=1, minutes=-10)
+        IndexIntradayPoint.objects.create(index=self.nepse, recorded_at=wednesday_pre_open, value=2600)
+        result = market_overview.chart_series("1D", now=wednesday_pre_open + timedelta(minutes=12))
+        self.assertEqual(result["session_date"], TUESDAY)
+        self.assertEqual([p["close"] for p in result["points"]], [2590, 2591])
+        self.assertFalse(result["is_live"])
+
+    def test_single_tick_only_gives_no_chart(self):
+        IndexIntradayPoint.objects.create(
+            index=self.nepse, recorded_at=datetime(2026, 10, 13, 10, 50, tzinfo=NPT), value=2597.93)
+        result = market_overview.chart_series("1D")
+        self.assertEqual(result["points"], [])
+        self.assertNotIn("1D", result["available_ranges"])
+        self.assertIn("reason", result)
+
+    def test_no_ticks_at_all(self):
+        result = market_overview.chart_series("1D")
+        self.assertEqual((result["points"], result["session_date"], result["is_live"]), ([], None, False))
+        self.assertIn("reason", result)
 
     def test_company_daily_series(self):
         result = market_overview.chart_series("ALL", self.company("GAIN"))

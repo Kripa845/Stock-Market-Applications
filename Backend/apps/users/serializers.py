@@ -17,6 +17,8 @@ User = get_user_model()
 # ============================================================
 # PERMISSION DEFINITIONS
 # ============================================================
+# Every key listed here must be enforced somewhere in the backend;
+# a checkbox that changes nothing misleads whoever edits a role.
 
 ROLE_PERMISSIONS = {
     "users": [
@@ -38,21 +40,16 @@ ROLE_PERMISSIONS = {
         {"key": "view_market_data", "name": "View Market Data"},
         {"key": "view_price_history", "name": "View Price History"},
         {"key": "view_trading_volume", "name": "View Trading Volume"},
-        {"key": "view_vwap", "name": "View VWAP"},
-        {"key": "view_buy_sell_pressure", "name": "View Buy/Sell Pressure"},
     ],
     "news": [
         {"key": "view_news", "name": "View News"},
         {"key": "categorize_news", "name": "Categorize News"},
         {"key": "correct_categories", "name": "Correct Categories"},
-        {"key": "edit_news", "name": "Edit News"},
-        {"key": "delete_news", "name": "Delete News"},
     ],
     "watchlist": [
         {"key": "view_watchlist", "name": "View Watchlist"},
         {"key": "add_watchlist", "name": "Add Companies"},
         {"key": "remove_watchlist", "name": "Remove Companies"},
-        {"key": "edit_watchlist", "name": "Edit Watchlist"},
     ],
     "crawler": [
         {"key": "view_crawl_runs", "name": "View Crawl Runs"},
@@ -62,14 +59,9 @@ ROLE_PERMISSIONS = {
     ],
     "analysis": [
         {"key": "view_analysis", "name": "View Analysis"},
-        {"key": "view_price_trends", "name": "View Price Trends"},
-        {"key": "view_volume_trends", "name": "View Volume Trends"},
-        {"key": "view_vwap_analysis", "name": "View VWAP Analysis"},
-        {"key": "view_pressure_analysis", "name": "View Buy/Sell Pressure"},
     ],
     "reports": [
         {"key": "view_reports", "name": "View Reports"},
-        {"key": "generate_reports", "name": "Generate Reports"},
         {"key": "export_reports", "name": "Export Reports"},
     ],
     "roles_permissions": [

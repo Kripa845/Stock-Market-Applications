@@ -21,6 +21,8 @@ export interface RegisterPayload {
 export interface PermissionsResponse {
   permissions: string[];
   role: string;
+  custom_role_id?: number | null;
+  custom_role_name?: string | null;
   effective_role: string;
 }
 

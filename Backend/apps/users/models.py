@@ -207,11 +207,14 @@ class User(AbstractUser):
             return set(VALID_PERMISSION_KEYS)
         if self.custom_role_id:
             role = self.custom_role
-            return set(role.permissions or []) if role and role.is_active else set()
-        config = RolePermissionConfig.objects.filter(
-            role_key=self.role, is_active=True
-        ).first()
-        return set(config.permissions or []) if config else set()
+            granted = set(role.permissions or []) if role and role.is_active else set()
+        else:
+            config = RolePermissionConfig.objects.filter(
+                role_key=self.role, is_active=True
+            ).first()
+            granted = set(config.permissions or []) if config else set()
+        # Keys retired from the catalogue grant nothing.
+        return granted & VALID_PERMISSION_KEYS
 
     def has_app_permission(self, permission_key):
         return permission_key in self.get_app_permissions()

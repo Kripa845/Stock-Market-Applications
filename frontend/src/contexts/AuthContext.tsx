@@ -123,6 +123,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     (response: {
       permissions: string[];
       role: string;
+      custom_role_id?: number | null;
+      custom_role_name?: string | null;
       effective_role: string;
     }) => {
       setPermissions(response.permissions || []);
@@ -133,14 +135,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return previousUser;
         }
 
-        // Server role has not changed.
-        if (previousUser.role === response.role) {
+        const customRoleId = response.custom_role_id ?? null;
+
+        // Neither the built-in role nor the custom role has changed.
+        if (
+          previousUser.role === response.role &&
+          (previousUser.custom_role_id ?? null) === customRoleId &&
+          previousUser.effective_role === response.effective_role
+        ) {
           return previousUser;
         }
 
         const nextUser: User = {
           ...previousUser,
           role: response.role as User["role"],
+          custom_role_id: customRoleId,
+          custom_role_name: response.custom_role_name ?? null,
           effective_role: response.effective_role,
         };
 

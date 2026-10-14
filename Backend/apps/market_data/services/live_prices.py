@@ -38,7 +38,7 @@ NPT = ZoneInfo("Asia/Kathmandu")
 SOURCE = "NEPSE live market (nepalstock.com.np, via nepse-data-api)"
 TWO_PLACES = Decimal("0.01")
 TIMEOUT_SECONDS = 15
-USER_AGENT = "personal-stock-project/1.0"
+USER_AGENT = "NepseStockMarketApp/1.0 (personal market-data research; polls every few minutes during NEPSE trading hours only)"
 # The task runs every 2 minutes; this allows a few missed runs before warning.
 STALE_AFTER = timedelta(minutes=10)
 

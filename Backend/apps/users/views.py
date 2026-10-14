@@ -16,7 +16,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
 )
 
-from .permissions import (HasAppPermission, HasViewMethodPermissions, IsAdminUserRole,
+from .permissions import (HasAppPermission, HasViewMethodPermissions,
                           is_admin_account, missing_grants)
 
 from .models import CustomRole, RolePermissionConfig, UserCompanyAccess
@@ -38,6 +38,11 @@ from .serializers import (
 )
 # from apps.users.serializers import UserCompanyAccessListSerializer
 User = get_user_model()
+
+def _either(user, *keys):
+    """Require one of ``keys``: the first the user holds, else the first (so the check fails)."""
+    return [next((key for key in keys if user.has_app_permission(key)), keys[0])]
+
 
 def assignment_escalation(request, instance=None):
     """Permissions a non-admin actor tries to hand out (via role or custom role) but does not hold."""
@@ -308,49 +313,13 @@ class MePermissionsAPIView(APIView):
 
     def get(self, request):
         user = request.user
-
-        if user.is_admin():
-            return Response(
-                {
-                    "permissions": list(
-                        VALID_PERMISSION_KEYS
-                    ),
-                    "role": user.role,
-                    "effective_role": (
-                        user.get_effective_role_name()
-                    ),
-                }
-            )
-
-        if user.custom_role:
-            if not user.custom_role.is_active:
-                permissions = []
-            else:
-                permissions = list(
-                    user.custom_role.permissions or []
-                )
-        else:
-            config = (
-                RolePermissionConfig.objects
-                .filter(
-                    role_key=user.role,
-                    is_active=True,
-                )
-                .first()
-            )
-            permissions = (
-                list(config.permissions or [])
-                if config
-                else []
-            )
-
         return Response(
             {
                 "permissions": sorted(user.get_app_permissions()),
                 "role": user.role,
-                "effective_role": (
-                    user.get_effective_role_name()
-                ),
+                "custom_role_id": user.custom_role_id,
+                "custom_role_name": user.custom_role.name if user.custom_role else None,
+                "effective_role": user.get_effective_role_name(),
             }
         )
 
@@ -374,7 +343,10 @@ class AdminUserListCreateAPIView(
     queryset = User.objects.all()
 
     def get_required_permissions(self, request):
-        return ["view_users"] if request.method == "GET" else ["create_users"]
+        if request.method == "GET":
+            # Role managers need the list to assign roles from the Roles page.
+            return _either(request.user, "view_users", "assign_roles")
+        return ["create_users"]
 
     def get_queryset(self):
         queryset = (
@@ -486,7 +458,7 @@ class AdminUserDetailAPIView(
         if any(field in fields for field in ("first_name", "last_name", "email", "password")):
             required.append("edit_users")
         if any(field in fields for field in ("role", "custom_role_id")):
-            required.append("change_user_roles")
+            required += _either(request.user, "change_user_roles", "assign_roles")
         if "is_active" in fields:
             required.append("activate_users")
         return required or ["edit_users"]
@@ -625,9 +597,8 @@ class AdminUserDetailAPIView(
 class AnalystListAPIView(
     generics.ListAPIView
 ):
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_users"
 
     serializer_class = UserSerializer
 
@@ -868,9 +839,8 @@ class RolePermissionsAPIView(APIView):
 # ======================================================
 
 class RoleStatisticsAPIView(APIView):
-    permission_classes = [
-        IsAdminUserRole
-    ]
+    permission_classes = [HasAppPermission]
+    permission_key = "view_roles"
 
     def get(self, request):
         return Response(

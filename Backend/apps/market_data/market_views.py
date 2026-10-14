@@ -16,10 +16,13 @@ from datetime import datetime
 from django.core.cache import cache
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.companies.models import Company
+from apps.market_indices.services import aggregates
 from apps.market_intelligence.services import technical_summary
 from apps.news.views import NewsArticleListAPIView
 from apps.users.company_access import get_accessible_company_ids, require_company_access
@@ -221,6 +224,87 @@ class TrackedTopAPIView(APIView):
             return error
         limit = _limit(request, 10)
         return _cached(request, lambda ids: movers.top_by(self.metric, trade_date, ids, limit))
+
+
+PUBLIC_ROWS = 5
+PUBLIC_ROW_FIELDS = ("symbol", "name", "close", "change", "change_pct", "turnover", "volume", "transactions")
+
+
+def _public_rows(rows):
+    return [{field: row.get(field) for field in PUBLIC_ROW_FIELDS} for row in rows]
+
+
+def _public_snapshot():
+    main = aggregates.main_index_table()
+    sub = aggregates.sub_index_table()
+    day_movers = movers.tracked_movers("1D", None, None, PUBLIC_ROWS, lean=True)
+    top = {metric: movers.top_by(metric, None, None, PUBLIC_ROWS) for metric in ("turnover", "volume", "transactions")}
+    overview = market_overview.market_overview()
+    return {
+        "scope": SCOPE,
+        "nepse": overview["instrument"],
+        "status": overview["status"],
+        "stats": overview["stats"],
+        "stats_label": overview["stats_label"],
+        "indices": {"as_of": main.get("as_of"), "rows": main.get("rows", [])},
+        "sub_indices": {"as_of": sub.get("as_of"), "rows": sub.get("rows", [])},
+        "as_of": day_movers["as_of"],
+        "gainers": _public_rows(day_movers["gainers"]),
+        "losers": _public_rows(day_movers["losers"]),
+        "top_turnover": _public_rows(top["turnover"]["rows"]),
+        "top_volume": _public_rows(top["volume"]["rows"]),
+        # A NULL trade count means "not filled yet", not zero: keep those rows out of the ranking.
+        "top_transactions": _public_rows([r for r in top["transactions"]["rows"] if r.get("transactions") is not None]),
+    }
+
+
+class PublicMarketSnapshotAPIView(APIView):
+    """
+    GET /api/market/public/snapshot/
+
+    Unauthenticated, for the public landing page: NEPSE indices / sub-indices
+    (whole market) and the top 5 tracked gainers, losers, turnover, volume and
+    transactions for the latest crawled session.  Rows carry only symbol, name
+    and the ranked numbers -- no provenance, sparklines or company ids.
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public"
+
+    def get(self, request):
+        payload = cache.get("market-api:public-snapshot")
+        if payload is None:
+            payload = _public_snapshot()
+            cache.set("market-api:public-snapshot", payload, CACHE_SECONDS)
+        return Response(payload)
+
+
+class PublicMarketChartAPIView(APIView):
+    """
+    GET /api/market/public/chart/?range=1D|1W|1M|3M|6M|1Y|5Y|ALL
+
+    Unauthenticated, for the public landing page: the NEPSE index chart only
+    (same series as /api/market/overview/chart/ without a symbol).
+    """
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public"
+
+    def get(self, request):
+        range_id = request.query_params.get("range", "1D").strip().upper()
+        if range_id not in market_overview.RANGES:
+            return Response(
+                {"detail": f"range must be one of {', '.join(market_overview.RANGES)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        key = f"market-api:public-chart:{range_id}"
+        payload = cache.get(key)
+        if payload is None:
+            payload = market_overview.chart_series(range_id)
+            cache.set(key, payload, CACHE_SECONDS)
+        return Response(payload)
 
 
 class CompanyBrokerActivityAPIView(APIView):

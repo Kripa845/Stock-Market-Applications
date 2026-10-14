@@ -8,6 +8,7 @@ import { useTheme } from '../hooks/useTheme';
 import HeroIllustration from '../components/landing/HeroIllustration';
 import ParticleWave from '../components/landing/ParticleWave';
 import LandingNews from '../components/landing/LandingNews';
+import LandingMarket from '../components/landing/LandingMarket';
 
 // Public landing page with purple glows; follows the app's light / dark theme (colours in index.css .landing).
 // Every claim here describes something the app really does; there are no invented reviews or user counts.
@@ -88,7 +89,7 @@ function Faq() {
 export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, toggleTheme] = useTheme();
-  const nav = [['Features', '#features'],['News', '#news'], ['How it works', '#how-it-works'], ['Access', '#access'], ['FAQ', '#faq']];
+  const nav = [['Market', '#market'], ['Features', '#features'], ['News', '#news'], ['How it works', '#how-it-works'], ['Access', '#access'], ['FAQ', '#faq']];
 
   return (
     <div className="landing min-h-screen overflow-x-hidden bg-[var(--l-bg)] font-sans text-[color:var(--l-text)] antialiased">
@@ -150,6 +151,12 @@ export default function LandingPage() {
           <ParticleWave className="h-48 w-full sm:h-64" />
         </div>
       </section>
+
+      {/* Market overview: indices and top lists for the latest session (hidden when there is no data) */}
+      <LandingMarket theme={theme} heading={
+        <SectionHeading title="Today's market at a glance"
+          text="NEPSE indices and the top tracked companies by change, turnover, volume and transactions for the latest crawled session." />
+      } />
 
       {/* Features */}
       <section id="features" className="relative scroll-mt-20 px-4 py-20 sm:px-6">

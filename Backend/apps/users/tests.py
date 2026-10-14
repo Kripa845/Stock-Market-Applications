@@ -330,7 +330,7 @@ class CompanyScopedEndpointTests(TestCase):
 
         self.role = CustomRole.objects.create(
             name="Scoped Researcher",
-            permissions=["view_price_history", "view_analysis", "export_reports"],
+            permissions=["view_price_history", "view_analysis", "view_reports", "export_reports"],
         )
         self.user_a = User.objects.create_user(
             username="scoped_a", email="scoped_a@example.com", password="pw",

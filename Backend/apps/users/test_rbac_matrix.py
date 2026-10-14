@@ -57,11 +57,14 @@ CASES = [
     ("get", "/api/crawler-runs/", "view_crawl_runs"),
     ("get", "/api/crawler-runs/1/", "view_crawl_runs"),
     ("get", "/api/reports/export/brokers/", "export_reports"),
+    ("get", "/api/reports/export/companies/", "view_reports"),
     ("post", "/api/crawler-runs/1/cancel/", "run_crawler"),
     ("post", "/api/crawler-runs/1/retry/", "retry_failed_crawl"),
     ("get", "/api/users/admin/users/", "view_users"),
     ("post", "/api/users/admin/users/", "create_users"),
     ("get", "/api/users/admin/roles/", "view_roles"),
+    ("get", "/api/users/admin/roles/statistics/", "view_roles"),
+    ("get", "/api/users/admin/analysts/", "view_users"),
     ("get", "/api/users/admin/role-permissions/", "view_roles"),
     ("patch", "/api/users/admin/roles/viewer/", "edit_roles"),
     ("get", "/api/users/admin/custom-roles/", "view_roles"),
@@ -166,3 +169,42 @@ class EscalationTests(TestCase):
         self.assertEqual(c.get("/api/users/admin/users/").status_code, 200)
         User.objects.filter(pk=adm.pk).update(role=User.Role.VIEWER)
         self.assertEqual(c.get("/api/users/admin/users/").status_code, 403)
+
+
+@FAST_HASH
+class DynamicRoleTests(TestCase):
+    def setUp(self):
+        self.target = make_user("target")
+        self.reader_role = CustomRole.objects.create(name="Reader", permissions=["view_news"])
+
+    def test_assign_roles_lists_users_and_assigns_a_custom_role(self):
+        manager = make_user("manager", perms=["view_roles", "assign_roles", "view_news"])
+        c = as_user(manager)
+        self.assertEqual(c.get("/api/users/admin/users/").status_code, 200)
+        r = c.patch(f"/api/users/admin/users/{self.target.pk}/", {"custom_role_id": self.reader_role.pk}, format="json")
+        self.assertEqual(r.status_code, 200)
+        self.target.refresh_from_db()
+        self.assertEqual(self.target.custom_role_id, self.reader_role.pk)
+
+    def test_assign_roles_cannot_hand_out_permissions_it_lacks(self):
+        manager = make_user("manager2", perms=["view_roles", "assign_roles"])
+        r = as_user(manager).patch(
+            f"/api/users/admin/users/{self.target.pk}/", {"custom_role_id": self.reader_role.pk}, format="json")
+        self.assertEqual(r.status_code, 403)
+
+    def test_role_assignment_needs_change_user_roles_or_assign_roles(self):
+        editor = make_user("editor2", perms=["view_users", "edit_users", "view_news"])
+        r = as_user(editor).patch(
+            f"/api/users/admin/users/{self.target.pk}/", {"custom_role_id": self.reader_role.pk}, format="json")
+        self.assertEqual(r.status_code, 403)
+
+    def test_retired_permission_keys_grant_nothing(self):
+        user = make_user("stale", perms=["view_news", "view_vwap", "manage_users"])
+        self.assertEqual(user.get_app_permissions(), {"view_news"})
+
+    def test_me_permissions_reports_current_custom_role(self):
+        user = make_user("me", perms=["view_news"])
+        data = as_user(user).get("/api/users/me/permissions/").data
+        self.assertEqual(data["permissions"], ["view_news"])
+        self.assertEqual(data["custom_role_name"], "me-role")
+        self.assertEqual(data["effective_role"], "me-role")

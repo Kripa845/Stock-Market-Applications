@@ -322,10 +322,10 @@ class ExportCompanyListAPIView(APIView):
     Returns the list of all active companies — used by the frontend to
     populate the company selector in the Export UI.
 
-    Permission: export_reports
+    Permission: view_reports (opening the Reports page; each download needs export_reports)
     """
     permission_classes = [HasAppPermission]
-    permission_key = "export_reports"
+    permission_key = "view_reports"
 
     def get(self, request):
         companies = (

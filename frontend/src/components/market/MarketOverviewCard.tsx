@@ -83,6 +83,9 @@ function StatsPanel({ stats, label, tradeDate }: { stats: OverviewStats; label: 
   );
 }
 
+/** Today's date in Nepal as YYYY-MM-DD (en-CA formats dates that way). */
+const nepalToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kathmandu' });
+
 export default function MarketOverviewCard() {
   const [symbol, setSymbol] = useState('NEPSE');
   const [range, setRange] = useState<OverviewRange>('1D');
@@ -200,16 +203,29 @@ export default function MarketOverviewCard() {
           </div>
         </div>
 
+        {intraday && chart.data?.session_date && (
+          <p className="flex items-center gap-1.5 text-[11px] text-text-muted">
+            {chart.data.is_live
+              ? <><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-up" /> Live · today&apos;s session</>
+              : chart.data.session_date === nepalToday()
+                ? <>Market closed · today&apos;s session</>
+                : <>{data?.status === 'OPEN' ? "Waiting for today's ticks" : 'Market closed'}, showing last session
+                    · {new Date(`${chart.data.session_date}T00:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</>}
+            {' · '}{chart.data.points.length} ticks
+          </p>
+        )}
+
         <div ref={chartBox} className="h-56 bg-bg-card">
           {chart.loading && !chart.data ? (
             <p className="flex h-full items-center justify-center text-xs text-text-muted">Loading chart…</p>
           ) : chart.error ? (
             <p className="flex h-full items-center justify-center text-xs text-down">Could not load the chart.</p>
-          ) : chart.data && chart.data.points.length > 0 ? (
-            <OverviewPriceChart points={chart.data.points} intraday={intraday} mode={mode} previousClose={previousClose} />
+          ) : chart.data && chart.data.points.length >= (intraday ? 2 : 1) ? (
+            <OverviewPriceChart points={chart.data.points} intraday={intraday} mode={mode} previousClose={previousClose}
+              sessionDate={chart.data.session_date} />
           ) : (
             <p className="flex h-full items-center justify-center px-6 text-center text-xs text-text-muted">
-              {chart.data?.reason ?? 'No chart data.'}
+              {chart.data?.reason ?? (intraday ? 'Not enough intraday values for this session yet.' : 'No chart data.')}
             </p>
           )}
         </div>

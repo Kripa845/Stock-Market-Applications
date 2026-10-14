@@ -10,6 +10,8 @@ from .market_views import (
     MarketOverviewAPIView,
     MarketOverviewChartAPIView,
     MarketOverviewTechnicalAPIView,
+    PublicMarketChartAPIView,
+    PublicMarketSnapshotAPIView,
     TrackedMoversAPIView,
     TrackedSummaryAPIView,
     TopActivityAPIView,
@@ -20,6 +22,8 @@ from .market_views import (
 
 # Mounted at /api/market/ -- tracked companies only (see market_views).
 urlpatterns = [
+    path("public/snapshot/", PublicMarketSnapshotAPIView.as_view(), name="market-public-snapshot"),
+    path("public/chart/", PublicMarketChartAPIView.as_view(), name="market-public-chart"),
     path("summary/", TrackedSummaryAPIView.as_view(), name="market-summary"),
     path("overview/", MarketOverviewAPIView.as_view(), name="market-overview"),
     path("overview/chart/", MarketOverviewChartAPIView.as_view(), name="market-overview-chart"),

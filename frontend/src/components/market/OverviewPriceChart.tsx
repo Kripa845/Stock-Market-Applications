@@ -13,6 +13,10 @@ const UP = '#26a69a';
 const DOWN = '#ef5350';
 const NPT = 'Asia/Kathmandu';
 
+/** Epoch ms of hh:00 Nepal time on a YYYY-MM-DD session date (Nepal is UTC+05:45 all year). */
+const nepalHour = (sessionDate: string, hour: number) =>
+  Date.parse(`${sessionDate}T${String(hour).padStart(2, '0')}:00:00+05:45`);
+
 const timeLabel = (iso: string, intraday: boolean) =>
   intraday
     ? new Date(iso).toLocaleTimeString('en-GB', { timeZone: NPT, hour: '2-digit', minute: '2-digit' })
@@ -20,6 +24,7 @@ const timeLabel = (iso: string, intraday: boolean) =>
 
 interface Row {
   t: string;
+  ts: number;   // epoch ms of t: the intraday x-axis is real time, not one slot per point
   close: number;
   open: number | null;
   high: number | null;
@@ -66,22 +71,27 @@ function ChartTooltip({ active, payload, intraday }: { active?: boolean; payload
   );
 }
 
-export default function OverviewPriceChart({ points, intraday, mode, previousClose }: {
+export default function OverviewPriceChart({ points, intraday, mode, previousClose, sessionDate, gridColor = '#242832' }: {
   points: ChartPoint[];
   intraday: boolean;
   mode: ChartMode;
   previousClose: number | null;
+  /** 1D only: the Nepal-time session date, so the x-axis spans that day's 11:00-15:00. */
+  sessionDate?: string | null;
+  /** Horizontal grid lines; the default suits the dark app theme. */
+  gridColor?: string;
 }) {
-  const rows = useMemo<Row[]>(() => points.map((p) => {
+  // Every point becomes a row, in time order ("t" is ISO 8601 with its offset, e.g. ...Z or +05:45).
+  const rows = useMemo<Row[]>(() => points.map((p): Row => {
     const open = p.open == null ? null : Number(p.open);
     const high = p.high == null ? null : Number(p.high);
     const low = p.low == null ? null : Number(p.low);
     return {
-      t: p.t, close: Number(p.close), open, high, low,
+      t: p.t, ts: Date.parse(p.t), close: Number(p.close), open, high, low,
       volume: p.volume == null ? null : Number(p.volume),
       range: high != null && low != null ? [low, high] : null,
     };
-  }), [points]);
+  }).sort((a, b) => a.ts - b.ts), [points]);
 
   const first = rows[0]?.close ?? 0;
   const last = rows[rows.length - 1]?.close ?? 0;
@@ -90,6 +100,20 @@ export default function OverviewPriceChart({ points, intraday, mode, previousClo
   const hasVolume = rows.some((r) => r.volume != null);
   const maxVolume = Math.max(0, ...rows.map((r) => r.volume ?? 0));
   const candles = mode === 'candle' && rows.every((r) => r.range != null);
+
+  // Intraday: a time axis over the 11:00-15:00 session, widened only when a tick falls outside it
+  // (a pre-open or after-close snapshot), labelled every hour.
+  const session = intraday && sessionDate ? [nepalHour(sessionDate, 11), nepalHour(sessionDate, 15)] : null;
+  const xDomain: [number, number] | null = session && rows.length
+    ? [Math.min(session[0], rows[0].ts), Math.max(session[1], rows[rows.length - 1].ts)]
+    : null;
+  const xTicks = sessionDate ? [11, 12, 13, 14, 15].map((h) => nepalHour(sessionDate, h)) : undefined;
+
+  // Y-axis: the day's own low/high (candle wicks included) with a little headroom.
+  const minY = Math.min(...rows.map((r) => r.low ?? r.close));
+  const maxY = Math.max(...rows.map((r) => r.high ?? r.close));
+  const pad = (maxY - minY) * 0.08 || Math.abs(maxY) * 0.001 || 1;
+  const yDomain: [number, number] = [minY - pad, maxY + pad];
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -100,10 +124,16 @@ export default function OverviewPriceChart({ points, intraday, mode, previousClo
             <stop offset="100%" stopColor={color} stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="#242832" strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="t" tickFormatter={(t: string) => timeLabel(t, intraday)} minTickGap={40}
-          tick={{ fontSize: 10, fill: '#787b86' }} axisLine={false} tickLine={false} />
-        <YAxis yAxisId="price" orientation="right" domain={['auto', 'auto']} width={48}
+        <CartesianGrid stroke={gridColor} strokeDasharray="3 3" vertical={false} />
+        {xDomain ? (
+          <XAxis dataKey="ts" type="number" scale="time" domain={xDomain} ticks={xTicks}
+            tickFormatter={(ts: number) => timeLabel(new Date(ts).toISOString(), true)}
+            tick={{ fontSize: 10, fill: '#787b86' }} axisLine={false} tickLine={false} />
+        ) : (
+          <XAxis dataKey="t" tickFormatter={(t: string) => timeLabel(t, intraday)} minTickGap={40}
+            tick={{ fontSize: 10, fill: '#787b86' }} axisLine={false} tickLine={false} />
+        )}
+        <YAxis yAxisId="price" orientation="right" domain={yDomain} width={48}
           tick={{ fontSize: 10, fill: '#787b86' }} axisLine={false} tickLine={false}
           tickFormatter={(v: number) => v.toLocaleString('en-IN', { maximumFractionDigits: 0 })} />
         {/* Volume uses the bottom quarter of the chart. */}

@@ -345,6 +345,41 @@ class MoversApiTests(MoversFixture):
         self.assertEqual(self.client.get("/api/market/movers/", {"period": "2Y"}).status_code, 400)
 
 
+class PublicSnapshotApiTests(MoversFixture):
+
+    def setUp(self):
+        super().setUp()
+        self.add("GAIN", MONDAY, 100); self.add("GAIN", TUESDAY, 105)
+        self.add("LOSE", MONDAY, 200); self.add("LOSE", TUESDAY, 190)
+
+    def test_anonymous_gets_lean_rows(self):
+        response = APIClient().get("/api/market/public/snapshot/")
+        self.assertEqual(response.status_code, 200)
+        data = response.data
+        self.assertEqual(data["as_of"], TUESDAY)
+        self.assertEqual(self.symbols(data["gainers"]), ["GAIN"])
+        self.assertEqual(self.symbols(data["losers"]), ["LOSE"])
+        self.assertEqual(self.symbols(data["top_turnover"]), ["LOSE", "GAIN"])
+        self.assertEqual(set(data["gainers"][0]), {"symbol", "name", "close", "change", "change_pct", "turnover", "volume", "transactions"})
+        for key in ("indices", "sub_indices", "top_volume", "top_transactions", "nepse", "status"):
+            self.assertIn(key, data)
+        self.assertEqual(data["stats"]["advanced"], 1)
+        self.assertEqual(data["stats"]["declined"], 1)
+
+    def test_anonymous_chart_is_nepse_only(self):
+        client = APIClient()
+        data = client.get("/api/market/public/chart/", {"range": "1M", "symbol": "GAIN"}).data
+        self.assertEqual(data["symbol"], "NEPSE")
+        self.assertEqual(client.get("/api/market/public/chart/", {"range": "2Y"}).status_code, 400)
+
+    def test_empty_database_is_not_an_error(self):
+        DailyPrice.objects.all().delete()
+        data = APIClient().get("/api/market/public/snapshot/").data
+        self.assertIsNone(data["as_of"])
+        self.assertEqual(data["gainers"], [])
+        self.assertEqual(data["indices"]["rows"], [])
+
+
 class SpiderSourceChangeTests(SimpleTestCase):
 
     def setUp(self):

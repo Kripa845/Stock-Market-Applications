@@ -54,7 +54,11 @@ const emptyForm: RoleForm = {
 
 export default function RolesPermissionsPage() {
   const navigate = useNavigate();
-  const { refreshPermissions } = useAuth();
+  const { refreshPermissions, hasPermission, hasAnyPermission } = useAuth();
+  // The user list is optional: a role manager without user access still gets the role editor.
+  const canListUsers = hasAnyPermission(["view_users", "assign_roles"]);
+  const canAssignRoles = hasAnyPermission(["change_user_roles", "assign_roles"]);
+  const canToggleUsers = hasPermission("activate_users");
   const [
     permissionGroups,
     setPermissionGroups,
@@ -367,7 +371,7 @@ export default function RolesPermissionsPage() {
       ] = await Promise.all([
         rolesApi.getPermissionDefinitions(),
         rolesApi.getRoles(),
-        usersApi.list(),
+        canListUsers ? usersApi.list() : Promise.resolve([]),
       ]);
 
       setPermissionGroups(
@@ -401,7 +405,7 @@ export default function RolesPermissionsPage() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [canListUsers]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
 const openCreate = () => {
@@ -858,7 +862,7 @@ const openCreate = () => {
 
 
       {/* USER ROLE ASSIGNMENT */}
-      <section>
+      {canListUsers && <section>
         <div className="mb-3">
           <h2 className="text-lg font-semibold text-text-primary">
             User Role Assignment
@@ -917,13 +921,15 @@ const openCreate = () => {
                       <td className="px-4 py-3">
                         <select
                           value={currentValue}
+                          disabled={!canAssignRoles}
+                          title={canAssignRoles ? undefined : "Needs the Change User Roles or Assign Roles permission"}
                           onChange={(event) =>
                             assignRole(
                               user,
                               event.target.value
                             )
                           }
-                          className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary"
+                          className="rounded-lg border border-bg-border bg-bg-card px-3 py-2 text-sm text-text-primary disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <optgroup label="System Roles">
                             <option value="admin">
@@ -957,6 +963,8 @@ const openCreate = () => {
                       <td className="px-4 py-3">
                         <button
                           type="button"
+                          disabled={!canToggleUsers}
+                          title={canToggleUsers ? undefined : "Needs the Activate / Deactivate Users permission"}
                           onClick={() =>
                             toggleUserStatus(user)
                           }
@@ -978,7 +986,7 @@ const openCreate = () => {
             </table>
           </div>
         </div>
-      </section>
+      </section>}
 
 
       {/* CUSTOM ROLES */}

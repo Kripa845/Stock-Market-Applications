@@ -296,14 +296,17 @@ CELERY_BEAT_SCHEDULE = {
         "options": {"expires": 100},
     },
     # ---- Live NEPSE index (Market Overview header + 1D chart) ----
+    # Every 5 minutes 11:00-14:55 Nepal time on NEPSE trading weekdays (TRADING_DAYS_CRONTAB,
+    # Monday-Friday since 2026-04-06), then a few runs after 15:00 to catch the closing value.
+    # Holidays are skipped inside the task (TradingHoliday).
     "snapshot-live-index-market-hours": {
         "task": "apps.market_indices.tasks.snapshot_live_index",
-        "schedule": crontab(minute="*/2", hour="11-14", day_of_week=TRADING_DAYS_CRONTAB),
-        "options": {"expires": 100},
+        "schedule": crontab(minute="*/5", hour="11-14", day_of_week=TRADING_DAYS_CRONTAB),
+        "options": {"expires": 240},  # a run still queued near the next slot is stale; the next one replaces it
     },
     "snapshot-live-index-at-close": {
         "task": "apps.market_indices.tasks.snapshot_live_index",
-        "schedule": crontab(minute="0,5,10", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+        "schedule": crontab(minute="0,5,10,15", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
         "options": {"expires": 100},
     },
     "finalize-intraday-candles-after-close": {

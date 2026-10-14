@@ -11,10 +11,14 @@ percentageChange is kept as ``source_change_pct``: NEPSE computes it from unroun
 values, which differs visibly for tiny indices (Mutual Fund ~19.5 points).
 """
 
+import logging
+import random
 import re
+import time
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
+import requests
 from django.utils import timezone
 
 from apps.market_data.services.live_prices import NPT, _nepse_client
@@ -29,6 +33,12 @@ NEPSE_INDEX_IDS = {
     64: "MICROFINANCE", 65: "LIFEINSU", 66: "MUTUAL", 67: "INVESTMENT",
 }
 DEFAULT_DAYS = 10
+# Live index fetch: retry only throttling / blocking / server errors and timeouts,
+# backing off 5s then 10s (plus jitter).  Worst case stays well inside the 5-minute schedule.
+LIVE_INDEX_MAX_RETRIES = 2
+LIVE_INDEX_BACKOFF_SECONDS = 5
+
+logger = logging.getLogger(__name__)
 
 
 class IndexFeedError(Exception):
@@ -123,23 +133,58 @@ def _nepse_time(value):
         return None
 
 
+def _get_live_index():
+    """
+    One GET of ``/api/nots/nepse-index`` (after the client's token handshake).
+
+    Not ``Nepse.get_nepse_index``: that swallows every error and returns ``{}``, which
+    hides the status code we need to decide whether a retry is worthwhile.
+    """
+    client = _nepse_client()
+    response = client.session.get(f"{client.BASE_URL}/api/nots/nepse-index", headers=client._get_auth_headers())
+    response.raise_for_status()
+    return response.json()
+
+
+def _retryable(exc):
+    """429 / 403 / 5xx responses and timeouts are worth another try; anything else is not."""
+    if isinstance(exc, requests.Timeout):
+        return True
+    response = getattr(exc, "response", None)
+    if isinstance(exc, requests.HTTPError) and response is not None:
+        return response.status_code in (403, 429) or response.status_code >= 500
+    return False
+
+
+def fetch_live_index(sleep=time.sleep):
+    """NEPSE's live index rows, retried with exponential backoff (at most LIVE_INDEX_MAX_RETRIES)."""
+    for attempt in range(LIVE_INDEX_MAX_RETRIES + 1):
+        try:
+            return _get_live_index()
+        except Exception as exc:  # network, auth, timeout or parsing failure
+            if attempt == LIVE_INDEX_MAX_RETRIES or not _retryable(exc):
+                raise IndexFeedError(f"NEPSE live index failed: {exc}") from exc
+            delay = LIVE_INDEX_BACKOFF_SECONDS * 2 ** attempt + random.uniform(0, 1)
+            logger.warning("NEPSE live index attempt %d failed (%s); retrying in %.1fs", attempt + 1, exc, delay)
+            sleep(delay)
+
+
 def snapshot_live_index(rows=None):
     """
     Save NEPSE's current main-index values (``/api/nots/nepse-index``) as IndexIntradayPoint rows.
 
-    Run only during the session; NEPSE keeps returning the last values after the close,
-    and re-saving them is harmless (unique on index + NEPSE's own timestamp).
+    Run only during the session; NEPSE keeps returning the last values after the close.
+    A row is keyed on index + NEPSE's own timestamp: an identical repeat is skipped, and a
+    changed value under the same timestamp updates the row.  Returns the three counts.
     """
     if rows is None:
-        try:
-            rows = _nepse_client().get_nepse_index(use_cache=False)
-        except Exception as exc:
-            raise IndexFeedError(f"NEPSE live index failed: {exc}") from exc
+        rows = fetch_live_index()
     if not isinstance(rows, list) or not rows:
         raise IndexFeedError("NEPSE live index returned no rows")
 
     catalogue = {index.code: index for index in MarketIndex.objects.all()}
-    saved = 0
+    saved = updated = unchanged = 0
+    latest = None
     for row in rows:
         if not isinstance(row, dict):
             continue
@@ -149,16 +194,25 @@ def snapshot_live_index(rows=None):
         if index is None or value is None or recorded_at is None:
             continue
         change = _decimal(row.get("change"))
-        _, created = IndexIntradayPoint.objects.update_or_create(
-            index=index, recorded_at=recorded_at,
-            defaults={
-                "value": value,
-                # The feed's "previousClose" / "close" labels are unreliable (after the close
-                # "previousClose" equals the current value), so derive it from the change.
-                "previous_close": None if change is None else value - change,
-                "change": change,
-                "change_pct": _decimal(row.get("perChange")),
-            },
-        )
-        saved += created
-    return {"saved": saved}
+        fields = {
+            "value": value,
+            # The feed's "previousClose" / "close" labels are unreliable (after the close
+            # "previousClose" equals the current value), so derive it from the change.
+            "previous_close": None if change is None else value - change,
+            "change": change,
+            "change_pct": _decimal(row.get("perChange")),
+        }
+        if index.code == "NEPSE":
+            latest = {"recorded_at": recorded_at.isoformat(), "value": str(value)}
+        existing = IndexIntradayPoint.objects.filter(index=index, recorded_at=recorded_at).first()
+        if existing is None:
+            IndexIntradayPoint.objects.create(index=index, recorded_at=recorded_at, **fields)
+            saved += 1
+        elif all(getattr(existing, name) == new for name, new in fields.items()):
+            unchanged += 1
+        else:
+            for name, new in fields.items():
+                setattr(existing, name, new)
+            existing.save(update_fields=list(fields))
+            updated += 1
+    return {"saved": saved, "updated": updated, "unchanged": unchanged, "nepse": latest}

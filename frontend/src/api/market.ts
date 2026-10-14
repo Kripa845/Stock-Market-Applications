@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { IndexRow } from './marketIndices';
 import type { PaginatedResponse, NewsArticle } from '../types';
 
 // /api/market/ — the TRACKED COMPANIES dashboard (not the whole NEPSE market).
@@ -362,6 +363,9 @@ export interface OverviewChart {
   range: OverviewRange;
   interval: 'intraday' | 'daily';
   date?: string | null;
+  /** 1D only: the Nepal-time session the ticks belong to, and whether it is trading right now. */
+  session_date?: string | null;
+  is_live?: boolean;
   available_ranges: OverviewRange[];
   points: ChartPoint[];
   reason?: string;
@@ -395,10 +399,32 @@ export interface TechnicalAnalysis {
   disclaimer: string;
 }
 
+/** One ranked row on the public landing page (GET /market/public/snapshot/, no login needed). */
+export type PublicMarketRow = Pick<TrackedRow, 'symbol' | 'name' | 'close' | 'change' | 'change_pct' | 'turnover' | 'volume' | 'transactions'>;
+
+export interface PublicMarketSnapshot {
+  scope: 'tracked_companies';
+  nepse: OverviewQuote;
+  status: MarketStatus;
+  stats: OverviewStats | null;
+  stats_label: string;
+  indices: { as_of: string | null; rows: IndexRow[] };
+  sub_indices: { as_of: string | null; rows: IndexRow[] };
+  /** Latest crawled session behind the ranked lists. */
+  as_of: string | null;
+  gainers: PublicMarketRow[];
+  losers: PublicMarketRow[];
+  top_turnover: PublicMarketRow[];
+  top_volume: PublicMarketRow[];
+  top_transactions: PublicMarketRow[];
+}
+
 const get = <T,>(url: string, params?: Record<string, unknown>) =>
   apiClient.get<T>(url, { params }).then((response) => response.data);
 
 export const marketApi = {
+  publicSnapshot: () => get<PublicMarketSnapshot>('/market/public/snapshot/'),
+  publicChart: (range: OverviewRange) => get<OverviewChart>('/market/public/chart/', { range }),
   summary: (date?: string) =>
     get<Scoped & { summary: TrackedSummary; circuit_threshold_pct: number; provenance: Provenance; note: string }>('/market/summary/', { date }),
   movers: (period: MoverPeriod = '1D', limit = 5, date?: string) =>

@@ -43,8 +43,6 @@ export default function NewsPage() {
   // Permission flags
   const canCategorize = hasPermission('categorize_news');
   const canCorrect = hasPermission('correct_categories');
-  const canEdit = hasPermission('edit_news');
-  const canDelete = hasPermission('delete_news');
 
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -248,7 +246,7 @@ export default function NewsPage() {
                     </div>
 
                     {/* Permission-gated action buttons */}
-                    {(canCategorize || canCorrect || canEdit || canDelete) && (
+                    {(canCategorize || canCorrect) && (
                       <div
                         className="flex flex-wrap gap-1.5 pt-1"
                         onClick={(e) => e.stopPropagation()}

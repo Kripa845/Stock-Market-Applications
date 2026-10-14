@@ -33,7 +33,6 @@ NEWS_SOURCE_MAP = {
     "arthakhabar": "arthakhabar",
     "fiscal Nepal": "fiscalnepal",
     "fiscalnepal": "fiscalnepal",
-    "merolagani": "merolagani",
     "nepali paisa": "nepalipaisa",
     "nepalipaisa": "nepalipaisa",
 }
@@ -63,7 +62,6 @@ def _resolve_sources(crawl_type, source):
                 "sharesansar",
                 "arthakhabar",
                 "fiscalnepal",
-                "merolagani",
                 "nepsealpha",
                 "bizmandu",
             ]
@@ -76,7 +74,6 @@ def _resolve_sources(crawl_type, source):
     # "all"
     return [
         "sharesansar",
-        "merolagani",
         "bizmandu",
         "nepsealpha",
         "arthakhabar",

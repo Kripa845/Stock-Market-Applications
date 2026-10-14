@@ -29,7 +29,6 @@ CRAWLER_PROJECT_DIR = Path(__file__).resolve().parent
 
 NEWS_SPIDERS = [
     "sharesansar",
-    "merolagani",
     "bizmandu",
     "nepsealpha",
     "arthakhabar",

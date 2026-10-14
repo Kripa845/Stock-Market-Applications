@@ -17,6 +17,21 @@ CRAWLERS_DIR = Path(__file__).resolve().parents[2] / "crawlers"
 SPIDERS = ("market_stocks", "market_indices")
 SPIDER_TIMEOUT_SECONDS = 600
 
+# snapshot_live_index circuit breaker: after 3 failed runs in a row, stop calling NEPSE
+# for 30 minutes.  Kept in Redis (the Celery broker), not Django's per-process cache,
+# so every worker process sees the same count.
+BREAKER_THRESHOLD = 3
+BREAKER_PAUSE_SECONDS = 30 * 60
+BREAKER_FAILURES_KEY = "snapshot_live_index:consecutive_failures"
+BREAKER_OPEN_KEY = "snapshot_live_index:paused"
+
+
+def _breaker():
+    import redis
+    from django.conf import settings
+
+    return redis.Redis.from_url(settings.CELERY_BROKER_URL)
+
 
 def _run_spider(name):
     """Run one spider as a subprocess (same approach as crawler_runs.runner)."""
@@ -78,16 +93,32 @@ def sync_indices_from_nepse():
 
 @shared_task(name="apps.market_indices.tasks.snapshot_live_index")
 def snapshot_live_index_task():
-    """Every 2 minutes in the session: NEPSE's live index values (1D chart and overview header)."""
+    """Every 5 minutes in the session: NEPSE's live index values (1D chart and overview header)."""
     from apps.market_indices.services.nepse_indices import IndexFeedError, snapshot_live_index
 
     reason = market_closed_reason()
     if reason:
+        logger.info("snapshot_live_index: market closed (%s), nothing fetched", reason)
         return {"skipped": True, "reason": reason}
+    breaker = _breaker()
+    if breaker.exists(BREAKER_OPEN_KEY):
+        logger.warning("snapshot_live_index: circuit open, NEPSE not called (%ss left)", breaker.ttl(BREAKER_OPEN_KEY))
+        return {"skipped": True, "reason": "circuit breaker open"}
     try:
         result = snapshot_live_index()
     except IndexFeedError as exc:
-        logger.warning("snapshot_live_index: %s", exc)
+        logger.warning("snapshot_live_index: fetch failed, no ticks saved: %s", exc)
+        if breaker.incr(BREAKER_FAILURES_KEY) >= BREAKER_THRESHOLD:
+            breaker.set(BREAKER_OPEN_KEY, 1, ex=BREAKER_PAUSE_SECONDS)
+            breaker.delete(BREAKER_FAILURES_KEY)
+            logger.error("snapshot_live_index: %d failures in a row, pausing for %d minutes",
+                         BREAKER_THRESHOLD, BREAKER_PAUSE_SECONDS // 60)
         return {"skipped": True, "reason": str(exc)}
-    logger.info("snapshot_live_index: %s", result)
+    breaker.delete(BREAKER_FAILURES_KEY)
+    nepse = result.get("nepse") or {}
+    logger.info(
+        "snapshot_live_index: NEPSE %s at %s | %d new, %d updated, %d unchanged rows",
+        nepse.get("value", "?"), nepse.get("recorded_at", "?"),
+        result["saved"], result["updated"], result["unchanged"],
+    )
     return result

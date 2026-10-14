@@ -283,7 +283,7 @@ export const universalDashboardConfig: DashboardConfig = {
           route: '/reports',
           icon: FileText,
           type: 'quick-action',
-          requiredPermission: ['view_reports', 'export_reports'],
+          requiredPermission: ['view_reports'],
         },
         {
           id: 'link-roles',

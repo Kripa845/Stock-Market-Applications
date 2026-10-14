@@ -17,7 +17,7 @@ export const ROUTE_RULES: Record<string, RouteRule> = {
   '/watchlist-comparison':  { permissions: ['view_analysis', 'view_companies'], mode: 'all' },
   '/news':              { permissions: ['view_news'], mode: 'all' },
   '/crawl':             { permissions: ['view_crawl_runs'], mode: 'all' },
-  '/reports':           { permissions: ['view_reports', 'export_reports'], mode: 'all' },
+  '/reports':           { permissions: ['view_reports'], mode: 'all' },
   '/users':             { permissions: ['view_users'], mode: 'all' },
   '/roles-permissions': { permissions: ['view_roles'], mode: 'all' },
 };

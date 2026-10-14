@@ -87,10 +87,6 @@ export function usePermissions(
         canViewTradingVolume: can(
           "view_trading_volume"
         ),
-        canViewVWAP: can("view_vwap"),
-        canViewBuySellPressure: can(
-          "view_buy_sell_pressure"
-        ),
 
         // News
         canViewNews: can("view_news"),
@@ -98,14 +94,11 @@ export function usePermissions(
         canCorrectCategories: can(
           "correct_categories"
         ),
-        canEditNews: can("edit_news"),
-        canDeleteNews: can("delete_news"),
 
         // Watchlist
         canViewWatchlist: can("view_watchlist"),
         canAddWatchlist: can("add_watchlist"),
         canRemoveWatchlist: can("remove_watchlist"),
-        canEditWatchlist: can("edit_watchlist"),
 
         // Crawler
         canViewCrawlRuns: can("view_crawl_runs"),
@@ -115,22 +108,9 @@ export function usePermissions(
 
         // Analysis
         canViewAnalysis: can("view_analysis"),
-        canViewPriceTrends: can(
-          "view_price_trends"
-        ),
-        canViewVolumeTrends: can(
-          "view_volume_trends"
-        ),
-        canViewVWAPAnalysis: can(
-          "view_vwap_analysis"
-        ),
-        canViewPressureAnalysis: can(
-          "view_pressure_analysis"
-        ),
 
         // Reports
         canViewReports: can("view_reports"),
-        canGenerateReports: can("generate_reports"),
         canExportReports: can("export_reports"),
 
         // Users
@@ -154,8 +134,7 @@ export function usePermissions(
           can("delete_companies") ||
           can("manage_tracked_companies"),
         canManageWatchlist: can("add_watchlist") ||
-          can("remove_watchlist") ||
-          can("edit_watchlist"),
+          can("remove_watchlist"),
         canTriggerCrawl: can("run_crawler"),
         canMonitorCrawl: can("view_crawl_runs"),
         canManageUsers: can("create_users") ||

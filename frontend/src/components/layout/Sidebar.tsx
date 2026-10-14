@@ -121,7 +121,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Reports',
     icon: Database,
     to: '/reports',
-    requiredPermissions: ['export_reports'],
+    requiredPermissions: ['view_reports'],
   },
 
   { type: 'divider', label: 'Administration' },
