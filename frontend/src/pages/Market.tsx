@@ -14,6 +14,7 @@ import CompanyLogo from '../components/companies/CompanyLogo';
 import Section from '../components/common/Section';
 import IndexSummaryCards from '../components/market/IndexSummaryCards';
 import MarketOverviewCard from '../components/market/MarketOverviewCard';
+import WatchlistStrip from '../components/market/WatchlistStrip';
 import { changeTone, formatCount, formatPct, formatPrice } from '../components/market/format';
 
 export default function MarketPage() {
@@ -44,6 +45,8 @@ export default function MarketPage() {
           <IndexSummaryCards />
         </div>
       </Section>
+
+      <WatchlistStrip />
 
       <Section title="Top gainers & losers" subtitle="Biggest price moves among the tracked companies">
         <TopMoversCards />

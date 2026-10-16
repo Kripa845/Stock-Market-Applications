@@ -22,10 +22,12 @@ still labelled live.
 """
 
 import logging
+import time
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.utils import timezone
 
 from apps.market_data.models import LiveFeedStatus
@@ -65,9 +67,21 @@ def _trade_time(value):
 
 
 def _nepse_client():
-    """A ``nepse_data_api.Nepse`` whose every request has a timeout and our User-Agent."""
+    """
+    A ``nepse_data_api.Nepse`` whose every request has a timeout, our User-Agent and
+    TLS certificate verification ON.
+
+    The library sets ``session.verify = False`` and, on import, silences urllib3's
+    InsecureRequestWarning for the whole process.  nepalstock.com.np serves a valid
+    certificate chain (checked 2026-10-15), so both are undone here.
+    """
+    import warnings
+
     import requests
+    import urllib3
     from nepse_data_api import Nepse  # imported lazily: it authenticates on construction
+
+    warnings.simplefilter("default", urllib3.exceptions.InsecureRequestWarning)
 
     class TimeoutSession(requests.Session):
         def request(self, *args, **kwargs):
@@ -81,7 +95,7 @@ def _nepse_client():
         def authenticate(self):
             if not isinstance(self.session, TimeoutSession):
                 session = TimeoutSession()
-                session.verify = self.session.verify
+                session.verify = True  # never inherit the library's verify=False
                 session.headers.update(self.session.headers)
                 session.headers["User-Agent"] = USER_AGENT
                 self.session = session
@@ -90,22 +104,52 @@ def _nepse_client():
     return TimeoutNepse(enable_cache=False)
 
 
+# One logged-in client per worker process, shared by the frequent polls (live prices
+# every 2 minutes, live index every 5), so a run costs one request instead of a login
+# plus a request.  Dropped after any failure and after NEPSE_CLIENT_REUSE_SECONDS;
+# 0 disables reuse (the test settings do).
+_shared_client = {"client": None, "created": 0.0}
+
+
+def shared_nepse_client():
+    """(client, reused): the process's logged-in client, logging in when there is none or it is too old."""
+    max_age = getattr(settings, "NEPSE_CLIENT_REUSE_SECONDS", 15 * 60)
+    now = time.monotonic()
+    client = _shared_client["client"]
+    if client is not None and max_age > 0 and now - _shared_client["created"] < max_age:
+        return client, True
+    client = _nepse_client()
+    _shared_client.update(client=client if max_age > 0 else None, created=now)
+    return client, False
+
+
+def discard_shared_nepse_client():
+    """Forget the shared client so the next call logs in again (after an error or an empty answer)."""
+    _shared_client["client"] = None
+
+
 def fetch_live_rows():
     """All securities traded so far in the current session, keyed by symbol."""
-    try:
-        rows = _nepse_client().get_stocks()
-    except Exception as exc:  # network, auth, timeout or parsing failure inside the library
-        raise LivePriceError(f"NEPSE live feed failed: {exc}") from exc
-    # The library swallows request errors (timeouts included) and returns [], so
-    # empty means "nothing usable"; non-dict rows mean the format changed.
-    by_symbol = {
-        str(row.get("symbol", "")).upper(): row
-        for row in (rows if isinstance(rows, list) else [])
-        if isinstance(row, dict) and row.get("symbol")
-    }
-    if not by_symbol:
-        raise LivePriceError("NEPSE live feed returned no rows")
-    return by_symbol
+    while True:
+        try:
+            client, reused = shared_nepse_client()
+            rows = client.get_stocks()
+        except Exception as exc:  # network, auth, timeout or parsing failure inside the library
+            discard_shared_nepse_client()
+            raise LivePriceError(f"NEPSE live feed failed: {exc}") from exc
+        # The library swallows request errors (timeouts and an expired token included)
+        # and returns [], so empty means "nothing usable"; non-dict rows mean the format changed.
+        by_symbol = {
+            str(row.get("symbol", "")).upper(): row
+            for row in (rows if isinstance(rows, list) else [])
+            if isinstance(row, dict) and row.get("symbol")
+        }
+        if by_symbol:
+            return by_symbol
+        discard_shared_nepse_client()
+        if not reused:
+            raise LivePriceError("NEPSE live feed returned no rows")
+        logger.info("NEPSE live feed empty with a reused login; logging in again once")
 
 
 def fetch_day_summary(day, client=None):
@@ -250,5 +294,5 @@ def live_movers(company_ids=None, limit=10):
     }
     if as_of is None:
         result["reason"] = "No live prices stored yet. They are fetched every 2 minutes during market hours."
-        result["action"] = "Run `python manage.py update_prices` (works while the NEPSE live feed has data)."
+        result["action"] = "Run `python manage.py update_live_prices` (works while the NEPSE live feed has data)."
     return result

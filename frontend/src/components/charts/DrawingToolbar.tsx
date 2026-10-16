@@ -196,8 +196,8 @@ export default function DrawingToolbar({ getChart }: Props) {
   };
 
   const btn = (on: boolean, toggle = false) =>
-    `flex h-8 w-8 items-center justify-center rounded transition-colors ${
-      on ? (toggle ? 'bg-accent/15 text-accent' : 'bg-accent text-white')
+    `flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+      on ? (toggle ? 'bg-accent/15 text-accent-light' : 'bg-accent/10 text-accent-light ring-1 ring-inset ring-accent/60')
         : 'text-text-secondary hover:bg-blue-500/10 hover:text-text-primary'}`;
 
   // Small corner arrow that opens a group's flyout, like TradingView.
@@ -222,10 +222,10 @@ export default function DrawingToolbar({ getChart }: Props) {
     </button>
   );
 
-  const divider = <span className="my-1 h-px w-6 self-center bg-border" />;
+  const divider = <span className="my-1.5 h-px w-6 self-center bg-bg-border" />;
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-0.5 border-r border-border p-1">
+    <div ref={rootRef} className="flex flex-col items-center gap-1 border-r border-bg-border bg-bg-primary px-1.5 py-2">
       <button type="button" title="Cursor (Esc)" onClick={cursor} className={btn(active === null)}>
         <Crosshair size={17} />
       </button>

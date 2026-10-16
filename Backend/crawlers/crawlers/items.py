@@ -54,7 +54,10 @@ class FloorsheetItem(scrapy.Item):
 
 
 class IndexDailyItem(scrapy.Item):
+    # MarketWidePipeline dispatches on item_type ("index_daily") and matches index_name.
+    item_type = scrapy.Field()
     item_code = scrapy.Field()
+    index_name = scrapy.Field()
 
     
     date = scrapy.Field()
@@ -68,6 +71,8 @@ class IndexDailyItem(scrapy.Item):
     
     
 class MarketStockDailyItem(scrapy.Item):
+    # MarketWidePipeline dispatches on item_type ("market_stock_daily").
+    item_type = scrapy.Field()
     symbol = scrapy.Field()
 
     date = scrapy.Field()
@@ -81,3 +86,42 @@ class MarketStockDailyItem(scrapy.Item):
     source = scrapy.Field()
     
     
+
+
+class DividendItem(scrapy.Item):
+    # DividendPipeline dispatches on item_type ("dividend"); upserted on (symbol, fiscal_year).
+    item_type = scrapy.Field()
+    source_id = scrapy.Field()
+    symbol = scrapy.Field()
+    company_name = scrapy.Field()
+    fiscal_year = scrapy.Field()
+
+    bonus_pct = scrapy.Field()
+    cash_pct = scrapy.Field()
+
+    announcement_date = scrapy.Field()
+    book_closure_date = scrapy.Field()
+    distribution_date = scrapy.Field()
+    bonus_listing_date = scrapy.Field()
+
+    source = scrapy.Field()
+
+
+class CompanyFaceValueItem(scrapy.Item):
+    # item_type "company_face_value": paid-up value per share.
+    item_type = scrapy.Field()
+    symbol = scrapy.Field()
+    face_value = scrapy.Field()
+
+    source = scrapy.Field()
+
+
+class CompanyEpsItem(scrapy.Item):
+    # item_type "company_eps": EPS for one fiscal year and quarter.
+    item_type = scrapy.Field()
+    symbol = scrapy.Field()
+    fiscal_year = scrapy.Field()
+    quarter = scrapy.Field()
+    eps = scrapy.Field()
+
+    source = scrapy.Field()

@@ -1,5 +1,6 @@
 
 from datetime import datetime, timedelta
+from decimal import Decimal
 import math
 
 from django.db.models import Avg, Count, DecimalField, ExpressionWrapper, F, Sum, Max, Min, StdDev
@@ -28,6 +29,7 @@ from .serializers import BrokerActivitySerializer, DailyAnalysisSerializer, Volu
 from .services.brokers import (
     build_broker_activity,
     build_top_stock_by_broker,
+    build_top_stocks_by_broker,
     floorsheet_day_coverage,
     sampled_floorsheet_dates,
 )
@@ -528,7 +530,9 @@ class TopBrokerAPIView(APIView):
     """
     One trading day's broker ranking by turnover (buy + sell amount) across
     the user's accessible companies, with a top-3 podium and each broker's
-    highest-turnover stock.
+    stocks: ``top_stocks`` (up to 10, highest turnover first), ``stock_count``
+    (every stock it traded) and ``top_stock`` (the first of ``top_stocks``,
+    kept for existing clients).
 
     ``?date=YYYY-MM-DD`` picks the day; without it the latest *complete* day
     is used.  A day counts as complete when it has trades for at least
@@ -589,25 +593,46 @@ class TopBrokerAPIView(APIView):
 
         from apps.market_data.serializers import broker_metadata
 
-        top_stocks = build_top_stock_by_broker(start_date=day, end_date=day, company_ids=company_ids)
-        logos = dict(
-            Company.objects.filter(symbol__in={t["symbol"] for t in top_stocks.values()})
-            .values_list("symbol", "logo_url")
-        )
+        ranked = build_top_stocks_by_broker(start_date=day, end_date=day, company_ids=company_ids)
+        # Names and logos for every listed stock in one query.
+        company_info = {
+            company["id"]: company
+            for company in Company.objects.filter(
+                pk__in={stock["company_id"] for entry in ranked.values() for stock in entry["stocks"]}
+            ).values("id", "name", "logo_url")
+        }
         data = BrokerActivitySerializer(
             rows, many=True, context={"broker_metadata": broker_metadata(r["broker"] for r in rows)}
         ).data
         results = []
         for raw_row, row in zip(rows, data):
             row = dict(row)
-            top = top_stocks.get(raw_row["broker"])
+            entry = ranked.get(raw_row["broker"], {"stock_count": 0, "stocks": []})
+            broker_total = raw_row["total_value"]
+            stocks = []
+            for stock in entry["stocks"]:
+                info = company_info.get(stock["company_id"], {})
+                stocks.append({
+                    "symbol": stock["symbol"],
+                    "name": info.get("name", ""),
+                    "logo_url": info.get("logo_url") or None,
+                    "buy_amount": str(stock["buy_amt"]),
+                    "sell_amount": str(stock["sell_amt"]),
+                    "buy_quantity": stock["buy_qty"],
+                    "sell_quantity": stock["sell_qty"],
+                    "turnover": str(stock["turnover"]),
+                    # Share of this broker's own turnover (buy + sell) for the day.
+                    "share_pct": (
+                        str((stock["turnover"] / broker_total * 100).quantize(Decimal("0.01")))
+                        if broker_total else None
+                    ),
+                })
+            row["top_stocks"] = stocks
+            row["stock_count"] = entry["stock_count"]
+            # Unchanged shape for existing clients: the first of top_stocks.
             row["top_stock"] = {
-                "symbol": top["symbol"],
-                "logo_url": logos.get(top["symbol"]) or None,
-                "buy_amount": str(top["buy_amt"]),
-                "sell_amount": str(top["sell_amt"]),
-                "turnover": str(top["turnover"]),
-            } if top else None
+                key: stocks[0][key] for key in ("symbol", "logo_url", "buy_amount", "sell_amount", "turnover")
+            } if stocks else None
             results.append(row)
 
         companies = dict(coverage).get(day, 0)

@@ -609,6 +609,9 @@ import {
   type VolumeAnomaly,
 } from '../api/analysis';
 import type { Company } from '../types/company';
+import {
+  getIndexHistory, getIndices, getSubIndices, type IndexHistory, type IndexRow,
+} from '../api/marketIndices';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -634,6 +637,15 @@ function SectionTitle({ icon: Icon, children }: { icon: React.ElementType; child
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Index values arrive as decimal strings; a missing value is shown as "—", never 0.
+function fmtPoints(value: string | null | undefined, signed = false) {
+  if (value == null || value === '') return '—';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '—';
+  const text = n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return signed && n > 0 ? `+${text}` : text;
+}
 
 function computeVwap(prices: PricePoint[]) {
   const totalTurnover = prices.reduce((s, p) => s + parseFloat(p.turnover), 0);
@@ -662,6 +674,19 @@ export default function CompanyAnalysisDashboard() {
   const [loading,     setLoading]     = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error,       setError]       = useState('');
+  // NEPSE indices: when one is selected it replaces the company view.
+  const [mainIndices, setMainIndices] = useState<IndexRow[]>([]);
+  const [subIndices,  setSubIndices]  = useState<IndexRow[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<string | null>(null);
+  const [indexHistory,  setIndexHistory]  = useState<IndexHistory | null>(null);
+
+  // Load the index list once (the 4 main indices and the 13 sub-indices).
+  useEffect(() => {
+    Promise.allSettled([getIndices(), getSubIndices()]).then(([mainRes, subRes]) => {
+      if (mainRes.status === 'fulfilled') setMainIndices(mainRes.value.rows);
+      if (subRes.status  === 'fulfilled') setSubIndices(subRes.value.rows);
+    });
+  }, []);
 
   // Load company list once
   useEffect(() => {
@@ -677,6 +702,16 @@ export default function CompanyAnalysisDashboard() {
 
   // Load extended historical prices once per company; the selected range is filtered from this history.
   const loadData = useCallback(() => {
+    if (selectedIndex) {
+      setLoadingData(true);
+      setError('');
+      setIndexHistory(null);
+      getIndexHistory(selectedIndex)
+        .then(setIndexHistory)
+        .catch(() => setError('Unable to load index data. Check your permissions.'))
+        .finally(() => setLoadingData(false));
+      return;
+    }
     if (!selectedId) return;
     setVolumeAnomalyRefresh(value => value + 1);
     setLoadingData(true);
@@ -695,12 +730,22 @@ export default function CompanyAnalysisDashboard() {
       const failed = [prRes, bhRes, newsRes].filter(r => r.status === 'rejected');
       if (failed.length === 3) setError('Unable to load company data. Check your permissions.');
     }).finally(() => setLoadingData(false));
-  }, [selectedId]);
+  }, [selectedId, selectedIndex]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
   // ── Derived values ──────────────────────────────────────────────────────────
-  const company  = companies.find(c => c.id === selectedId);
+  // No company while an index is shown, so the company-only requests below do not run.
+  const company  = selectedIndex ? undefined : companies.find(c => c.id === selectedId);
+  const week52 = indexHistory?.fifty_two_week;
+  const latestIndex = indexHistory?.latest;
+  const indexPriceLines = useMemo(() => [
+    { label: `52W H ${fmtPoints(week52?.high)}`, value: week52?.high != null ? Number(week52.high) : null },
+    { label: `52W L ${fmtPoints(week52?.low)}`,  value: week52?.low  != null ? Number(week52.low)  : null },
+  ], [week52]);
+  const indexChangeNote = `${fmtPoints(latestIndex?.change, true)} (${fmtPoints(latestIndex?.change_pct, true)}%)`
+    .replace('(—%)', '(—)');
+  const indexUp = latestIndex?.change_pct != null ? Number(latestIndex.change_pct) >= 0 : null;
   // Ranges count back from the latest crawled session, not from today, so a pause in crawling
   // never empties the view. A range the data cannot fill falls back to all available data.
   const priceDates = useMemo(() => [...new Set(prices.map(p => p.date))].sort(), [prices]);
@@ -785,23 +830,97 @@ export default function CompanyAnalysisDashboard() {
         </div>
       )}
 
-      {/* ── Company selector ─────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2">
-        {companies.map(c => (
-          <button
-            key={c.id}
-            onClick={() => setSelectedId(c.id)}
-            className={clsx(
-              'px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all',
-              c.id === selectedId
-                ? 'bg-accent text-white shadow-md'
-                : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-blue-500/10',
-            )}
-          >
-            {c.symbol}
-          </button>
+      {/* ── Chart selector: indices first, then companies ──────────────────── */}
+      <div className="space-y-2">
+        {[
+          { label: 'Indices', rows: mainIndices },
+          { label: 'Sub-indices', rows: subIndices },
+        ].filter(group => group.rows.length > 0).map(group => (
+          <div key={group.label} className="flex flex-wrap items-center gap-2">
+            <span className="w-24 shrink-0 text-[10px] uppercase tracking-widest text-text-muted">{group.label}</span>
+            {group.rows.map(row => (
+              <button
+                key={row.code}
+                onClick={() => setSelectedIndex(row.code)}
+                className={clsx(
+                  'px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
+                  row.code === selectedIndex
+                    ? 'bg-accent text-white shadow-md'
+                    : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-blue-500/10',
+                )}
+              >
+                {row.name}
+              </button>
+            ))}
+          </div>
         ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {(mainIndices.length > 0 || subIndices.length > 0) && (
+            <span className="w-24 shrink-0 text-[10px] uppercase tracking-widest text-text-muted">Companies</span>
+          )}
+          {companies.map(c => (
+            <button
+              key={c.id}
+              onClick={() => { setSelectedIndex(null); setSelectedId(c.id); }}
+              className={clsx(
+                'px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all',
+                !selectedIndex && c.id === selectedId
+                  ? 'bg-accent text-white shadow-md'
+                  : 'bg-bg-elevated text-text-secondary hover:text-text-primary hover:bg-blue-500/10',
+              )}
+            >
+              {c.symbol}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* ── Index header card + chart (replaces the company view) ────────── */}
+      {selectedIndex && indexHistory && (
+        <>
+          <div className="card flex flex-wrap items-center gap-6 py-4">
+            <div>
+              <p className="font-semibold text-text-primary text-base">{indexHistory.name}</p>
+              <p className="text-xs text-text-muted">
+                NEPSE official daily data{latestIndex ? ` · as of ${latestIndex.date}` : ''}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-5 ml-auto">
+              <StatPill
+                label="Latest close"
+                value={fmtPoints(latestIndex?.close)}
+                color={indexUp === null ? 'text-text-primary' : indexUp ? 'text-up' : 'text-down'}
+              />
+              <StatPill
+                label="Change"
+                value={indexChangeNote}
+                color={indexUp === null ? 'text-text-secondary' : indexUp ? 'text-up' : 'text-down'}
+                sub={latestIndex?.previous_date ? `vs ${latestIndex.previous_date}` : undefined}
+              />
+              <StatPill label="52W high" value={fmtPoints(week52?.high)} sub={week52?.high_date ?? undefined} />
+              <StatPill label="52W low"  value={fmtPoints(week52?.low)}  sub={week52?.low_date ?? undefined} />
+            </div>
+          </div>
+
+          {indexHistory.prices.length === 0 ? (
+            <div className="card py-16 text-center">
+              <p className="text-sm text-text-muted">No stored data for this index yet.</p>
+            </div>
+          ) : (
+            <div className="card space-y-2">
+              <SectionTitle icon={TrendingUp}>Price Action</SectionTitle>
+              <div className="h-[720px]">
+                <KlinePriceChart
+                  prices={indexHistory.prices}
+                  symbol={indexHistory.name}
+                  priceLines={indexPriceLines}
+                  lastPriceNote={indexChangeNote}
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Company header card ───────────────────────────────────────────── */}
       {company && (
@@ -848,6 +967,7 @@ export default function CompanyAnalysisDashboard() {
         </div>
       )}
 
+      {!selectedIndex && (<>
       {/* ── Range selector ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 bg-bg-elevated rounded-lg p-0.5 w-fit">
         {(['5D', '1M', '3M', 'All'] as const).map(r => {
@@ -983,6 +1103,7 @@ export default function CompanyAnalysisDashboard() {
           </div>
         </>
       )}
+      </>)}
     </div>
   );
 }

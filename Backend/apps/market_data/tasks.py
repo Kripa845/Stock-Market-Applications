@@ -24,6 +24,18 @@ from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
+# update_live_prices circuit breaker: after 3 failed runs in a row, stop calling NEPSE
+# for 30 minutes (same policy as market_indices.tasks.snapshot_live_index).
+LIVE_PRICES_BREAKER = "update_live_prices"
+LIVE_PRICES_BREAKER_THRESHOLD = 3
+LIVE_PRICES_BREAKER_PAUSE_SECONDS = 30 * 60
+
+
+def _breaker_redis():
+    from apps.market_data.services.circuit_breaker import broker_redis
+
+    return broker_redis()
+
 
 # Recent sessions still missing a trade count are retried from NEPSE on every run;
 # older gaps are left to `manage.py backfill_price_fields --nepse`.
@@ -114,10 +126,19 @@ def update_live_prices():
     if reason:
         logger.info("update_live_prices: skipping — %s.", reason)
         return {"skipped": True, "reason": reason}
+    from apps.market_data.services.circuit_breaker import CircuitBreaker
+
+    breaker = CircuitBreaker(_breaker_redis(), LIVE_PRICES_BREAKER,
+                             LIVE_PRICES_BREAKER_THRESHOLD, LIVE_PRICES_BREAKER_PAUSE_SECONDS)
+    if breaker.is_open():
+        logger.warning("update_live_prices: circuit open, NEPSE not called (%ss left)", breaker.seconds_left())
+        return {"skipped": True, "reason": "circuit breaker open"}
     try:
         result = sync_live_prices()
     except LivePriceError as exc:
         logger.warning("update_live_prices: %s; keeping old prices.", exc)
+        breaker.record_failure()
         return {"skipped": True, "reason": str(exc)}
+    breaker.record_success()
     logger.info("update_live_prices: %s", result)
     return result

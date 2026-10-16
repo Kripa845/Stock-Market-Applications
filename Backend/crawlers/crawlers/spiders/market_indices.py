@@ -68,6 +68,11 @@ class MarketIndicesSpider(scrapy.Spider):
         self.api_url = url or os.environ.get("NEPSE_INDEX_API_URL", "")
         self.forced_date = date
 
+    async def start(self):
+        # Scrapy >= 2.13 calls start(), not start_requests().
+        for request in self.start_requests():
+            yield request
+
     def start_requests(self):
         if not self.api_url:
             self.logger.error(

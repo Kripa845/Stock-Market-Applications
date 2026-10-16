@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DailyPrice, DividendAnnouncement, FloorsheetTransaction, IntradayCandle, TradingHoliday
+from .models import CompanyEarnings, DailyPrice, DividendAnnouncement, FloorsheetTransaction, IntradayCandle, TradingHoliday
 # Register your models here.
 admin.site.register(DailyPrice)
 admin.site.register(FloorsheetTransaction)
@@ -14,10 +14,18 @@ class TradingHolidayAdmin(admin.ModelAdmin):
 
 @admin.register(DividendAnnouncement)
 class DividendAnnouncementAdmin(admin.ModelAdmin):
-    list_display = ("company", "fiscal_year", "bonus_pct", "cash_pct", "total_pct", "book_closure_date")
-    list_filter = ("fiscal_year",)
-    search_fields = ("company__symbol", "company__name")
+    list_display = ("symbol", "fiscal_year", "bonus_pct", "cash_pct", "total_pct", "book_closure_date", "status", "source")
+    list_filter = ("status", "fiscal_year", "source")
+    search_fields = ("symbol", "company_name", "company__name")
     list_select_related = ("company",)
+    readonly_fields = ("missing_fields", "source_id", "scraped_at")
+
+
+@admin.register(CompanyEarnings)
+class CompanyEarningsAdmin(admin.ModelAdmin):
+    list_display = ("symbol", "fiscal_year", "quarter", "eps", "source", "scraped_at")
+    list_filter = ("fiscal_year", "quarter")
+    search_fields = ("symbol",)
 
 
 @admin.register(IntradayCandle)

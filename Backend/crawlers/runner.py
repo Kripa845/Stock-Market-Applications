@@ -43,7 +43,17 @@ FLOORSHEET_SPIDERS = [
     "floorsheet",
 ]
 
-ALL_SPIDERS = NEWS_SPIDERS + MARKET_DATA_SPIDERS + FLOORSHEET_SPIDERS
+# Run on their own schedule (crawl_brokers), never as part of an "all" crawl.
+BROKER_SPIDERS = [
+    "brokers",
+]
+
+# Run on their own schedule (crawl_dividends), never as part of an "all" crawl.
+DIVIDEND_SPIDERS = [
+    "dividends",
+]
+
+ALL_SPIDERS = NEWS_SPIDERS + MARKET_DATA_SPIDERS + FLOORSHEET_SPIDERS + BROKER_SPIDERS + DIVIDEND_SPIDERS
 
 
 class SpiderRunResult:

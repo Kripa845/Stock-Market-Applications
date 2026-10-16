@@ -101,3 +101,59 @@ class SectorRotationSnapshot(models.Model):
             models.UniqueConstraint(fields=["sector", "date"], name="unique_sector_rotation_snapshot"),
         ]
         indexes = [models.Index(fields=["date", "rank_1w"])]
+
+
+class SupportResistanceSet(models.Model):
+    """Latest support / resistance computation for one company (replaced on every run)."""
+
+    STATUS_OK = "ok"
+    STATUS_INSUFFICIENT = "insufficient_history"
+    STATUS_NO_LEVELS = "no_levels"
+    STATUS_CHOICES = [
+        (STATUS_OK, "OK"),
+        (STATUS_INSUFFICIENT, "Insufficient history"),
+        (STATUS_NO_LEVELS, "No levels found"),
+    ]
+
+    company = models.OneToOneField("companies.Company", on_delete=models.CASCADE, related_name="support_resistance")
+    as_of = models.DateField()                                     # latest session used
+    status = models.CharField(max_length=24, choices=STATUS_CHOICES)
+    latest_close = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    sessions_used = models.PositiveIntegerField(default=0)
+    window_start = models.DateField(null=True, blank=True)
+    # History before this date was dropped: a price adjustment with no usable factor.
+    adjustment_cut = models.DateField(null=True, blank=True)
+    # Sessions whose earlier bars were back-adjusted (bonus / right shares), oldest first.
+    adjustments = models.JSONField(default=list, blank=True)
+    params = models.JSONField(default=dict, blank=True)
+    computed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["company_id"]
+
+    def __str__(self):
+        return f"S&R {self.company_id} as of {self.as_of} ({self.status})"
+
+
+class SupportResistanceLevel(models.Model):
+    """One clustered price level: swing highs / lows within the tolerance of each other."""
+
+    KIND_SUPPORT = "support"
+    KIND_RESISTANCE = "resistance"
+    KIND_CHOICES = [(KIND_SUPPORT, "Support"), (KIND_RESISTANCE, "Resistance")]
+
+    set = models.ForeignKey(SupportResistanceSet, on_delete=models.CASCADE, related_name="levels")
+    price = models.DecimalField(max_digits=15, decimal_places=4)
+    kind = models.CharField(max_length=10, choices=KIND_CHOICES)
+    touches = models.PositiveSmallIntegerField()
+    strength = models.DecimalField(max_digits=10, decimal_places=4)
+    first_touch = models.DateField()
+    last_touch = models.DateField()
+    at_price = models.BooleanField(default=False)                  # within a hair of the latest close
+
+    class Meta:
+        ordering = ["-price"]
+        indexes = [models.Index(fields=["set", "kind"])]
+
+    def __str__(self):
+        return f"{self.kind} {self.price} ({self.touches} touches)"

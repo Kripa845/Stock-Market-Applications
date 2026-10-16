@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from crawlers.runner import (
+    DIVIDEND_SPIDERS,
     FLOORSHEET_SPIDERS,
     MARKET_DATA_SPIDERS,
     NEWS_SPIDERS,
@@ -138,6 +139,8 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
             CrawlRun.CrawlType.FLOORSHEET_SAMPLE,
         ):
             spider_names = list(FLOORSHEET_SPIDERS)
+        elif crawl_run.crawl_type == CrawlRun.CrawlType.DIVIDENDS:
+            spider_names = list(DIVIDEND_SPIDERS)
         elif crawl_run.crawl_type == CrawlRun.CrawlType.ALL:
             spider_names = (
                 list(NEWS_SPIDERS)
@@ -309,9 +312,9 @@ def crawl_daily_prices():
     """
     Scheduled daily trading-data crawl.
 
-    Chains ``derive_price_fields_task`` (transactions) and then
-    ``rebuild_all_analysis`` so VWAP / volume baseline / pressure are
-    recomputed immediately after fresh prices land.
+    Chains ``derive_price_fields_task`` (transactions), ``rebuild_all_analysis``
+    and ``compute_support_resistance_task`` so VWAP / volume baseline / pressure
+    and the S&R levels are recomputed immediately after fresh prices land.
     """
     closed = _market_closed_today("crawl_daily_prices")
     if closed:
@@ -334,11 +337,13 @@ def crawl_daily_prices():
 
     from apps.analysis.tasks import rebuild_all_analysis
     from apps.market_data.tasks import derive_price_fields_task
+    from apps.market_intelligence.tasks import compute_support_resistance_task
 
     task = chain(
         run_crawl.si(crawl_run.id),
         derive_price_fields_task.si(),
         rebuild_all_analysis.si(),
+        compute_support_resistance_task.si(),
     ).apply_async()
 
     crawl_run.task_id = task.id
@@ -376,6 +381,34 @@ def crawl_brokers():
     crawl_run.save(update_fields=["task_id", "status", "started_at"])
     logger.info("crawl_brokers: started CrawlRun #%s.", crawl_run.id)
     return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "brokers"}
+
+
+@shared_task(name="apps.crawler_runs.tasks.crawl_dividends")
+def crawl_dividends():
+    """Daily: proposed dividends for every listed company (ShareSansar) + face value / EPS."""
+    if _has_active_crawl(CrawlRun.CrawlType.DIVIDENDS):
+        logger.info("crawl_dividends: skipping because a dividend crawl is active.")
+        return {"skipped": True, "reason": "dividend crawl already active"}
+
+    with transaction.atomic():
+        crawl_run = CrawlRun.objects.create(
+            crawl_type=CrawlRun.CrawlType.DIVIDENDS,
+            source="dividends",
+            target="All listed companies",
+            status=CrawlRun.Status.PENDING,
+            sources=list(DIVIDEND_SPIDERS),
+        )
+
+    task = run_crawl.apply_async(
+        args=[crawl_run.id],
+        kwargs={"spider_name": "dividends"},
+    )
+    crawl_run.task_id = task.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+    crawl_run.started_at = timezone.now()
+    crawl_run.save(update_fields=["task_id", "status", "started_at"])
+    logger.info("crawl_dividends: started CrawlRun #%s.", crawl_run.id)
+    return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "dividends"}
 
 
 # ---------------------------------------------------------------------------

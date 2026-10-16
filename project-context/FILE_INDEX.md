@@ -77,7 +77,6 @@ Omitted: empty `__init__.py`, migrations, data dumps (*.json, *.csv, *.backup), 
 - `Backend/apps/companies/management/commands/import_company_logos.py` (79 lines) — Command
 - `Backend/apps/companies/management/commands/seed_admin.py` (54 lines) — Command
 - `Backend/apps/companies/management/commands/seed_companies.py` (283 lines) — Command
-- `Backend/apps/companies/management/commands/seed_market_data.py` (425 lines) — Command
 
 ## Backend/apps/crawler_runs
 
@@ -243,7 +242,8 @@ Omitted: empty `__init__.py`, migrations, data dumps (*.json, *.csv, *.backup), 
 - `Backend/apps/users/company_access.py` (392 lines) — is_unrestricted_user, get_accessible_company_ids, has_company_access, user_can_access_company, require_company_access, require_company_id_access, filter_company_queryset, filter_queryset_by_user_companies, accessible_company_queryset, require_permission, require_permission_and_company, validate_company_ids …
 - `Backend/apps/users/company_permissions.py` (35 lines) — check_company_access
 - `Backend/apps/users/managers.py` (5 lines) — CustomUserManager
-- `Backend/apps/users/models.py` (302 lines) — RolePermissionConfig, CustomRole, User, UserCompanyAccess, WatchlistItem
+- `Backend/apps/users/models.py` — RolePermissionConfig, CustomRole, User, UserCompanyAccess, Watchlist, WatchlistItem
+- `Backend/apps/market_data/services/watchlist.py` — watchlist rows (latest crawled session, sparkline, holding value) and summary totals
 - `Backend/apps/users/permissions.py` (127 lines) — IsAdminUserRole, IsAnalystUserRole, IsViewerUserRole, HasAppPermission, HasViewMethodPermissions, ReadOnlyOrAdmin, ReadOnlyOrAnalyst, is_admin_account, missing_grants
 - `Backend/apps/users/serializers.py` (676 lines) — validate_permission_dependencies, CustomTokenObtainPairSerializer, UserRegistrationSerializer, UserCompanyAccessItemSerializer, UserCompanyAccessListSerializer, AdminUserCreateSerializer, UserSerializer, MeSerializer, AdminUserUpdateSerializer, CustomRoleSerializer, RolePermissionConfigSerializer, RolePermissionSerializer …
 - `Backend/apps/users/test_permission_dependencies.py` (460 lines) — Tests for permission dependency validation — Users topic (Section 1.2 of spec). The dependency chain for the Users group is: view_users ↓ create_users ↓ edit_us…; ValidatePermissionDependenciesUnitTests, BuiltInRoleDependencyAPITests, CustomRoleDependencyAPITests
@@ -471,6 +471,7 @@ Omitted: empty `__init__.py`, migrations, data dumps (*.json, *.csv, *.backup), 
 - `frontend/src/pages/TrackedMoversPage.tsx` (223 lines) — TrackedMoversPage
 - `frontend/src/pages/ViewerDashboard.tsx` (3 lines)
 - `frontend/src/pages/WatchlistComparison.tsx` (651 lines) — WatchlistComparison
+- `frontend/src/pages/MyWatchlistPage.tsx` — MyWatchlistPage (/watchlist: named lists, holdings, add any company)
 - `frontend/src/pages/WatchlistPage.tsx` (135 lines) — WatchlistPage
 
 ## frontend/src/pages/admin

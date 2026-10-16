@@ -20,6 +20,9 @@ import Layout from './components/layout/Layout';
 
 import Dashboard from './pages/Dashboard';
 import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
+import TechnicalCharts from './pages/TechnicalCharts';
+import FloorsheetPage from './pages/FloorsheetPage';
+import TopBrokerStocksPage from './pages/TopBrokerStocksPage';
 import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage';
 import TopBrokerPage from './pages/TopBrokerPage';
 
@@ -28,13 +31,15 @@ import UserManagementPage from './pages/admin/UserManagementPage';
 import WatchlistComparison from './pages/WatchlistComparison';
 import AdminWatchlistPage from './pages/admin/WatchlistPage';
 import WatchlistPage from './pages/WatchlistPage';
+import MyWatchlistPage from './pages/MyWatchlistPage';
 import RolesPermissionsPage from './pages/admin/RolesPermissionPage';
 
 import CrawlerStatusPage from './pages/CrawlerStatus';
 import MarketPage from './pages/Market';
 import TopMoversPage from './pages/TopMoversPage';
+import DividendsPage from './pages/DividendsPage';
+import IndicesPage from './pages/IndicesPage';
 import TopActivityPage from './pages/TopActivityPage';
-import TrackedCompaniesPage from './pages/TrackedCompanies';
 import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
 import NewsDetail from './pages/NewsDetail';
@@ -150,7 +155,7 @@ function PermissionRoute({
 }
 
 
-function WatchlistPageWrapper() {
+function LiveTradingPageWrapper() {
   const { user } = useAuth();
   return user?.role === 'admin' ? <AdminWatchlistPage /> : <WatchlistPage />;
 }
@@ -198,6 +203,25 @@ function AppRoutes() {
 
 
         {/* =================================================
+            TECHNICAL CHARTS — full-screen terminal, outside the
+            app Layout (no sidebar / header / footer)
+        ================================================= */}
+
+        <Route
+          path="/technical-charts"
+          element={
+            <PrivateRoute>
+              <PermissionRoute
+                rule={ROUTE_RULES['/technical-charts']}
+              >
+                <TechnicalCharts />
+              </PermissionRoute>
+            </PrivateRoute>
+          }
+        />
+
+
+        {/* =================================================
             PROTECTED APPLICATION ROUTES
         ================================================= */}
 
@@ -234,6 +258,28 @@ function AppRoutes() {
             }
           />
 
+
+          <Route
+            path="/market/indices"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/indices']}
+              >
+                <IndicesPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/dividends"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/dividends']}
+              >
+                <DividendsPage />
+              </PermissionRoute>
+            }
+          />
 
           <Route
             path="/market/gainers"
@@ -291,15 +337,10 @@ function AppRoutes() {
           />
 
 
+          {/* Tracked Companies page was removed; keep old links working. */}
           <Route
             path="/tracked"
-            element={
-              <PermissionRoute
-                rule={ROUTE_RULES['/tracked']}
-              >
-                <TrackedCompaniesPage />
-              </PermissionRoute>
-            }
+            element={<Navigate to="/companies" replace />}
           />
 
           {/* -----------------------------------------------
@@ -330,7 +371,22 @@ function AppRoutes() {
 
 
           {/* -----------------------------------------------
-              COMPANY ANALYSIS
+              FLOORSHEET
+          ----------------------------------------------- */}
+
+          <Route
+            path="/floorsheet"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/floorsheet']}
+              >
+                <FloorsheetPage />
+              </PermissionRoute>
+            }
+          />
+
+          {/* -----------------------------------------------
+              COMPANY ANALYSIS (full dashboard; not in the sidebar for now)
           ----------------------------------------------- */}
 
           <Route
@@ -355,6 +411,10 @@ function AppRoutes() {
           <Route
             path="/top-brokers"
             element={<PermissionRoute rule={ROUTE_RULES['/top-brokers']}><TopBrokerPage /></PermissionRoute>}
+          />
+          <Route
+            path="/top-brokers/:broker"
+            element={<PermissionRoute rule={ROUTE_RULES['/top-brokers']}><TopBrokerStocksPage /></PermissionRoute>}
           />
 
 
@@ -384,7 +444,18 @@ function AppRoutes() {
               <PermissionRoute
                 rule={ROUTE_RULES['/watchlist']}
               >
-                <WatchlistPageWrapper />
+                <MyWatchlistPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/live-trading"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/live-trading']}
+              >
+                <LiveTradingPageWrapper />
               </PermissionRoute>
             }
           />
@@ -542,7 +613,7 @@ function AppRoutes() {
 
           <Route
             path="/analyst/trading"
-            element={<Navigate to="/company-analysis" replace />}
+            element={<Navigate to="/technical-charts" replace />}
           />
 
           <Route

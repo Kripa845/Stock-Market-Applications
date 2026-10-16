@@ -18,6 +18,10 @@ from .market_views import (
     TopMoversAPIView,
     TrackedTopAPIView,
     WatchlistAPIView,
+    WatchlistDetailAPIView,
+    WatchlistItemDetailAPIView,
+    WatchlistItemsAPIView,
+    WatchlistsAPIView,
 )
 
 # Mounted at /api/market/ -- tracked companies only (see market_views).
@@ -41,5 +45,10 @@ urlpatterns = [
     path("dividends/", DividendListAPIView.as_view(), name="market-dividends"),
     path("watchlist/", WatchlistAPIView.as_view(), name="market-watchlist"),
     path("watchlist/<str:symbol>/", WatchlistAPIView.as_view(), name="market-watchlist-item"),
+    path("watchlists/", WatchlistsAPIView.as_view(), name="market-watchlists"),
+    path("watchlists/<int:pk>/", WatchlistDetailAPIView.as_view(), name="market-watchlist-detail"),
+    path("watchlists/<int:pk>/items/", WatchlistItemsAPIView.as_view(), name="market-watchlist-items"),
+    path("watchlists/<int:pk>/items/<int:item_id>/", WatchlistItemDetailAPIView.as_view(),
+         name="market-watchlist-item-detail"),
     path("news/<str:symbol>/", CompanyNewsAPIView.as_view(), name="market-company-news"),
 ]

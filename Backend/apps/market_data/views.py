@@ -9,12 +9,16 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 import django_filters
 from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Count, Max, Min, Sum
 
 from apps.companies.models import Company
 from .models import DailyPrice, FloorsheetTransaction, IntradayCandle
 from .services.intraday_candles import NPT, latest_candle_date
 from .services.price_source import requested_price_source
 from .serializers import (
+    broker_metadata,
+    broker_payload,
     DailyPriceSerializers,
     FloorsheetSerializer,
     IntradayCandleQuerySerializer,
@@ -60,11 +64,19 @@ class CompanyPriceList(APIView):
         return Response(serializer.data)
 
 
+class FloorsheetPagination(PageNumberPagination):
+    # Default stays at the project's 20 rows; the Floorsheet page asks for more with ?page_size=.
+    page_size = 20
+    page_size_query_param = "page_size"
+    max_page_size = 200
+
+
 class FloorsheetListAPIView(generics.ListAPIView):
     serializer_class = FloorsheetSerializer
     permission_classes = [HasAppPermission]
     permission_key = "view_trading_volume"
     queryset = FloorsheetTransaction.objects.select_related("company").all()
+    pagination_class = FloorsheetPagination
 
     filter_backends = [
         DjangoFilterBackend,
@@ -81,6 +93,7 @@ class FloorsheetListAPIView(generics.ListAPIView):
     ]
     ordering_fields = [
         "date",
+        "trade_time",
         "quantity",
         "rate",
         "amount",
@@ -95,6 +108,65 @@ class FloorsheetListAPIView(generics.ListAPIView):
         return filter_company_queryset(
             super().get_queryset(), self.request.user
         )
+
+
+FLOORSHEET_TOP_BROKERS = 5
+FLOORSHEET_RECENT_DATES = 60
+
+
+class FloorsheetSummaryAPIView(FloorsheetListAPIView):
+    """
+    GET /api/floorsheet/summary/ -- totals and top brokers for the same filters / search
+    as /api/floorsheet/ (so the numbers always match the table), plus the dates that
+    have floorsheet data (newest first) for the date picker.  Without a date filter it
+    summarises the latest date only (all history is ~1M trades and slow to aggregate);
+    ``date`` in the response says which day was used.
+    """
+    pagination_class = None
+    DATE_PARAMS = ("date", "date_from", "date_to")
+
+    def list(self, request, *args, **kwargs):
+        visible = self.get_queryset()                  # company access applied, no filters
+        dates = list(
+            visible.order_by("-date").values_list("date", flat=True).distinct()[:FLOORSHEET_RECENT_DATES]
+        )
+        rows = self.filter_queryset(visible).order_by()
+        day = request.query_params.get("date") or None
+        if not any(request.query_params.get(name) for name in self.DATE_PARAMS):
+            day = dates[0] if dates else None
+            rows = rows.filter(date=day)
+        totals = rows.aggregate(
+            trades=Count("id"), quantity=Sum("quantity"), amount=Sum("amount"),
+            companies=Count("company", distinct=True),
+            first_trade=Min("trade_time"), last_trade=Max("trade_time"),
+        )
+
+        def top(side):
+            field = f"{side}_broker"
+            return list(
+                rows.values(field)
+                .annotate(quantity=Sum("quantity"), amount=Sum("amount"), trades=Count("id"))
+                .order_by("-quantity")[:FLOORSHEET_TOP_BROKERS]
+            )
+
+        buyers, sellers = top("buyer"), top("seller")
+        metadata = broker_metadata([r["buyer_broker"] for r in buyers] + [r["seller_broker"] for r in sellers])
+
+        def broker_rows(items, field):
+            return [
+                {**broker_payload(item[field], metadata),
+                 "quantity": item["quantity"], "amount": item["amount"], "trades": item["trades"]}
+                for item in items
+            ]
+
+        return Response({
+            "date": day,
+            **totals,
+            "top_buyers": broker_rows(buyers, "buyer_broker"),
+            "top_sellers": broker_rows(sellers, "seller_broker"),
+            "latest_date": dates[0] if dates else None,
+            "dates": dates,
+        })
 
 
 class StockIntradayCandlesAPIView(APIView):

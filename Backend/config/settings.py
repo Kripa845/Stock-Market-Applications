@@ -241,6 +241,10 @@ NEPSE_TRADING_WEEKDAYS = NEPSE_TRADING_WEEKS[-1][1]
 # Celery's crontab counts Sunday=0, Python's weekday() counts Monday=0.
 TRADING_DAYS_CRONTAB = ",".join(str((day + 1) % 7) for day in NEPSE_TRADING_WEEKDAYS)
 
+# NEPSE API: how long one logged-in client is reused by the frequent live polls in a
+# worker process (market_data.services.live_prices.shared_nepse_client).  0 = log in every run.
+NEPSE_CLIENT_REUSE_SECONDS = int(os.getenv("NEPSE_CLIENT_REUSE_SECONDS", str(15 * 60)))
+
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {
@@ -259,6 +263,11 @@ CELERY_BEAT_SCHEDULE = {
     "crawl-brokers-weekly": {
         "task": "apps.crawler_runs.tasks.crawl_brokers",
         "schedule": crontab(minute=0, hour=20, day_of_week=6),
+    },
+    # Every day, not only trading days: book-closure / distribution dates move the status.
+    "crawl-dividends-daily": {
+        "task": "apps.crawler_runs.tasks.crawl_dividends",
+        "schedule": crontab(minute=30, hour=19),
     },
 
     # ---- Floorsheet ----
@@ -323,6 +332,12 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.market_intelligence.tasks.build_daily_market_intelligence",
         "schedule": crontab(minute=0, hour=19),
     },
+    # Normally runs at the end of the 18:00 price-crawl chain; this is the safety net
+    # for when an earlier step in that chain fails.  Recomputing is idempotent.
+    "compute-support-resistance-fallback": {
+        "task": "apps.market_intelligence.tasks.compute_support_resistance_task",
+        "schedule": crontab(minute=15, hour=19, day_of_week=TRADING_DAYS_CRONTAB),
+    },
 
     # ---- News categorization ----
     "categorize-unprocessed-news-every-10-minutes": {
@@ -340,6 +355,18 @@ CELERY_BEAT_SCHEDULE = {
     "sync-nepse-indices-after-close": {
         "task": "apps.market_indices.tasks.sync_indices_from_nepse",
         "schedule": crontab(minute="15,45", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
+    },
+    # NEPSE revises the day's index turnover / volume / transactions after 15:45 (late trade
+    # corrections), which the indices page reports as "mismatch".  Re-sync in the evening;
+    # update_or_create overwrites the same rows, so this never duplicates.
+    "sync-nepse-indices-evening": {
+        "task": "apps.market_indices.tasks.sync_indices_from_nepse",
+        "schedule": crontab(minute=30, hour=18, day_of_week=TRADING_DAYS_CRONTAB),
+    },
+    # After the 15:45 index sync: snapshot company data, compare reproduced vs published closes.
+    "verify-index-replication": {
+        "task": "apps.market_indices.tasks.verify_index_replication",
+        "schedule": crontab(minute=0, hour=16, day_of_week=TRADING_DAYS_CRONTAB),
     },
     "crawl-market-wide-evening": {
         "task": "apps.market_indices.tasks.crawl_market_wide",

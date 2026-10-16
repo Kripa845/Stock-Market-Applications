@@ -1,9 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from django.core.management import call_command
-from django.core.management.base import CommandError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework import status
@@ -56,11 +54,6 @@ class CrawledPricePresentationTests(TestCase):
 
         self.assertEqual([row["close"] for row in get_prices()], ["100.00"])
         self.assertEqual([row["close"] for row in get_prices("&source=seeded")], ["999.00"])
-
-    @override_settings(DEBUG=False)
-    def test_seed_command_refuses_to_run_without_force_outside_debug(self):
-        with self.assertRaises(CommandError):
-            call_command("seed_market_data")
 
 
 class CompanyAccessControlTests(TestCase):

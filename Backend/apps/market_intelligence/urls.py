@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.market_intelligence.views import (
     CompanyIndicatorSeriesAPIView,
+    CompanySupportResistanceAPIView,
     CompanyTechnicalsAPIView,
     IndicatorRegistryAPIView,
     MarketBreadthAPIView,
@@ -18,6 +19,8 @@ urlpatterns = [
     path("sectors/rotation/", SectorRotationAPIView.as_view(), name="market-intelligence-sector-rotation"),
     path("relative-strength/", RelativeStrengthAPIView.as_view(), name="market-intelligence-relative-strength"),
     path("companies/<int:company_id>/technicals/", CompanyTechnicalsAPIView.as_view(), name="company-technicals"),
+    path("companies/<int:company_id>/support-resistance/", CompanySupportResistanceAPIView.as_view(),
+         name="company-support-resistance"),
     path("indicators/registry/", IndicatorRegistryAPIView.as_view(), name="indicator-registry"),
     path("companies/<int:company_id>/indicators/", CompanyIndicatorSeriesAPIView.as_view(), name="company-indicators"),
 ]

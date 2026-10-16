@@ -18,6 +18,7 @@ from apps.market_intelligence.models import (
     MarketBreadthSnapshot,
     ProxyIndexSnapshot,
     SectorRotationSnapshot,
+    SupportResistanceSet,
 )
 from apps.market_intelligence.indicators import REGISTRY as INDICATOR_REGISTRY
 from apps.market_intelligence.indicators import compute as compute_indicator
@@ -329,6 +330,41 @@ class CompanyTechnicalsAPIView(APIView):
             "possible_corporate_action": snapshot.possible_corporate_action,
             "disclaimer": "Technical signals are computed from historical prices and are not investment advice.",
             "computed_at": snapshot.computed_at,
+        })
+
+
+class CompanySupportResistanceAPIView(APIView):
+    """GET /api/market-intelligence/companies/<id>/support-resistance/ -- clustered swing levels."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request, company_id):
+        company = get_object_or_404(Company, pk=company_id, is_active=True)
+        require_company_access(request.user, company.pk)
+        sr_set = SupportResistanceSet.objects.filter(company=company).prefetch_related("levels").first()
+        if not sr_set:
+            return Response(
+                {"status": "not_computed", "detail": "Support/resistance levels are not computed yet."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        close = sr_set.latest_close
+        return Response({
+            "company_id": company.pk, "symbol": company.symbol,
+            "as_of": sr_set.as_of, "status": sr_set.status, "latest_close": close,
+            "sessions_used": sr_set.sessions_used, "window_start": sr_set.window_start,
+            "adjustment_cut": sr_set.adjustment_cut, "adjustments": sr_set.adjustments,
+            "params": sr_set.params,
+            "levels": [
+                {
+                    "price": level.price, "kind": level.kind, "touches": level.touches,
+                    "strength": level.strength, "at_price": level.at_price,
+                    "distance_pct": round((level.price / close - 1) * 100, 2) if close else None,
+                    "first_touch": level.first_touch, "last_touch": level.last_touch,
+                }
+                for level in sr_set.levels.all()
+            ],
+            "disclaimer": "Levels are computed from historical prices and are not investment advice.",
+            "computed_at": sr_set.computed_at,
         })
 
 

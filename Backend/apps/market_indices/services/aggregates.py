@@ -5,6 +5,8 @@ Panel A -- whole NEPSE market (MarketStockDaily + IndexDaily, all crawled).
 Panel B -- tracked companies only (DailyPrice, same rules as services.movers).
 """
 
+from datetime import timedelta
+
 from django.db.models import Count, F, Sum
 
 from apps.market_data.models import DailyPrice
@@ -17,6 +19,7 @@ WHOLE_MARKET = "whole_market"
 TRACKED = "tracked_companies"
 
 TOP_METRICS = {"turnover", "volume", "transactions"}
+SPARKLINE_SESSIONS = 30
 
 
 def _totals_by_sector(queryset, sector_field):
@@ -106,7 +109,8 @@ def index_table(kind, day=None):
     market = IndexDaily.objects.filter(index__code="NEPSE", date=session).values_list("turnover", flat=True).first()
     rows = []
     for index in MarketIndex.objects.filter(kind=kind):
-        last_two = list(index.daily.filter(date__lte=session).order_by("-date")[:2])
+        recent = list(index.daily.filter(date__lte=session).order_by("-date")[:SPARKLINE_SESSIONS])
+        last_two = recent[:2]
         if not last_two or last_two[0].date != session:
             continue
         current = last_two[0]
@@ -139,6 +143,8 @@ def index_table(kind, day=None):
             "turnover_share_pct": pct_of(current.turnover, market),
             "volume": current.volume, "vol_ch": vol_ch, "vol_ch_pct": vol_ch_pct,
             "transactions": current.transactions, "trans_ch": trans_ch, "trans_ch_pct": trans_ch_pct,
+            # Stored closes, oldest first, for the trend sparkline on Technical Charts.
+            "sparkline": [row.close for row in reversed(recent)],
         })
     return rows
 
@@ -215,6 +221,76 @@ def market_top(metric, limit=10):
         row["ltp"] = row["close"]
         row["ch_pct"] = pct_change(row["close"], row["prev_close"])
     return {"scope": WHOLE_MARKET, "as_of": as_of, "metric": metric, "rows": rows}
+
+
+# ----------------------------------------------------------------------
+# Candlestick chart: one index's stored daily OHLC
+# ----------------------------------------------------------------------
+
+FIFTY_TWO_WEEK_DAYS = 365
+
+
+def _text(value):
+    """Decimals as strings, like the company price endpoint; NULL stays None (shown as "—")."""
+    return None if value is None else str(value)
+
+
+def index_candles(index, start=None, end=None):
+    """
+    Stored NEPSE OHLC rows of one index, oldest first, in the company price-row shape.
+
+    ``fifty_two_week`` and ``latest`` are measured up to the latest stored session on or
+    before ``end`` and ignore ``start``, so they do not change with the chart range:
+      * 52-week high / low = max(high) / min(low) over the 365 days up to that session;
+      * ``change_pct`` is NEPSE's own ``source_change_pct`` (never recomputed);
+      * ``change`` = close minus the previous stored close, the same rule as ``index_table``.
+    """
+    history = index.daily.all()
+    if end:
+        history = history.filter(date__lte=end)
+    shown = history.filter(date__gte=start) if start else history
+    prices = [
+        {
+            "id": row.id,
+            "date": row.date,
+            "open": _text(row.open),
+            "high": _text(row.high),
+            "low": _text(row.low),
+            "close": _text(row.close),
+            "volume": row.volume,
+            "turnover": _text(row.turnover),
+        }
+        for row in shown.order_by("date")
+    ]
+
+    last_two = list(history.order_by("-date")[:2])
+    if not last_two:
+        return {"prices": prices, "fifty_two_week": None, "latest": None}
+    current = last_two[0]
+    previous = last_two[1] if len(last_two) > 1 else None
+
+    window = history.filter(date__gte=current.date - timedelta(days=FIFTY_TWO_WEEK_DAYS))
+    high_row = window.filter(high__isnull=False).order_by("-high", "-date").first()
+    low_row = window.filter(low__isnull=False).order_by("low", "-date").first()
+    return {
+        "prices": prices,
+        "fifty_two_week": {
+            "from": current.date - timedelta(days=FIFTY_TWO_WEEK_DAYS),
+            "to": current.date,
+            "high": _text(high_row.high) if high_row else None,
+            "high_date": high_row.date if high_row else None,
+            "low": _text(low_row.low) if low_row else None,
+            "low_date": low_row.date if low_row else None,
+        },
+        "latest": {
+            "date": current.date,
+            "close": _text(current.close),
+            "previous_date": previous.date if previous else None,
+            "previous_close": _text(previous.close) if previous else None,
+            "change": _text(current.close - previous.close) if previous else None,
+            "change_pct": _text(current.source_change_pct),
+        },
+    }
 
 
 # ----------------------------------------------------------------------

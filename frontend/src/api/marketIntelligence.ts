@@ -47,7 +47,41 @@ export interface RankedStock {
   possible_corporate_action: boolean;
 }
 
+/** One clustered swing level (GET /market-intelligence/companies/:id/support-resistance/). Decimals arrive as strings. */
+export interface SupportResistanceLevel {
+  price: string;
+  kind: 'support' | 'resistance';
+  touches: number;
+  strength: string;
+  at_price: boolean;
+  distance_pct: string | null;
+  first_touch: string;
+  last_touch: string;
+}
+
+export interface SupportResistance {
+  company_id?: number;
+  symbol: string;
+  as_of: string;
+  status: 'ok' | 'insufficient_history' | 'no_levels';
+  latest_close: string | null;
+  sessions_used: number;
+  window_start: string | null;
+  adjustment_cut: string | null;
+  adjustments: { date: string; factor: number }[];
+  params: Record<string, number>;
+  levels: SupportResistanceLevel[];
+  disclaimer: string;
+  computed_at: string;
+}
+
 export const marketIntelligenceApi = {
+  async getSupportResistance(companyId: number) {
+    const { data } = await apiClient.get<SupportResistance>(
+      `/market-intelligence/companies/${companyId}/support-resistance/`,
+    );
+    return data;
+  },
   async getBreadth() {
     const { data } = await apiClient.get<MarketBreadth>('/market-intelligence/breadth/');
     return data;

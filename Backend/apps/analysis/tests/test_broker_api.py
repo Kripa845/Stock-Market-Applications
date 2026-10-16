@@ -109,6 +109,61 @@ class BrokerAnalysisApiTests(TestCase):
         self.assertEqual(Decimal(top["sell_amount"]), Decimal("0"))
         self.assertEqual(Decimal(top["turnover"]), Decimal("6000"))
 
+    def test_top_brokers_lists_top_stocks_with_share_and_count(self):
+        # Broker 52 on 2026-09-12: buys 6,000 of TST2, sells 4,000 of TEST.
+        response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-12"})
+        row = next(r for r in response.data["results"] if r["broker"] == "52")
+        self.assertEqual(row["stock_count"], 2)
+        self.assertEqual([s["symbol"] for s in row["top_stocks"]], ["TST2", "TEST"])
+        first, second = row["top_stocks"]
+        self.assertEqual(first["name"], "Second Test Company")
+        self.assertEqual((Decimal(first["buy_amount"]), Decimal(first["sell_amount"])), (Decimal("6000"), Decimal("0")))
+        self.assertEqual((first["buy_quantity"], first["sell_quantity"]), (60, 0))
+        self.assertEqual((second["buy_quantity"], second["sell_quantity"]), (0, 40))
+        self.assertEqual((Decimal(first["share_pct"]), Decimal(second["share_pct"])), (Decimal("60.00"), Decimal("40.00")))
+        self.assertEqual(set(first), {
+            "symbol", "name", "logo_url", "buy_amount", "sell_amount",
+            "buy_quantity", "sell_quantity", "turnover", "share_pct",
+        })
+
+    def test_top_brokers_top_stock_keeps_shape_and_is_first_of_top_stocks(self):
+        response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-12"})
+        for row in response.data["results"]:
+            self.assertEqual(set(row["top_stock"]), {"symbol", "logo_url", "buy_amount", "sell_amount", "turnover"})
+            self.assertEqual(row["top_stock"]["symbol"], row["top_stocks"][0]["symbol"])
+            self.assertEqual(row["top_stock"]["turnover"], row["top_stocks"][0]["turnover"])
+        podium_52 = next(r for r in response.data["podium"] if r["broker"] == "52")
+        self.assertEqual(podium_52["top_stock"]["symbol"], "TST2")
+
+    def test_top_brokers_top_stocks_capped_at_ten(self):
+        for n in range(12):
+            company = Company.objects.create(symbol=f"CAP{n:02d}", name=f"Cap {n}", sector="Banking")
+            self._create_tx("52", "99", 10 + n, company, date(2026, 9, 12))
+        response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-12"})
+        row = next(r for r in response.data["results"] if r["broker"] == "52")
+        self.assertEqual(row["stock_count"], 14)
+        self.assertEqual(len(row["top_stocks"]), 10)
+        turnovers = [Decimal(s["turnover"]) for s in row["top_stocks"]]
+        self.assertEqual(turnovers, sorted(turnovers, reverse=True))
+
+    def test_top_brokers_top_stocks_respect_company_access(self):
+        viewer = User.objects.create_user(
+            username="top-stocks-viewer", email="top-stocks-viewer@example.test",
+            password="unused-test-password", role=User.Role.VIEWER,
+        )
+        viewer.custom_role = CustomRole.objects.create(name="Top Stocks Viewer", permissions=["view_analysis"])
+        viewer.save(update_fields=["custom_role"])
+        UserCompanyAccess.objects.create(user=viewer, company=self.company, status=1)
+        restricted = APIClient()
+        restricted.force_authenticate(viewer)
+
+        response = restricted.get("/api/analysis/brokers/top/", {"date": "2026-09-12"})
+        self.assertEqual(response.status_code, 200)
+        for row in response.data["results"]:
+            self.assertEqual({s["symbol"] for s in row["top_stocks"]}, {"TEST"})
+        row_52 = next(r for r in response.data["results"] if r["broker"] == "52")
+        self.assertEqual((row_52["stock_count"], Decimal(row_52["top_stocks"][0]["share_pct"])), (1, Decimal("100.00")))
+
     def test_top_brokers_flags_partial_day_and_lists_available_dates(self):
         response = self.client.get("/api/analysis/brokers/top/", {"date": "2026-09-10"})
         self.assertEqual(response.status_code, 200)

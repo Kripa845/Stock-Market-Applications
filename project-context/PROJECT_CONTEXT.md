@@ -140,7 +140,7 @@ Stock-Market-Application-crawling-2/
 - `selection.py` — `tracked_active_companies()`, `parse_symbols()`, `select_crawl_companies(symbols)` (which companies a crawl fetches).
 - `views.py` — company CRUD, toggle-track, `/prices/`, `/intraday/`, `/floorsheet/`, `/volume-anomalies/`, `/rvol/`, `/news-correlation/`, sectors, legacy `top_gainers`/`top_losers` (use `Company.ltp`).
 - `serializers.py` — `CompanySerializer` (adds latest change via `market_data.services.movers.company_rows`).
-- `management/commands/`: `seed_companies`, `seed_admin`, `import_company_logos`, `seed_market_data` (**synthetic** — don't use for real data).
+- `management/commands/`: `seed_companies`, `seed_admin`, `import_company_logos`.
 - `update_prices.py` — *WIP, uncommitted*: a `Command` to fetch live LTP via `nepse_data_api` (package not in requirements; file is not under `management/commands/` so Django can't find it yet).
 
 ### 4.3 `apps/market_data/` — prices, floorsheet, intraday, brokers, tracked dashboard
@@ -186,7 +186,7 @@ Stock-Market-Application-crawling-2/
 - Commands: `categorize_news`, `backfill_news_images`, `repair_news_dates` (fixes Bikram Sambat dates parsed as Gregorian).
 
 ### 4.7 `apps/users/` — auth, roles, permissions, company access, watchlist
-- `models.py`: `User` (email login, `role` = admin/analyst/viewer, optional `custom_role`), `RolePermissionConfig` (permission list per built-in role, editable), `CustomRole`, `UserCompanyAccess` (per-user allowed companies, `status`), `WatchlistItem`.
+- `models.py`: `User` (email login, `role` = admin/analyst/viewer, optional `custom_role`), `RolePermissionConfig` (permission list per built-in role, editable), `CustomRole`, `UserCompanyAccess` (per-user allowed companies, `status`), `Watchlist` (named lists per user, one `is_default`, "Primary" auto-created), `WatchlistItem` (company in a list + `units` / `wacc` holding).
   `User.get_app_permissions()` → admins get all keys; custom role → its list; else the role's config.
 - Permission keys (`serializers.py` → `ROLE_PERMISSIONS`; within a group each key requires the earlier ones):
   - users: view/create/edit/delete_users, change_user_roles, activate_users
@@ -244,7 +244,7 @@ Stock-Market-Application-crawling-2/
 |---|---|
 | `users/` | `login/`, `register/`, `token/refresh/`, `me/`, `me/permissions/`, `admin/users/`, `admin/users/<id>/`, `admin/users/<id>/company-access/`, `admin/roles/`, `admin/roles/<key>/`, `admin/roles/statistics/`, `admin/role-permissions/`, `admin/custom-roles/`, `admin/custom-roles/<id>/`, `admin/analysts/` |
 | `companies/` | `` (list/create), `<id>/`, `<id>/toggle-track/`, `<id>/prices/`, `<id>/intraday/`, `<id>/floorsheet/`, `<id>/behavior-summary/`, `<id>/news-price-correlation/`, `<symbol>/volume-anomalies/`, `<symbol>/rvol/`, `<symbol>/news-correlation/`, `sectors/`, `top-gainers/`, `top-losers/` |
-| `market/` (tracked dashboard) | `public/snapshot/` (public), `summary/`, `movers/?period=1D&limit=10`, `top-turnover/`, `top-volume/`, `top-transactions/`, `brokers/<symbol>/`, `signals/<symbol>/`, `basket-index/`, `dividends/`, `watchlist/`, `watchlist/<symbol>/`, `news/<symbol>/` |
+| `market/` (tracked dashboard) | `public/snapshot/` (public), `summary/`, `movers/?period=1D&limit=10`, `top-turnover/`, `top-volume/`, `top-transactions/`, `brokers/<symbol>/`, `signals/<symbol>/`, `basket-index/`, `dividends/`, `watchlist/`, `watchlist/<symbol>/` (default list only), `watchlists/`, `watchlists/<id>/`, `watchlists/<id>/items/` (any active company; rows from crawled prices via `services/watchlist.py`), `watchlists/<id>/items/<item_id>/`, `news/<symbol>/` |
 | `market-data/` | `` (prices), `floorsheet/`, `movers/tracked/`, `movers/tracked/list/?side=gainer&page=1` |
 | `floorsheet/` | floorsheet list (filters: symbol, company_id, date_from, date_to) |
 | `stocks/` | `<symbol>/intraday/?interval=5m&date=` |
@@ -306,7 +306,8 @@ Example `GET /api/market/movers/?period=1D` response shape:
   | `/companies/:symbol` | `StockDetail.tsx` | candlestick chart, indicators, intraday, floorsheet, news |
   | `/company-analysis` | `CompanyAnalysisDashboard.tsx` | VWAP, pressure, anomalies, news reaction |
   | `/broker-analysis`, `/broker-analysis/:brokerId` | `BrokerAnalysisPage.tsx` | |
-  | `/watchlist`, `/watchlist-comparison` | `WatchlistPage.tsx`, `WatchlistComparison.tsx` | |
+  | `/watchlist` | `MyWatchlistPage.tsx` | named watchlists (star = default), summary cards (units, avg WACC, value, investment, profit), add any company, edit units/WACC, sparkline table |
+  | `/live-trading`, `/watchlist-comparison` | `WatchlistPage.tsx` (admin: `admin/WatchlistPage.tsx`), `WatchlistComparison.tsx` | tracked companies latest values + floorsheet search |
   | `/news`, `/news/:id` | `News.tsx`, `NewsDetail.tsx` | tags, confidence, manual correction |
   | `/crawl` | `CrawlerStatus.tsx` | crawl runs, trigger/retry/cancel |
   | `/reports` | `ExportPage.tsx` | CSV/XLSX/PDF exports |

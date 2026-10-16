@@ -54,6 +54,7 @@ CASES = [
     ("get", "/api/analysis/brokers/", "view_analysis"),
     ("get", "/api/analysis/brokers/58/", "view_analysis"),
     ("get", "/api/analysis/dashboard-summary/", "view_market_data"),
+    ("get", "/api/market-indices/history/", "view_market_data"),
     ("get", "/api/crawler-runs/", "view_crawl_runs"),
     ("get", "/api/crawler-runs/1/", "view_crawl_runs"),
     ("get", "/api/reports/export/brokers/", "export_reports"),

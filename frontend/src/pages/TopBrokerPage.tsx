@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, Search } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
 import BrokerPodium from '../components/brokers/BrokerPodium';
@@ -22,7 +22,10 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 
 export default function TopBrokerPage() {
   // Empty = let the API pick the latest complete trading day.
-  const [date, setDate] = useState('');
+  // The day lives in the URL (?date=) so a broker's page can link back to the same day.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const date = searchParams.get('date') ?? '';
+  const setDate = (value: string) => setSearchParams(value ? { date: value } : {}, { replace: true });
   const [data, setData] = useState<TopBrokerResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');

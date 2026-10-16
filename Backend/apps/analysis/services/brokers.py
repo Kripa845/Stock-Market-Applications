@@ -280,40 +280,75 @@ def floorsheet_day_coverage(company_ids=None):
     ]
 
 
-def build_top_stock_by_broker(
+TOP_STOCKS_LIMIT = 10
+
+
+def build_top_stocks_by_broker(
     company=None, start_date=None, end_date=None, company_ids=None, broker=None,
+    limit=TOP_STOCKS_LIMIT,
 ):
-    """Each broker's highest-turnover stock (buy + sell value) in the selection."""
+    """
+    Each broker's stocks ranked by turnover (buy + sell value) in the selection.
+
+    Returns ``{broker: {"stock_count": n, "stocks": [row, ...]}}`` where
+    ``stock_count`` is every stock the broker traded and ``stocks`` the top
+    ``limit`` of them (fewer when the broker traded fewer).  Rows are sorted by
+    turnover, highest first; equal turnover sorts by symbol A-Z so the order is
+    stable.  Each row: ``symbol``, ``company_id``, ``buy_amt``, ``sell_amt``,
+    ``buy_qty``, ``sell_qty``, ``turnover``.
+
+    Two grouped queries (buy side, sell side) for all brokers together, however
+    many brokers or stocks there are -- no per-broker query.
+    """
     queryset = _base_queryset(
         company=company, start_date=start_date, end_date=end_date,
         company_ids=company_ids, broker=broker,
     )
 
-    book = {}  # (broker, symbol) -> {"buy": x, "sell": y}
+    book = {}  # (broker, company_id) -> amounts for that pair
     for side, field in (("buy", "_buyer_broker_clean"), ("sell", "_seller_broker_clean")):
         grouped = (
             queryset.order_by()
-            .values(field, "company__symbol")
-            .annotate(value_sum=Sum(_transaction_value()))
+            .values(field, "company_id", "company__symbol")
+            .annotate(value_sum=Sum(_transaction_value()), quantity_sum=Sum("quantity"))
         )
         for entry in grouped:
             name = _clean_broker(entry[field])
             if name is None:
                 continue
-            slot = book.setdefault(
-                (name, entry["company__symbol"]), {"buy": ZERO, "sell": ZERO}
-            )
-            slot[side] += Decimal(entry["value_sum"] or ZERO)
+            slot = book.setdefault((name, entry["company_id"]), {
+                "symbol": entry["company__symbol"], "company_id": entry["company_id"],
+                "buy_amt": ZERO, "sell_amt": ZERO, "buy_qty": 0, "sell_qty": 0,
+            })
+            slot[f"{side}_amt"] += Decimal(entry["value_sum"] or ZERO)
+            slot[f"{side}_qty"] += int(entry["quantity_sum"] or 0)
 
-    best = {}
-    for (name, symbol), amt in book.items():
-        total = amt["buy"] + amt["sell"]
-        current = best.get(name)
-        if current is None or (total, symbol) > (current["turnover"], current["symbol"]):
-            best[name] = {
-                "symbol": symbol,
-                "buy_amt": amt["buy"],
-                "sell_amt": amt["sell"],
-                "turnover": total,
-            }
-    return best
+    by_broker = {}
+    for (name, _), row in book.items():
+        row["turnover"] = row["buy_amt"] + row["sell_amt"]
+        by_broker.setdefault(name, []).append(row)
+
+    result = {}
+    for name, rows in by_broker.items():
+        rows.sort(key=lambda row: (-row["turnover"], row["symbol"]))
+        result[name] = {"stock_count": len(rows), "stocks": rows[:limit]}
+    return result
+
+
+def build_top_stock_by_broker(
+    company=None, start_date=None, end_date=None, company_ids=None, broker=None,
+):
+    """Each broker's highest-turnover stock (buy + sell value) in the selection.
+
+    The first entry of ``build_top_stocks_by_broker``, with the original keys
+    (``symbol``, ``buy_amt``, ``sell_amt``, ``turnover``) so existing callers and
+    the Broker Explorer response stay the same.
+    """
+    ranked = build_top_stocks_by_broker(
+        company=company, start_date=start_date, end_date=end_date,
+        company_ids=company_ids, broker=broker, limit=1,
+    )
+    return {
+        name: {key: entry["stocks"][0][key] for key in ("symbol", "buy_amt", "sell_amt", "turnover")}
+        for name, entry in ranked.items()
+    }

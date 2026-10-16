@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
 from apps.users.views import AdminUserDetailAPIView, AdminUserListCreateAPIView
-from apps.market_data.views import FloorsheetListAPIView
+from apps.market_data.views import FloorsheetListAPIView, FloorsheetSummaryAPIView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -10,6 +10,7 @@ urlpatterns = [
     path("api/companies/", include("apps.companies.urls")),
     path("api/market-data/", include("apps.market_data.urls")),
     path("api/market/", include("apps.market_data.market_urls")),
+    path("api/floorsheet/summary/", FloorsheetSummaryAPIView.as_view(), name="floorsheet-summary"),
     path("api/floorsheet/", FloorsheetListAPIView.as_view(), name="floorsheet-api"),
     path("api/stocks/", include("apps.market_data.stock_urls")),
 

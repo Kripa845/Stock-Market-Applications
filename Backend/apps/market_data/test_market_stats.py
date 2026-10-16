@@ -9,7 +9,7 @@ from rest_framework.test import APIClient
 from apps.companies.models import Company, TrackedCompany
 from apps.crawler_runs.models import CrawlRun
 from apps.crawler_runs.tasks import crawl_daily_prices, crawl_floorsheet
-from apps.market_data.models import DailyPrice, DividendAnnouncement, FloorsheetTransaction, TradingHoliday
+from apps.market_data.models import DailyPrice, FloorsheetTransaction, TradingHoliday
 from apps.market_data.services import live_prices, market_stats
 from apps.market_data.services.price_fields import (
     derive_price_fields,
@@ -154,16 +154,6 @@ class NepseTransactionsTests(TrackedMarketFixture):
             result = derive_price_fields_task()
         self.assertTrue(result["nepse"]["skipped"])
         self.assertIn("transactions_filled", result["floorsheet"])
-
-
-class DividendRowsTests(TrackedMarketFixture):
-
-    def test_total_pct(self):
-        DividendAnnouncement.objects.create(
-            company=self.companies["LOSE"], fiscal_year="2082/83",
-            bonus_pct=10, cash_pct=Decimal("0.5263"), book_closure_date=TUESDAY,
-        )
-        self.assertEqual(market_stats.dividend_rows()[0]["total_pct"], Decimal("10.5263"))
 
 
 class BrokerActivityTests(TrackedMarketFixture):

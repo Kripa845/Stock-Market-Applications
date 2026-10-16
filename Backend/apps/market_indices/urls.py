@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .views import (
+    IndexHistoryAPIView,
+    IndexIntradayAPIView,
+    IndexSupportResistanceAPIView,
+    IndexVerificationAPIView,
     IndicesAPIView,
     MarketAnalysisAPIView,
     MarketTopAPIView,
@@ -15,4 +19,8 @@ urlpatterns = [
     path("analysis/", MarketAnalysisAPIView.as_view(), name="market-indices-analysis"),
     path("top/", MarketTopAPIView.as_view(), name="market-indices-top"),
     path("tracked-sectors/", TrackedSectorsAPIView.as_view(), name="market-tracked-sectors"),
+    path("history/", IndexHistoryAPIView.as_view(), name="market-index-history"),
+    path("verify/", IndexVerificationAPIView.as_view(), name="market-index-verify"),
+    path("intraday/", IndexIntradayAPIView.as_view(), name="market-index-intraday"),
+    path("support-resistance/", IndexSupportResistanceAPIView.as_view(), name="market-index-support-resistance"),
 ]

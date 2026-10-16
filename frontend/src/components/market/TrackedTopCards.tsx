@@ -8,7 +8,7 @@ import { formatCount, formatNprCompact, formatPct, formatPrice, formatTradeDate 
 // (latest crawled session). Ranking is done by the backend (services/movers.py); this only formats.
 
 const ROWS = 8;
-const BREAKDOWN_LINK = '/tracked';
+const BREAKDOWN_LINK = '/companies';
 
 const ltp = (value: number | string | null) =>
   value === null ? '—' : Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -114,7 +114,7 @@ function SummaryCard({ summary }: { summary: TrackedSummary | null }) {
         ))}
       </dl>
       <Link to={BREAKDOWN_LINK} className="flex items-center justify-center gap-1 px-4 py-3 text-xs text-accent-light hover:underline">
-        See full breakdown →
+        See all companies →
       </Link>
     </div>
   );

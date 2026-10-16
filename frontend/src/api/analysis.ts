@@ -243,8 +243,27 @@ export interface TopBrokerStock {
   turnover: string;
 }
 
+/** One of a broker's top stocks for the day (decimals arrive as strings). */
+export interface TopBrokerRankedStock {
+  symbol: string;
+  name: string;
+  logo_url: string | null;
+  buy_amount: string;
+  sell_amount: string;
+  buy_quantity: number;
+  sell_quantity: number;
+  turnover: string;
+  /** Share of this broker's own buy + sell turnover; null when the broker's turnover is 0. */
+  share_pct: string | null;
+}
+
 export interface TopBrokerRow extends BrokerActivity {
+  /** The first of `top_stocks`, kept in its original shape. */
   top_stock: TopBrokerStock | null;
+  /** Up to 10 stocks, highest turnover (buy + sell) first. */
+  top_stocks: TopBrokerRankedStock[];
+  /** Every stock the broker traded that day (can exceed top_stocks.length). */
+  stock_count: number;
 }
 
 export interface TopBrokerResponse {

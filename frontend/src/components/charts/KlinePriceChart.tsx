@@ -5,13 +5,16 @@ import {
   type Chart, type KLineData,
 } from 'klinecharts';
 import { paneOf } from './customIndicators';
-import RangeBar from './RangeBar';
+import {
+  CUSTOM_DRAWN, ChartTypeMenu, candleStyles, loadChartType, saveChartType, toHeikinAshi, type ChartType,
+} from './chartTypes';
+import RangeBar, { type AxisMode } from './RangeBar';
 import DrawingToolbar from './DrawingToolbar';
 import {
   defaultRange, rangeAvailable, rangeCalendarDays, rangeStart as rangeStartFor, type RangeId,
 } from './chartRanges';
 import IndicatorPicker, { PICKER_TOGGLE_ATTR, type ActiveIndicator } from './IndicatorPicker';
-import { Layers } from 'lucide-react';
+import { Camera, ChevronDown, LineChart, Loader2, Maximize, Minimize } from 'lucide-react';
 import { ensureRegistered, toSeries, type RegistrySeries } from './registryIndicators';
 import {
   marketIntelligenceApi, type IndicatorDef, type IndicatorParams, type IndicatorRegistry,
@@ -20,12 +23,21 @@ import {
 // Same shape as KlinePriceChart, so <TradingChart prices={...} symbol={...} /> is a drop-in swap.
 interface ChartPrice {
   date: string;                       // "YYYY-MM-DD"
-  open: string | number;
-  high: string | number;
-  low: string | number;
-  close: string | number;
-  volume: number;
+  open: string | number | null;       // null (index rows NEPSE did not publish) -> the bar is skipped, never drawn at 0
+  high: string | number | null;
+  low: string | number | null;
+  close: string | number | null;
+  volume: number | null;
   turnover?: string | number | null;
+}
+// A dotted horizontal line with its value tagged on the price axis (e.g. 52-week high / low).
+export interface PriceLine {
+  label: string;
+  value: number | null;               // null -> not drawn
+  color?: string;
+  // false -> drawn only when the price axis already reaches it (the axis is not stretched to fit it).
+  // Default true, e.g. 52-week high / low should always be visible.
+  scale?: boolean;
 }
 // One row of intraday data. `time` is an ISO string (with timezone) or epoch milliseconds.
 export interface MinuteBar {
@@ -42,6 +54,12 @@ interface Props {
   fetchMinuteBars?: (days: number) => Promise<MinuteBar[]>;
   // Enables the indicator library (server-calculated, daily bars only).
   companyId?: number;
+  // Optional reference lines, computed by the caller (the chart only draws them).
+  priceLines?: PriceLine[];
+  // Optional text under the latest-close label on the price axis, e.g. "+21.33 (+0.82%)".
+  lastPriceNote?: string;
+  // Optional extra controls for the top bar (e.g. the S & R toggle on Technical Charts).
+  toolbarExtra?: React.ReactNode;
 }
 
 // ─── Menu config ──────────────────────────────────────────────────────────────
@@ -107,15 +125,25 @@ const MAX_INTRADAY_DAYS = 60;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function toBars(prices: ChartPrice[]): KLineData[] {
-  return prices.map((p) => {
+  return prices.filter((p) => p.open != null && p.high != null && p.low != null && p.close != null).map((p) => {
     const [y, m, d] = p.date.split('-').map(Number);
     return {
       timestamp: Date.UTC(y, m - 1, d),
-      open: +p.open, high: +p.high, low: +p.low, close: +p.close,
-      volume: p.volume, turnover: Number(p.turnover ?? 0),
+      open: +p.open!, high: +p.high!, low: +p.low!, close: +p.close!,
+      volume: p.volume ?? undefined, turnover: Number(p.turnover ?? 0),
     };
   }).sort((a, b) => a.timestamp - b.timestamp);
 }
+
+const PRICE_LINE_GROUP = 'price-lines';
+const PRICE_LINE_COLOR = '#94A3B8';
+// Same look as the library's own last-price label, one size smaller.
+const LAST_PRICE_NOTE_STYLE = {
+  show: true, position: 'below_price' as const, updateInterval: 0,
+  style: 'fill' as const, size: 11, family: 'Helvetica Neue', weight: 'normal', color: '#FFFFFF',
+  paddingLeft: 4, paddingTop: 2, paddingRight: 4, paddingBottom: 2,
+  borderStyle: 'solid' as const, borderSize: 0, borderColor: 'transparent', borderDashedValue: [2, 2], borderRadius: 2,
+};
 
 function toMinuteBars(rows: MinuteBar[]): KLineData[] {
   return rows.map((r) => {
@@ -170,7 +198,35 @@ const themeColors = (dark: boolean) => dark
 
 const isDarkTheme = () => document.documentElement.dataset.theme === 'dark';
 
-function buildStyles(dark: boolean) {
+const LEGEND_FONT = 'IBM Plex Mono, SFMono-Regular, Consolas, monospace';
+const UP = '#26a69a';
+const DOWN = '#ef5350';
+const legendNumber = (value: number) => value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// "O 181.69  H 182.36  L 181.31  C 182.05  +0.42 (+0.23%)" for the bar under the crosshair (else the latest).
+function legendTemplate(dark: boolean) {
+  const label = dark ? '#787b86' : '#64748B';
+  const value = dark ? '#d1d4dc' : '#0f172a';
+  return ({ prev, current }: { prev: KLineData | null; current: KLineData | null }) => {
+    if (!current) return [];
+    const legends = (['open', 'high', 'low', 'close'] as const).map((key) => ({
+      title: { text: `${key[0].toUpperCase()} `, color: label },
+      value: { text: legendNumber(current[key]), color: value },
+    }));
+    if (prev?.close) {
+      const change = current.close - prev.close;
+      const color = change > 0 ? UP : change < 0 ? DOWN : label;
+      const sign = change > 0 ? '+' : '';
+      legends.push({
+        title: { text: '', color },
+        value: { text: `${sign}${legendNumber(change)} (${sign}${((change / prev.close) * 100).toFixed(2)}%)`, color },
+      });
+    }
+    return legends;
+  };
+}
+
+function buildStyles(dark: boolean, chartType: ChartType) {
   const c = themeColors(dark);
   const axis = { axisLine: { color: c.axis }, tickLine: { color: c.axis }, tickText: { color: c.text } };
   return {
@@ -179,15 +235,21 @@ function buildStyles(dark: boolean) {
       vertical:   { color: c.grid, style: 'dashed' as const, dashedValue: [3, 3] },
     },
     candle: {
-      bar: {
-        upColor: '#22C55E', downColor: '#EF4444', noChangeColor: '#64748B',
-        upBorderColor: '#22C55E', downBorderColor: '#EF4444', noChangeBorderColor: '#64748B',
-        upWickColor: '#22C55E', downWickColor: '#EF4444', noChangeWickColor: '#64748B',
-      },
+      // Bars / candles / line / area… (see chartTypes.tsx)
+      ...candleStyles(chartType),
       tooltip: {
         showRule: 'always' as const, showType: 'standard' as const,
         rect: { position: 'fixed' as const, color: c.tipBg, borderColor: c.tipBorder },
-        title: { color: c.text }, legend: { color: c.text },
+        title: {
+          show: true, size: 14, weight: '600', family: 'Inter, system-ui, sans-serif',
+          color: dark ? '#d1d4dc' : '#0f172a', template: '{ticker} · {period}',
+          marginLeft: 12, marginTop: 10, marginRight: 8, marginBottom: 4,
+        },
+        legend: {
+          size: 12, family: LEGEND_FONT, color: c.text,
+          marginLeft: 12, marginTop: 4, marginRight: 4, marginBottom: 4,
+          template: legendTemplate(dark),
+        },
       },
     },
     indicator: {
@@ -203,8 +265,11 @@ function buildStyles(dark: boolean) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars, companyId }: Props) {
+export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars, companyId, priceLines, lastPriceNote, toolbarExtra }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [axisMode, setAxisMode] = useState<AxisMode>('normal');
   const chartRef = useRef<Chart | null>(null);
   const paneIds = useRef<Record<string, string>>({});   // indicator name -> pane id
   const anomalyKey = (anomalyDates ?? []).join(',');
@@ -213,6 +278,10 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   const [rangeChoice, setRange] = useState<RangeId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [active, setActive] = useState<string[]>(DEFAULT_ON);
+  const [chartType, setChartTypeState] = useState<ChartType>(loadChartType);
+  const chartTypeRef = useRef(chartType);
+  chartTypeRef.current = chartType;
+  const setChartType = (type: ChartType) => { saveChartType(type); setChartTypeState(type); };
 
   const [ivOpen, setIvOpen] = useState(false);
   const [minuteBars, setMinuteBars] = useState<KLineData[]>([]);
@@ -244,12 +313,16 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   }, [intraday, rangeDays, symbol]);
 
   const bars = useMemo(() => {
-    if (intraday) return aggregateIntraday(minuteBars, cfg.minutes!);
-    const all = toBars(prices);
-    if (!all.length || !rangeFrom) return all;
-    const from = Date.UTC(+rangeFrom.slice(0, 4), +rangeFrom.slice(5, 7) - 1, +rangeFrom.slice(8, 10));
-    return aggregate(all.filter((b) => b.timestamp >= from), interval as '1D' | '1W' | '1M');
-  }, [prices, minuteBars, intraday, cfg, interval, rangeFrom]);
+    const ohlc = (() => {
+      if (intraday) return aggregateIntraday(minuteBars, cfg.minutes!);
+      const all = toBars(prices);
+      if (!all.length || !rangeFrom) return all;
+      const from = Date.UTC(+rangeFrom.slice(0, 4), +rangeFrom.slice(5, 7) - 1, +rangeFrom.slice(8, 10));
+      return aggregate(all.filter((b) => b.timestamp >= from), interval as '1D' | '1W' | '1M');
+    })();
+    // Heikin Ashi is computed after aggregation, from the candles actually shown.
+    return chartType === 'heikin_ashi' ? toHeikinAshi(ohlc) : ohlc;
+  }, [prices, minuteBars, intraday, cfg, interval, rangeFrom, chartType]);
 
   const status = intraday
     ? !fetchMinuteBars ? 'Intraday data is not connected yet'
@@ -378,7 +451,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const chart = init(host, { locale: 'en-US', timezone: 'Asia/Kathmandu', styles: buildStyles(isDarkTheme()) });
+    const chart = init(host, { locale: 'en-US', timezone: 'Asia/Kathmandu', styles: buildStyles(isDarkTheme(), chartTypeRef.current) });
     if (!chart) return;
     chartRef.current = chart;
     paneIds.current = {};
@@ -397,13 +470,30 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
     }
 
     // Follow the app's light/dark switch (html[data-theme]).
-    const obs = new MutationObserver(() => chart.setStyles(buildStyles(isDarkTheme())));
+    const obs = new MutationObserver(() => chart.setStyles(buildStyles(isDarkTheme(), chartTypeRef.current)));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
     setChartGeneration((g) => g + 1);   // redraw library indicators on the new chart
 
     return () => { obs.disconnect(); dispose(host); chartRef.current = null; };
   }, [symbol]);
+
+  // Chart type: candle-pane styles, plus the CHART_TYPE overlay for the custom-drawn types.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    chart.setStyles(buildStyles(isDarkTheme(), chartType));
+    const drawn = chart.getIndicators({ name: 'CHART_TYPE' });
+    if (CUSTOM_DRAWN.has(chartType)) {
+      if (drawn.length === 0) {
+        chart.createIndicator({ name: 'CHART_TYPE', paneId: 'candle_pane', extendData: { type: chartType } } as any, true);
+      } else {
+        chart.overrideIndicator({ name: 'CHART_TYPE', paneId: 'candle_pane', extendData: { type: chartType } } as any);
+      }
+    } else {
+      drawn.forEach((indicator) => chart.removeIndicator({ id: indicator.id }));
+    }
+  }, [chartType, chartGeneration]);
 
   // The Volume checkbox is the source of truth for the separate volume pane.
   // Remove by indicator id so a stale pane id cannot leave volume visible.
@@ -456,6 +546,67 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
     chart.resetData();
   }, [bars, cfg, symbol, anomalyKey]);
 
+  // Reference lines: a dotted line across the price pane plus its value on the price axis.
+  const priceLinesKey = JSON.stringify(priceLines ?? []);
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    chart.removeOverlay({ groupId: PRICE_LINE_GROUP });
+    const lines = (JSON.parse(priceLinesKey) as PriceLine[])
+      .filter((line) => line.value != null && Number.isFinite(line.value));
+    const values = lines.filter((line) => line.scale !== false).map((line) => line.value!);
+    // Stretch the price axis so the lines stay on screen even when the visible candles do not reach them.
+    // Only on the plain (Auto) axis: % and log axes keep the library's own range.
+    chart.overrideYAxis({
+      paneId: 'candle_pane',
+      name: axisMode,
+      createRange: ({ defaultRange }) => {
+        if (!values.length || axisMode !== 'normal') return defaultRange;
+        const low = Math.min(...values), high = Math.max(...values);
+        if (low >= defaultRange.from && high <= defaultRange.to) return defaultRange;
+        const pad = (Math.max(high, defaultRange.to) - Math.min(low, defaultRange.from)) * 0.03;
+        const from = low < defaultRange.from ? low - pad : defaultRange.from;
+        const to = high > defaultRange.to ? high + pad : defaultRange.to;
+        const span = to - from;
+        return {
+          ...defaultRange, from, to, realFrom: from, realTo: to, displayFrom: from, displayTo: to,
+          range: span, realRange: span, displayRange: span,
+        };
+      },
+    });
+    for (const line of lines) {
+      const color = line.color ?? PRICE_LINE_COLOR;
+      chart.createOverlay({
+        name: 'simpleTag', groupId: PRICE_LINE_GROUP, lock: true,
+        points: [{ value: line.value }], extendData: line.label,
+        styles: {
+          line: { style: 'dashed', dashedValue: [2, 3], color },
+          text: { color: '#FFFFFF', backgroundColor: color, borderColor: color },
+        },
+      } as any);
+    }
+  }, [priceLinesKey, chartGeneration, axisMode]);
+
+  // Fullscreen is entered on the chart's root element; Esc leaves it without our button.
+  useEffect(() => {
+    const onChange = () => {
+      setFullscreen(document.fullscreenElement === rootRef.current);
+      chartRef.current?.resize();
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
+  // Extra text under the latest-close label; the label is coloured against the previous close.
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || !lastPriceNote) return;
+    chart.setFormatter({ formatExtendText: () => lastPriceNote });
+    chart.setStyles({
+      candle: { priceMark: { last: { compareRule: 'previous_close', extendTexts: [LAST_PRICE_NOTE_STYLE] } } },
+    });
+  }, [lastPriceNote, chartGeneration]);
+
   const toggleIndicator = (ind: Ind, on: boolean) => {
     if (ind.name === 'VOL_ANOMALY') {
       setActive((a) => (on
@@ -487,56 +638,95 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       : a.filter((n) => n !== ind.name)));
   };
 
-  const btn = (on: boolean) =>
-    `px-2.5 py-1 rounded text-xs font-medium transition-all ${on ? 'bg-accent text-white' : 'text-text-secondary hover:text-text-primary hover:bg-blue-500/10'}`;
+  const segment = (on: boolean) =>
+    `flex h-7 items-center gap-1 rounded-md px-3 text-[13px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+      on ? 'bg-bg-card text-accent-light shadow-sm' : 'text-text-secondary enabled:hover:text-text-primary'}`;
+  const iconBtn = 'flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-blue-500/10 hover:text-text-primary';
+  const shownIndicators = library.filter((a) => !a.hidden).length + active.filter((name) => name !== 'VOL_ANOMALY').length;
+
+  const saveImage = () => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const link = document.createElement('a');
+    link.href = chart.getConvertPictureUrl(true, 'png', isDarkTheme() ? '#0d0e14' : '#ffffff');
+    link.download = `${symbol.replace(/\s+/g, '_')}_${INTERVAL_LABELS[interval].replace(/\s+/g, '')}_${new Date().toISOString().slice(0, 10)}.png`;
+    link.click();
+  };
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else rootRef.current?.requestFullscreen?.().catch(() => {});
+  };
 
   return (
-    <div className="flex h-full w-full flex-col">
-      {/* Top bar: symbol, indicators, interval */}
-      <div className="relative flex flex-wrap items-center gap-1 border-b border-border px-2 py-1">
-        <span className="pr-2 text-sm font-bold text-text-primary">{symbol}</span>
-        <button {...{ [PICKER_TOGGLE_ATTR]: '' }} onClick={() => setMenuOpen((o) => !o)}
-          aria-expanded={menuOpen} aria-haspopup="dialog"
-          className={`flex items-center gap-1.5 ${btn(menuOpen)}`}>
-          <Layers size={13} />
-          Indicators
-          {library.filter((a) => !a.hidden).length > 0 && (
-            <span className={`rounded-full px-1.5 text-[10px] tabular-nums ${menuOpen ? 'bg-white/25' : 'bg-accent/15 text-accent'}`}>
-              {library.filter((a) => !a.hidden).length}
-            </span>
-          )}
-        </button>
-        {loadingSeries && <span className="text-[11px] text-text-secondary">Calculating…</span>}
-        <span className="mx-1 h-4 w-px bg-border" />
-        <div className="relative">
-          <button className={btn(ivOpen)} onClick={() => setIvOpen((o) => !o)} title="Candle size">{INTERVAL_LABELS[interval]} candles ▾</button>
-          {ivOpen && (
-            <div className="absolute left-0 top-8 z-20 min-w-[130px] rounded-lg border border-border bg-bg-card p-1 shadow-lg">
-              {(['Minutes', 'Hours', 'Days'] as const).map((g) => (
-                <div key={g}>
-                  <p className="px-2 pb-0.5 pt-1.5 text-[11px] font-semibold text-text-secondary">{g}</p>
-                  {INTERVALS.filter((i) => i.group === g).map((i) => {
-                    const disabled = i.group !== 'Days' && !fetchMinuteBars;
-                    return (
-                      <button key={i.id} disabled={disabled}
-                        title={disabled ? 'Needs an intraday data source' : undefined}
+    <div ref={rootRef} className="flex h-full w-full flex-col bg-bg-primary">
+      {/* Top bar: chart type, interval, indicators, extras; image and fullscreen on the right */}
+      <div className="relative flex min-h-[56px] flex-wrap items-center gap-2 border-b border-bg-border px-3 py-2">
+        <ChartTypeMenu value={chartType} onChange={setChartType} />
+
+        <div className="flex items-center rounded-lg bg-bg-elevated p-1" role="group" aria-label="Candle size">
+          <div className="relative">
+            <button
+              type="button"
+              className={segment(intraday || ivOpen)}
+              onClick={() => setIvOpen((o) => !o)}
+              disabled={!fetchMinuteBars}
+              aria-haspopup="menu"
+              aria-expanded={ivOpen}
+              title={fetchMinuteBars ? 'Intraday candles (minutes / hours)' : 'Intraday candles need an intraday data source'}
+            >
+              {intraday ? INTERVAL_LABELS[interval] : 'Intraday'}
+              <ChevronDown size={12} className="text-text-muted" />
+            </button>
+            {ivOpen && (
+              <div role="menu" className="absolute left-0 top-9 z-30 min-w-[140px] rounded-lg border border-bg-border bg-bg-card p-1 shadow-xl">
+                {(['Minutes', 'Hours'] as const).map((g) => (
+                  <div key={g}>
+                    <p className="px-2 pb-0.5 pt-1.5 text-[11px] font-semibold text-text-secondary">{g}</p>
+                    {INTERVALS.filter((i) => i.group === g).map((i) => (
+                      <button key={i.id} type="button" role="menuitem"
                         onClick={() => { setIntervalMode(i.id); setIvOpen(false); }}
-                        className={`block w-full rounded px-2 py-1 text-left text-xs ${interval === i.id ? 'bg-accent text-white' : 'text-text-primary hover:bg-blue-500/10'} disabled:cursor-not-allowed disabled:opacity-40`}>
+                        className={`block w-full rounded px-2 py-1.5 text-left text-xs ${interval === i.id ? 'bg-accent/15 text-accent-light' : 'text-text-primary hover:bg-blue-500/10'}`}>
                         {INTERVAL_LABELS[i.id]}
                       </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {(['1D', '1W', '1M'] as const).map((i) => (
+            <button key={i} type="button" className={segment(interval === i)} onClick={() => { setIntervalMode(i); setIvOpen(false); }}
+              title={`Each candle = 1 ${i === '1D' ? 'day' : i === '1W' ? 'week' : 'month'}`}>
+              {INTERVAL_LABELS[i]}
+            </button>
+          ))}
         </div>
-        {(['1D', '1W', '1M'] as const).map((i) => (
-          <button key={i} className={btn(interval === i)} onClick={() => setIntervalMode(i)}
-            title={`Each candle = 1 ${INTERVAL_LABELS[i] === 'Daily' ? 'day' : INTERVAL_LABELS[i] === 'Weekly' ? 'week' : 'month'}`}>
-            {INTERVAL_LABELS[i]}
+
+        <span className="mx-0.5 hidden h-6 w-px bg-bg-border md:block" />
+
+        <button {...{ [PICKER_TOGGLE_ATTR]: '' }} type="button" onClick={() => setMenuOpen((o) => !o)}
+          aria-expanded={menuOpen} aria-haspopup="dialog"
+          className={`flex h-9 items-center gap-2 rounded-lg border px-3 text-[13px] font-medium transition-colors ${
+            menuOpen ? 'border-accent/60 bg-accent/10 text-accent-light' : 'border-bg-border text-text-primary hover:bg-blue-500/10'}`}>
+          <LineChart size={15} />
+          Indicators
+          {shownIndicators > 0 && (
+            <span className="rounded-md bg-accent/15 px-1.5 font-mono text-[11px] tabular-nums text-accent-light">{shownIndicators}</span>
+          )}
+          {loadingSeries && <Loader2 size={12} className="animate-spin text-text-muted" />}
+        </button>
+
+        {toolbarExtra}
+
+        <div className="ml-auto flex items-center gap-1">
+          <button type="button" onClick={saveImage} className={iconBtn} title="Save chart as image (PNG)" aria-label="Save chart as image">
+            <Camera size={17} />
           </button>
-        ))}
+          <button type="button" onClick={toggleFullscreen} className={iconBtn}
+            title={fullscreen ? 'Exit full screen' : 'Full screen'} aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}>
+            {fullscreen ? <Minimize size={17} /> : <Maximize size={17} />}
+          </button>
+        </div>
 
         {menuOpen && (
           <IndicatorPicker
@@ -570,7 +760,8 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       </div>
 
       {/* Bottom bar: date ranges, measured against the real trading dates */}
-      <RangeBar dates={dailyDates} value={range} onChange={setRange} shownFrom={rangeFrom} shownCount={shownCount} />
+      <RangeBar dates={dailyDates} value={range} onChange={setRange} shownFrom={rangeFrom} shownCount={shownCount}
+        axisMode={axisMode} onAxisMode={setAxisMode} />
     </div>
   );
 }

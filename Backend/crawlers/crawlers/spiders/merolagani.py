@@ -1,14 +1,13 @@
 """
 Whole-market daily stock table (every listed stock, one request).
 
-Source default: ShareSansar "today share price" page.
-VERIFY BEFORE USE (I could not open the site from the authoring environment):
-  1. URL                 -> START_URL (or pass -a url=...)
-  2. the table selector  -> TABLE_SELECTOR
-  3. where the trade date is shown -> DATE_REGEX (or pass -a date=YYYY-MM-DD)
+Source: ShareSansar "today share price" page (checked against the live page 2026-10-15):
+    table   <table id="headFixed" ...>              -> TABLE_SELECTOR
+    date    <h5>As of : <span class="text-org">2026-10-14</span>   -> TRADE_DATE_XPATH
+Both are matched exactly.  If either is missing the spider logs an error and yields
+nothing, rather than reading another table or a date from elsewhere on the page.
 Column positions are NOT hard-coded: columns are found by their header text
-(HEADER_ALIASES), so a re-ordered table still works.  If the date cannot be
-determined the spider yields nothing rather than guessing.
+(HEADER_ALIASES), so a re-ordered table still works.
 
 Respects the project's ROBOTSTXT_OBEY = True.  Manual run:
     scrapy crawl market_stocks
@@ -23,8 +22,9 @@ import scrapy
 from crawlers.items import MarketStockDailyItem
 
 START_URL = "https://www.sharesansar.com/today-share-price"
-TABLE_SELECTOR = "table"                      # VERIFY: tighten to the real table, e.g. "table#headFixed"
-DATE_REGEX = re.compile(r"(\d{4}-\d{2}-\d{2})")
+TABLE_SELECTOR = "table#headFixed"
+TRADE_DATE_XPATH = '//h5[contains(normalize-space(.), "As of")]/span/text()'
+DATE_REGEX = re.compile(r"^\s*(\d{4}-\d{2}-\d{2})\s*$")
 
 # canonical field -> header texts (lower-case, punctuation stripped) that mean it
 HEADER_ALIASES = {
@@ -55,6 +55,11 @@ class MarketStocksSpider(scrapy.Spider):
         self.start_url = url or START_URL
         self.forced_date = date
 
+    async def start(self):
+        # Scrapy >= 2.13 calls start(), not start_requests().
+        for request in self.start_requests():
+            yield request
+
     def start_requests(self):
         yield scrapy.Request(self.start_url, callback=self.parse)
 
@@ -63,14 +68,15 @@ class MarketStocksSpider(scrapy.Spider):
     def parse(self, response):
         trade_date = self._trade_date(response)
         if trade_date is None:
-            self.logger.error("Trade date not found on the page; pass -a date=YYYY-MM-DD. Nothing saved.")
+            self.logger.error("Trade date not found; pass -a date=YYYY-MM-DD if the page is right. Nothing saved.")
             return
 
-        table = response.css(TABLE_SELECTOR)
-        if not table:
-            self.logger.error("Table %r not found: check TABLE_SELECTOR", TABLE_SELECTOR)
+        tables = response.css(TABLE_SELECTOR)
+        if len(tables) != 1:
+            self.logger.error("Expected exactly one %r table, found %d: page layout changed. Nothing saved.",
+                              TABLE_SELECTOR, len(tables))
             return
-        table = table[0]
+        table = tables[0]
 
         headers = [_clean_header(" ".join(th.css("*::text").getall())) for th in table.css("thead th")]
         columns = self._column_positions(headers)
@@ -114,8 +120,12 @@ class MarketStocksSpider(scrapy.Spider):
     def _trade_date(self, response):
         if self.forced_date:
             return date.fromisoformat(self.forced_date)
-        match = DATE_REGEX.search(" ".join(response.css("body *::text").getall()))
-        return date.fromisoformat(match.group(1)) if match else None
+        texts = response.xpath(TRADE_DATE_XPATH).getall()
+        matches = {m.group(1) for m in (DATE_REGEX.match(t) for t in texts) if m}
+        if len(matches) != 1:
+            self.logger.error("'As of' date not found or ambiguous (%r): page layout changed", texts)
+            return None
+        return date.fromisoformat(matches.pop())
 
     @staticmethod
     def _column_positions(headers):

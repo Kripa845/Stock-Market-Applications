@@ -117,7 +117,7 @@ export default function MarketOverviewCard() {
 
   const refresh = () => { overview.reload(); chart.reload(); };
   const isIndex = data?.instruments.find((item) => item.symbol === symbol)?.kind === 'index' || symbol === 'NEPSE';
-  const openTechnical = () => navigate(isIndex ? '/company-analysis' : `/company-analysis?symbol=${encodeURIComponent(symbol)}`);
+  const openTechnical = () => navigate(`/technical-charts?${isIndex ? 'index' : 'symbol'}=${encodeURIComponent(symbol)}`);
   const fullscreen = () => { chartBox.current?.requestFullscreen?.().catch(() => undefined); };
 
   return (

@@ -23,3 +23,13 @@ def build_daily_market_intelligence():
     except Exception:
         logger.exception("Daily market intelligence build failed; crawl chain may continue.")
         return {"ok": False, "error": "market intelligence build failed"}
+
+
+@shared_task(name="apps.market_intelligence.tasks.compute_support_resistance_task")
+def compute_support_resistance_task():
+    """Support / resistance levels for the tracked companies (after the evening price crawl)."""
+    from apps.market_intelligence.services.support_resistance import compute_support_resistance
+
+    result = compute_support_resistance()
+    logger.info("Support/resistance levels computed: %s", result)
+    return result

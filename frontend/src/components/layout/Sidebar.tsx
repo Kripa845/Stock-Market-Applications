@@ -17,9 +17,11 @@ import {
   ChevronDown,
   Users,
   ShieldCheck,
-  Gauge,
   Trophy,
   Search,
+  Zap,
+  ScrollText,
+  Gift,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -63,9 +65,14 @@ const NAV_ITEMS: NavItem[] = [
     children: TOP_LIST_PAGES,
   },
   {
-    label: 'Tracked Companies',
-    icon: Gauge,
-    to: '/tracked',
+    label: 'Indices',
+    icon: BarChart3,
+    to: '/market/indices',
+  },
+  {
+    label: 'Proposed Dividend',
+    icon: Gift,
+    to: '/market/dividends',
   },
   {
     label: 'Companies',
@@ -75,7 +82,12 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Technical Charts',
     icon: Activity,
-    to: '/company-analysis',
+    to: '/technical-charts',
+  },
+  {
+    label: 'Floorsheet',
+    icon: ScrollText,
+    to: '/floorsheet',
   },
   {
     label: 'Broker Analysis',
@@ -90,6 +102,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Watchlist',
     icon: Star,
     to: '/watchlist',
+    requiredPermissions: ['view_watchlist'],
+  },
+  {
+    label: 'Live Trading',
+    icon: Zap,
+    to: '/live-trading',
     requiredPermissions: ['view_watchlist'],
   },
   {

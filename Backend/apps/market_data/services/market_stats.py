@@ -8,7 +8,7 @@ describes the whole NEPSE market; callers must label results
 
 Session change, movers, the summary and top lists live in services.movers
 (one definition everywhere).  This module holds the scope helpers, broker
-activity, price signals, the Tracked Basket and dividends.
+activity, price signals and the Tracked Basket (dividends: services.dividends).
 
 Python is used only to arrange already-aggregated rows into the response
 (merging the buy-side and sell-side broker tables); no per-trade or
@@ -32,7 +32,7 @@ from django.db.models import (
 from django.db.models.functions import Trim
 
 from apps.companies.models import Company
-from apps.market_data.models import Broker, DailyPrice, DividendAnnouncement
+from apps.market_data.models import Broker, DailyPrice
 from apps.market_data.services.price_fields import real_floorsheet
 from apps.market_intelligence.models import ProxyIndexSnapshot
 
@@ -58,7 +58,6 @@ UNITS = {
     "transactions": "trades",
 }
 
-PCT_FIELD = DecimalField(max_digits=24, decimal_places=6)
 MONEY_FIELD = DecimalField(max_digits=30, decimal_places=4)
 
 
@@ -261,7 +260,7 @@ def signals(company_id, anchor_date=None):
 
 
 # ----------------------------------------------------------------------
-# Basket index, dividends, watchlist
+# Basket index, watchlist
 # ----------------------------------------------------------------------
 
 BASKET_LABEL = "Tracked Basket"
@@ -281,18 +280,3 @@ def basket_index(days=None):
     if days:
         rows = rows[:days]
     return {"label": BASKET_LABEL, "base_level": 1000, "rows": list(reversed(list(rows)))}
-
-
-def dividend_rows(company_ids=None):
-    return list(
-        DividendAnnouncement.objects
-        .filter(company__in=tracked_companies(company_ids))
-        .annotate(
-            symbol=F("company__symbol"),
-            name=F("company__name"),
-            logo_url=F("company__logo_url"),
-            total_pct=ExpressionWrapper(F("bonus_pct") + F("cash_pct"), output_field=PCT_FIELD),
-        )
-        .order_by(F("book_closure_date").desc(nulls_last=True), "company__symbol")
-        .values("id", "company_id", "symbol", "name", "logo_url", "fiscal_year", "bonus_pct", "cash_pct", "total_pct", "book_closure_date")
-    )

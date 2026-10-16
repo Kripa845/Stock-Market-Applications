@@ -176,7 +176,7 @@ export default function IndicatorPicker(props: Props) {
 
   return (
     <div ref={rootRef} role="dialog" aria-label="Indicators"
-      className="absolute left-2 top-10 z-30 flex max-h-[min(560px,80vh)] w-[min(680px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border bg-bg-card shadow-2xl">
+      className="absolute left-2 top-[52px] z-30 flex max-h-[min(560px,80vh)] w-[min(680px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border bg-bg-card shadow-2xl">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">

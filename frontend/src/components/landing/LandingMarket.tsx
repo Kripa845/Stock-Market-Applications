@@ -10,6 +10,7 @@ import {
 import type { IndexRow } from '../../api/marketIndices';
 import { changeTone, formatCount, formatNprCompact, formatPct, formatPrice, formatTradeDate } from '../market/format';
 import OverviewPriceChart, { type ChartMode } from '../market/OverviewPriceChart';
+import WatchlistStrip from '../market/WatchlistStrip';
 
 // "Market overview" on the public landing page: the NEPSE index chart (GET /market/public/chart/),
 // NEPSE indices / sub-indices and the top 5 tracked
@@ -79,7 +80,7 @@ function NepseChartCard({ data, theme }: { data: PublicMarketSnapshot; theme: 'd
         <div>
           <div className="flex items-center gap-1.5">
             <p className="text-sm font-semibold">NEPSE Index</p>
-            <Link to="/company-analysis" aria-label="Open technical charts" title="Technical charts"
+            <Link to="/technical-charts" aria-label="Open technical charts" title="Technical charts"
               className="flex h-6 w-6 items-center justify-center rounded-md border border-[color:var(--l-border)] text-[color:var(--l-muted)] transition hover:text-[color:var(--l-accent)]">
               <ChevronRight size={15} />
             </Link>
@@ -296,6 +297,7 @@ export default function LandingMarket({ heading, theme }: { heading: React.React
               <NepseChartCard data={data} theme={theme} />
               <IndicesCard data={data} />
             </div>
+            <WatchlistStrip variant="landing" />
             {data.as_of && (
               <p className="pt-4 text-xs text-[color:var(--l-faint)]">
                 Tracked companies · session {formatTradeDate(data.as_of)} · end of day, not live

@@ -280,26 +280,73 @@ class UserCompanyAccess(models.Model):
         return f"{self.user.username} → {self.company.symbol} ({state})"
 
 
+class Watchlist(models.Model):
+    """A named list of companies ("Primary", "Banks", ...); one per user is the default."""
+
+    DEFAULT_NAME = "Primary"
+
+    user = models.ForeignKey(
+        "users.User",
+        on_delete=models.CASCADE,
+        related_name="watchlists",
+    )
+    name = models.CharField(max_length=60)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-is_default", "created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "name"],
+                name="unique_user_watchlist_name",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: {self.name}"
+
+    @classmethod
+    def default_for(cls, user):
+        """The user's default list, creating "Primary" on first use."""
+        watchlist = cls.objects.filter(user=user, is_default=True).first()
+        if watchlist is None:
+            watchlist = cls.objects.filter(user=user).first()
+            if watchlist is None:
+                watchlist = cls.objects.create(user=user, name=cls.DEFAULT_NAME, is_default=True)
+            else:
+                watchlist.is_default = True
+                watchlist.save(update_fields=["is_default"])
+        return watchlist
+
+
 class WatchlistItem(models.Model):
-    """A user's saved company, as created by the existing migration."""
+    """A company saved in one of the user's watchlists, with optional holding units / WACC."""
 
     user = models.ForeignKey(
         "users.User",
         on_delete=models.CASCADE,
         related_name="watchlist_items",
     )
+    watchlist = models.ForeignKey(
+        Watchlist,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
     company = models.ForeignKey(
         "companies.Company",
         on_delete=models.CASCADE,
         related_name="watchlist_items",
     )
+    units = models.PositiveBigIntegerField(default=0)
+    wacc = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "company"],
-                name="unique_user_watchlist_company",
+                fields=["watchlist", "company"],
+                name="unique_watchlist_company",
             )
         ]

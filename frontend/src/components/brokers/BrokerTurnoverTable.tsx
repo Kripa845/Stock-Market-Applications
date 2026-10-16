@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import type { TopBrokerRow } from '../../api/analysis';
 import CompanyLogo from '../companies/CompanyLogo';
 import { formatCount, formatNprArab } from '../market/format';
@@ -47,11 +48,15 @@ export default function BrokerTurnoverTable({ rows, ranks, day }: { rows: TopBro
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => (
+          {rows.map((row, index) => {
+            const listed = row.top_stocks?.length ?? 0;
+            const detailLink = `/broker-analysis/${encodeURIComponent(row.broker)}${range}`;
+            const stocksLink = `/top-brokers/${encodeURIComponent(row.broker)}${day ? `?date=${day}` : ''}`;
+            return (
             <tr key={row.broker} className="table-row">
               <td className="px-2 py-2"><RankBadge rank={ranks?.get(row.broker) ?? index + 1} /></td>
               <td className="max-w-[220px] px-2 py-2">
-                <Link to={`/broker-analysis/${encodeURIComponent(row.broker)}${range}`} title="Open in Broker Explorer" className="flex min-w-0 hover:text-accent-light">
+                <Link to={detailLink} title="Open in Broker Explorer" className="flex min-w-0 hover:text-accent-light">
                   <BrokerBadge brokerCode={row.broker_code} name={row.name} shortName={row.short_name} logoUrl={row.logo_url} />
                 </Link>
               </td>
@@ -78,9 +83,19 @@ export default function BrokerTurnoverTable({ rows, ranks, day }: { rows: TopBro
                     </span>
                   </Link>
                 ) : <span className="text-text-muted">—</span>}
+                {listed > 1 && (
+                  <Link
+                    to={stocksLink}
+                    title={`${row.name}: top ${listed} of ${row.stock_count} stocks`}
+                    className="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-medium text-accent-light hover:bg-blue-500/10"
+                  >
+                    Top {listed} stocks <ChevronRight size={11} />
+                  </Link>
+                )}
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

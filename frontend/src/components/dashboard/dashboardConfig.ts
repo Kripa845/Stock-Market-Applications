@@ -232,15 +232,6 @@ export const universalDashboardConfig: DashboardConfig = {
           requiredPermission: ['view_companies', 'view_market_data'],
         },
         {
-          id: 'link-tracked',
-          title: 'Tracked Companies',
-          description: 'Movers, signals and broker activity per company',
-          route: '/tracked',
-          icon: Building2,
-          type: 'quick-action',
-          requiredPermission: 'view_market_data',
-        },
-        {
           id: 'link-brokers',
           title: 'Broker Analysis',
           description: 'Buy, sell and net activity from the floorsheet',
@@ -252,8 +243,8 @@ export const universalDashboardConfig: DashboardConfig = {
         {
           id: 'link-analysis',
           title: 'Technical Charts',
-          description: 'Price, volume and news for one company',
-          route: '/company-analysis',
+          description: 'Candlestick charts for indices and companies',
+          route: '/technical-charts',
           icon: BarChart3,
           type: 'quick-action',
           requiredPermission: ['view_analysis', 'view_companies', 'view_price_history', 'view_market_data'],

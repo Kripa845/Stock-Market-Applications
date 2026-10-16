@@ -75,6 +75,7 @@ class DailyPriceSerializers(serializers.ModelSerializer):
         ]
         
 class FloorsheetSerializer(serializers.ModelSerializer):
+    symbol = serializers.CharField(source="company.symbol", read_only=True)
     buyer_broker_name = serializers.SerializerMethodField()
     buyer_broker_short_name = serializers.SerializerMethodField()
     buyer_broker_logo_url = serializers.SerializerMethodField()
@@ -121,7 +122,9 @@ class FloorsheetSerializer(serializers.ModelSerializer):
         fields=[
              "id",
             "company",
+            "symbol",
             "date",
+            "trade_time",
             "transaction_id",
             "buyer_broker",
             "seller_broker",

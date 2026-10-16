@@ -14,6 +14,10 @@ class BrokersSpider(scrapy.Spider):
         "DOWNLOAD_DELAY": 2,
     }
 
+    async def start(self):
+        # Scrapy >= 2.13 calls start(), not start_requests().
+        yield self._page_request(1)
+
     def start_requests(self):
         yield self._page_request(1)
 

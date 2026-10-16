@@ -21,7 +21,12 @@ from decimal import Decimal, InvalidOperation
 import requests
 from django.utils import timezone
 
-from apps.market_data.services.live_prices import NPT, _nepse_client
+from apps.market_data.services.live_prices import (
+    NPT,
+    _nepse_client,
+    discard_shared_nepse_client,
+    shared_nepse_client,
+)
 from apps.market_indices.models import IndexDaily, IndexIntradayPoint, MarketIndex
 
 # NEPSE's exchangeIndexId -> MarketIndex.code.  Names differ between feeds
@@ -76,11 +81,7 @@ def fetch_index_history(since):
     return data
 
 
-def sync_index_history(since=None, history=None):
-    """Store every session of every catalogued index from ``since`` (default: last 10 days)."""
-    since = since or (timezone.now().astimezone(NPT).date() - timedelta(days=DEFAULT_DAYS))
-    history = history if history is not None else fetch_index_history(since)
-
+def _catalogue():
     catalogue = {index.code: index for index in MarketIndex.objects.all()}
     if not catalogue:
         raise IndexFeedError("MarketIndex catalogue is empty: run `manage.py seed_market_indices`")
@@ -88,34 +89,49 @@ def sync_index_history(since=None, history=None):
     for index in catalogue.values():
         for label in (index.code, index.name, index.sector_name):
             by_name[normalise_index_name(label)] = index
+    return catalogue, by_name
 
-    saved, unmatched, dates = 0, set(), set()
+
+def iter_history(history, catalogue=None):
+    """
+    Yield (feed name, MarketIndex or None, date or None, IndexDaily field values) per feed row.
+    The values are exactly what sync_index_history stores, so the verifier compares like with like.
+    """
+    catalogue, by_name = catalogue or _catalogue()
     for name, rows in history.items():
         for row in rows if isinstance(rows, list) else []:
             if not isinstance(row, dict):
                 continue
             index = catalogue.get(NEPSE_INDEX_IDS.get(_int(row.get("exchangeIndexId")))) \
                 or by_name.get(normalise_index_name(name))
-            close = _decimal(row.get("closingIndex"))
             try:
                 day = date.fromisoformat(str(row.get("businessDate"))[:10])
             except ValueError:
                 day = None
-            if index is None or close is None or day is None:
-                unmatched.add(str(name))
-                continue
-            IndexDaily.objects.update_or_create(
-                index=index, date=day,
-                defaults={
-                    "open": _decimal(row.get("openIndex")), "high": _decimal(row.get("highIndex")),
-                    "low": _decimal(row.get("lowIndex")), "close": close,
-                    "turnover": _decimal(row.get("turnoverValue")), "volume": _int(row.get("turnoverVolume")),
-                    "transactions": _int(row.get("totalTransaction")),
-                    "source_change_pct": _decimal(row.get("percentageChange")), "source": "crawled",
-                },
-            )
-            saved += 1
-            dates.add(day)
+            yield str(name), index, day, {
+                "open": _decimal(row.get("openIndex")), "high": _decimal(row.get("highIndex")),
+                "low": _decimal(row.get("lowIndex")), "close": _decimal(row.get("closingIndex")),
+                "turnover": _decimal(row.get("turnoverValue")), "volume": _int(row.get("turnoverVolume")),
+                "transactions": _int(row.get("totalTransaction")),
+                "source_change_pct": _decimal(row.get("percentageChange")),
+            }
+
+
+def sync_index_history(since=None, history=None):
+    """Store every session of every catalogued index from ``since`` (default: last 10 days)."""
+    since = since or (timezone.now().astimezone(NPT).date() - timedelta(days=DEFAULT_DAYS))
+    history = history if history is not None else fetch_index_history(since)
+
+    saved, unmatched, dates = 0, set(), set()
+    # update_or_create on the unique (index, date) pair: re-running never duplicates rows,
+    # it overwrites earlier values with NEPSE's latest (e.g. totals revised after the close).
+    for name, index, day, values in iter_history(history):
+        if index is None or values["close"] is None or day is None:
+            unmatched.add(name)
+            continue
+        IndexDaily.objects.update_or_create(index=index, date=day, defaults={**values, "source": "crawled"})
+        saved += 1
+        dates.add(day)
     return {
         "since": since.isoformat(),
         "saved": saved,
@@ -140,19 +156,27 @@ def _get_live_index():
     Not ``Nepse.get_nepse_index``: that swallows every error and returns ``{}``, which
     hides the status code we need to decide whether a retry is worthwhile.
     """
-    client = _nepse_client()
-    response = client.session.get(f"{client.BASE_URL}/api/nots/nepse-index", headers=client._get_auth_headers())
-    response.raise_for_status()
-    return response.json()
+    client, _ = shared_nepse_client()
+    try:
+        response = client.session.get(f"{client.BASE_URL}/api/nots/nepse-index", headers=client._get_auth_headers())
+        response.raise_for_status()
+        return response.json()
+    except Exception:
+        discard_shared_nepse_client()  # the next attempt or run logs in again
+        raise
 
 
 def _retryable(exc):
-    """429 / 403 / 5xx responses and timeouts are worth another try; anything else is not."""
+    """
+    429 / 403 / 5xx responses and timeouts are worth another try; so is 401, which is
+    how NEPSE rejects an expired token on a reused login (the retry logs in again).
+    Anything else is not.
+    """
     if isinstance(exc, requests.Timeout):
         return True
     response = getattr(exc, "response", None)
     if isinstance(exc, requests.HTTPError) and response is not None:
-        return response.status_code in (403, 429) or response.status_code >= 500
+        return response.status_code in (401, 403, 429) or response.status_code >= 500
     return False
 
 

@@ -21,6 +21,8 @@ class CrawlRun(models.Model):
         TRADING = "trading", "Trading Data"
         FLOORSHEET = "floorsheet", "Floorsheet"
         FLOORSHEET_SAMPLE = "floorsheet_sample", "Floorsheet (historical sample)"
+        MARKET_WIDE = "market_wide", "Market-wide (all stocks + indices)"
+        DIVIDENDS = "dividends", "Proposed dividends (all listed companies)"
         ALL = "all", "All"
 
     crawl_type = models.CharField(

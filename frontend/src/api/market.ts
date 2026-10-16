@@ -154,16 +154,53 @@ export interface Signals {
   };
 }
 
+export type DividendStatus = 'proposed' | 'agm_approved' | 'sebon_approved' | 'distributed';
+
+export type DividendFlag =
+  | 'missing_symbol' | 'missing_fiscal_year' | 'no_price' | 'no_face_value' | 'no_eps';
+
+/** One proposed dividend, WHOLE MARKET (definitions: Backend services/dividends.py). */
 export interface DividendRow {
   id: number;
+  /** '' when the crawled row had no symbol (flags has 'missing_symbol'). */
   symbol: string;
   name: string;
   logo_url: string | null;
+  /** '' when the crawled row had no fiscal year (flags has 'missing_fiscal_year'). */
   fiscal_year: string;
+  status: DividendStatus;
   bonus_pct: number;
   cash_pct: number;
   total_pct: number;
+  announcement_date: string | null;
   book_closure_date: string | null;
+  distribution_date: string | null;
+  bonus_listing_date: string | null;
+  face_value: number | null;
+  /** Latest crawled close and its session date. */
+  price: number | null;
+  price_date: string | null;
+  /** Full-year (Q4) EPS of the same fiscal year. */
+  eps: number | null;
+  cash_dps: number | null;
+  dividend_yield_pct: number | null;
+  cash_payout_pct: number | null;
+  payout_pct: number | null;
+  /** Null when there is no bonus, no price, or the price is already ex-bonus. */
+  ex_bonus_price: number | null;
+  flags: DividendFlag[];
+  scraped_at: string | null;
+}
+
+export interface DividendsResponse {
+  scope: 'whole_market';
+  fiscal_year: string;
+  fiscal_years: string[];
+  statuses: { value: DividendStatus; label: string }[];
+  status_note: string;
+  last_scraped_at: string | null;
+  last_crawl: { id: number; status: string; started_at: string | null; completed_at: string | null } | null;
+  rows: DividendRow[];
 }
 
 export type WatchlistRow = Partial<TrackedRow> & {
@@ -173,6 +210,60 @@ export type WatchlistRow = Partial<TrackedRow> & {
   name: string;
   bucket: MoverBucket | 'not_tracked';
 };
+
+/** A named watchlist ("Primary", "Banks", ...); the starred one is the default. */
+export interface NamedWatchlist {
+  id: number;
+  name: string;
+  is_default: boolean;
+  item_count: number | null;
+  created_at: string;
+}
+
+/** A saved company: its latest crawled session plus the user's holding (Backend services/watchlist.py). */
+export interface WatchlistItemRow {
+  id: number;
+  watchlist_id: number;
+  company_id: number;
+  symbol: string;
+  name: string;
+  sector: string;
+  logo_url: string | null;
+  /** Session behind ltp/high/low/volume/turnover; null when the company was never crawled. */
+  trade_date: string | null;
+  ltp: number | null;
+  high: number | null;
+  low: number | null;
+  change: number | null;
+  change_pct: number | null;
+  volume: number | null;
+  turnover: number | null;
+  sparkline: SparkPoint[];
+  units: number;
+  wacc: number;
+  current_value: number | null;
+  investment: number;
+  profit: number | null;
+  profit_pct: number | null;
+}
+
+export interface WatchlistSummary {
+  total_units: number;
+  average_wacc: number;
+  current_value: number;
+  investment: number;
+  profit: number;
+  profit_pct: number;
+}
+
+export interface WatchlistItemsResponse {
+  watchlist: NamedWatchlist;
+  rows: WatchlistItemRow[];
+  summary: WatchlistSummary;
+  price_source: string;
+}
+
+export interface WatchlistHolding { units?: number; wacc?: number }
 
 /** One tracked company's intraday move from NEPSE's live feed (Backend services/live_prices.py). */
 export interface LiveMoverRow {
@@ -439,10 +530,23 @@ export const marketApi = {
   brokers: (symbol: string) => get<Scoped & { symbol: string; windows: BrokerWindow[]; share_denominator: string }>(`/market/brokers/${symbol}/`),
   signals: (symbol: string) => get<Scoped & { signals: Signals | null }>(`/market/signals/${symbol}/`),
   basket: (days?: number) => get<Scoped & BasketIndex>('/market/basket-index/', { days }),
-  dividends: () => get<Scoped & { rows: DividendRow[] }>('/market/dividends/'),
+  dividends: (params: { fiscal_year?: string; status?: string } = {}) =>
+    get<DividendsResponse>('/market/dividends/', { fiscal_year: params.fiscal_year || undefined, status: params.status || undefined }),
   watchlist: () => get<Scoped & { as_of: string | null; rows: WatchlistRow[]; provenance: Provenance }>('/market/watchlist/'),
   addToWatchlist: (symbol: string) => apiClient.post<WatchlistRow>('/market/watchlist/', { symbol }).then((r) => r.data),
   removeFromWatchlist: (symbol: string) => apiClient.delete(`/market/watchlist/${symbol}/`),
+  watchlists: () => get<{ results: NamedWatchlist[] }>('/market/watchlists/').then((d) => d.results),
+  createWatchlist: (name: string) =>
+    apiClient.post<NamedWatchlist>('/market/watchlists/', { name }).then((r) => r.data),
+  updateWatchlist: (id: number, changes: { name?: string; is_default?: boolean }) =>
+    apiClient.patch<NamedWatchlist>(`/market/watchlists/${id}/`, changes).then((r) => r.data),
+  deleteWatchlist: (id: number) => apiClient.delete(`/market/watchlists/${id}/`),
+  watchlistItems: (id: number) => get<WatchlistItemsResponse>(`/market/watchlists/${id}/items/`),
+  addWatchlistItem: (id: number, symbol: string, holding: WatchlistHolding = {}) =>
+    apiClient.post<WatchlistItemRow>(`/market/watchlists/${id}/items/`, { symbol, ...holding }).then((r) => r.data),
+  updateWatchlistItem: (id: number, itemId: number, holding: WatchlistHolding) =>
+    apiClient.patch<WatchlistItemRow>(`/market/watchlists/${id}/items/${itemId}/`, holding).then((r) => r.data),
+  removeWatchlistItem: (id: number, itemId: number) => apiClient.delete(`/market/watchlists/${id}/items/${itemId}/`),
   companyNews: (symbol: string) => get<PaginatedResponse<NewsArticle>>(`/market/news/${symbol}/`),
   overview: (symbol: string) => get<Scoped & MarketOverview>('/market/overview/', { symbol }),
   overviewChart: (symbol: string, range: OverviewRange) => get<Scoped & OverviewChart>('/market/overview/chart/', { symbol, range }),

@@ -60,7 +60,16 @@ def _normalise_name(text):
 
 
 class MarketWidePipeline:
+    # Scrapy runs on the asyncio reactor, where Django refuses synchronous ORM
+    # calls (SynchronousOnlyOperation aborts the crawl); like crawlers.pipelines,
+    # every database call runs in a thread via deferToThread.
+
     def open_spider(self, spider):
+        from twisted.internet.threads import deferToThread
+
+        return deferToThread(self._load_lookups, spider)
+
+    def _load_lookups(self, spider):
         _ensure_django()
         from apps.market_indices.models import MarketIndex, StockSector
         from apps.market_indices.sectors import normalise_sector
@@ -91,6 +100,11 @@ class MarketWidePipeline:
         spider.logger.info("MarketWidePipeline: %s", self.counters)
 
     def process_item(self, item, spider):
+        from twisted.internet.threads import deferToThread
+
+        return deferToThread(self._process_sync, item, spider)
+
+    def _process_sync(self, item, spider):
         kind = item.get("item_type")
         if kind == "index_daily":
             self._save_index(item, spider)
