@@ -9,8 +9,8 @@ export default function SectionCard({ section }: SectionCardProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-text-primary">{section.title}</h2>
+        <div className="border-l-[3px] border-l-accent pl-3 section-title-accent">
+          <h2 className="text-[15px] font-semibold tracking-tight text-text-primary">{section.title}</h2>
           {section.description && (
             <p className="text-sm text-text-secondary mt-0.5">{section.description}</p>
           )}

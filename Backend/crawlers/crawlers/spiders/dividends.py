@@ -1,5 +1,5 @@
 """
-Proposed dividends (bonus % / cash %) for every listed company, per fiscal year.
+Proposed dividends (bonus % / cash %) for the tracked companies, per fiscal year.
 
 Source: ShareSansar "Proposed Dividend" (checked against the live page 2026-10-15).
 The table is drawn by DataTables from a JSON endpoint on the same URL, so no browser is
@@ -12,15 +12,18 @@ length > 50, and a 500 unless every DataTables column is listed (COLUMNS).
     row keys       symbol / companyname (HTML links), bonus_share, cash_dividend, year,
                    announcement_date, bookclose_date ("2026-07-03 [Closed]"),
                    distribution_date, bonus_listing_date, id
-Then, once per symbol (-a fundamentals=0 skips both):
+The endpoint has no symbol filter, so every page is read, but only rows for active, tracked
+companies are yielded (-a scope=all keeps every listed company, and rows without a symbol).
+Then, once per kept symbol (-a fundamentals=0 skips both):
     ShareSansar /company/<symbol>        "Paid Up  Rs. 100.00"            -> CompanyFaceValueItem
     Merolagani CompanyDetail.aspx        "EPS  27.01 (FY:082-083, Q:4)"   -> CompanyEpsItem
-A row without a symbol or fiscal year is still yielded: the pipeline stores it marked.
+With scope=all a row without a symbol or fiscal year is still yielded: the pipeline stores it marked.
 
 Respects the project's ROBOTSTXT_OBEY = True.  Manual run:
-    scrapy crawl dividends                  # the latest 2 fiscal years
+    scrapy crawl dividends                  # tracked companies, the latest 2 fiscal years
     scrapy crawl dividends -a years=5
     scrapy crawl dividends -a years=all -a fundamentals=0
+    scrapy crawl dividends -a scope=all     # every listed company
 """
 
 import json
@@ -29,9 +32,11 @@ from datetime import date
 from urllib.parse import urlencode
 
 import scrapy
+from asgiref.sync import sync_to_async
 from w3lib.html import remove_tags
 
 from crawlers.items import CompanyEpsItem, CompanyFaceValueItem, DividendItem
+from crawlers.market_wide_pipeline import _ensure_django
 
 START_URL = "https://www.sharesansar.com/proposed-dividend"
 COMPANY_URL = "https://www.sharesansar.com/company/{symbol}"
@@ -70,6 +75,13 @@ def _text(html):
     return re.sub(r"\s+", " ", remove_tags(str(html or ""))).strip()
 
 
+def _tracked_symbols():
+    _ensure_django()
+    from apps.companies.selection import tracked_active_companies
+
+    return {symbol.upper() for symbol in tracked_active_companies().values_list("symbol", flat=True)}
+
+
 class DividendsSpider(scrapy.Spider):
     name = "dividends"
     source = "ShareSansar"
@@ -81,11 +93,14 @@ class DividendsSpider(scrapy.Spider):
         },
     }
 
-    def __init__(self, url=None, years=None, fundamentals=None, **kwargs):
+    def __init__(self, url=None, years=None, fundamentals=None, scope=None, **kwargs):
         super().__init__(**kwargs)
         self.start_url = url or START_URL
         self.max_years = None if str(years).lower() == "all" else self._positive_int(years, DEFAULT_YEARS)
         self.fetch_fundamentals = str(fundamentals if fundamentals is not None else "1").lower() not in ("0", "false", "no")
+        self.tracked_only = str(scope or "tracked").lower() != "all"
+        # Filled in start(); None = keep every row (scope=all, or parse_page called directly).
+        self.tracked_symbols = None
         self.seen_symbols = set()
 
     @staticmethod
@@ -98,6 +113,12 @@ class DividendsSpider(scrapy.Spider):
 
     async def start(self):
         # Scrapy >= 2.13 calls start(), not start_requests().
+        if self.tracked_only:
+            self.tracked_symbols = await sync_to_async(_tracked_symbols)()
+            if not self.tracked_symbols:
+                self.logger.error("No active, tracked companies: nothing to crawl (use -a scope=all for every company).")
+                return
+            self.logger.info("dividends: %s tracked companies", len(self.tracked_symbols))
         for request in self.start_requests():
             yield request
 
@@ -152,6 +173,8 @@ class DividendsSpider(scrapy.Spider):
 
         for row in rows:
             symbol = _text(row.get("symbol")).upper()
+            if self.tracked_symbols is not None and symbol not in self.tracked_symbols:
+                continue
             yield DividendItem(
                 item_type="dividend",
                 source_id=str(row.get("id") or ""),

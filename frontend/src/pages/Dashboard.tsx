@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { analysisApi, type BrokerActivity, type BrokerAnalysisResponse } from '../api/analysis';
@@ -79,10 +80,38 @@ function BrokerSection() {
   );
 }
 
+function greeting(hour: number) {
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function WelcomeBanner() {
+  const { user } = useAuth();
+  const now = new Date();
+  const name = user?.first_name || user?.username || 'there';
+  return (
+    <section className="dashboard-banner">
+      <div className="relative z-10 flex min-h-[150px] flex-col justify-center gap-2 px-5 py-6 sm:min-h-[190px] sm:px-8 md:max-w-[62%]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300">
+          {greeting(now.getHours())} · {format(now, 'EEEE, d MMM yyyy')}
+        </p>
+        <h1 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
+          Welcome back, {name}
+        </h1>
+        <p className="text-sm text-white/75">
+          Your market intelligence at a glance: prices, movers, news and broker activity.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 export default function Dashboard() {
   const { hasPermission } = useAuth();
   return (
     <div className="space-y-8">
+      <WelcomeBanner />
       <RoleDashboard />
       {hasPermission('view_analysis') && <BrokerSection />}
     </div>

@@ -362,8 +362,8 @@ class DividendListAPIView(APIView):
     """
     GET /api/market/dividends/?fiscal_year=2082/2083|all&status=proposed
 
-    Unlike the rest of this module this is WHOLE MARKET (every listed company crawled from
-    ShareSansar, see services.dividends), so it is not narrowed to the caller's companies.
+    Rows for every tracked company crawled from ShareSansar (see services.dividends); not
+    narrowed to the caller's companies.
     No fiscal_year -> the latest crawled one.  Rows with no fiscal year are always included
     (``flags`` marks them).  Cached for 60 seconds per query.
     """
@@ -382,7 +382,7 @@ class DividendListAPIView(APIView):
             years = dividends.fiscal_years()
             fiscal_year = None if requested == "all" else (requested or (years[0] if years else None))
             payload = {
-                "scope": "whole_market",
+                "scope": "tracked_companies",
                 "units": dividends.UNITS,
                 "fiscal_year": fiscal_year or "all",
                 "fiscal_years": years,

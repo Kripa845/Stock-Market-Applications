@@ -44,6 +44,15 @@ class IndexHistoryTests(TestCase):
         self.assertEqual((self.result["saved"], self.result["sessions"], self.result["unmatched"]), (7, 2, []))
         self.assertTrue(IndexDaily.objects.filter(index__code="MANUFACTURE", date=date(2026, 10, 12)).exists())
 
+    def test_session_still_trading_is_not_stored(self):
+        # What the feed sends mid-session: closingIndex 0, -100 %, open = high = low.
+        live = {"NEPSE Index": [{**row(58, "2026-10-13", 0.0, 1420e6, 5e6, 20000, pct=-100.0, open_=2595.81),
+                                 "highIndex": 2595.81, "lowIndex": 2595.81}]}
+        result = nepse_indices.sync_index_history(date(2026, 10, 1), live)
+        self.assertEqual((result["saved"], result["unmatched"], result["skipped_in_progress"]), (0, [], ["2026-10-13"]))
+        self.assertFalse(IndexDaily.objects.filter(date=date(2026, 10, 13)).exists())
+        self.assertEqual(self.rows("main")["NEPSE"]["date"], date(2026, 10, 12))   # page keeps the last result
+
     def test_change_columns_compare_with_the_previous_session(self):
         nepse = self.rows("main")["NEPSE"]
         self.assertEqual(nepse["previous_date"], date(2026, 10, 9))

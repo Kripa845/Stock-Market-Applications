@@ -159,7 +159,7 @@ export type DividendStatus = 'proposed' | 'agm_approved' | 'sebon_approved' | 'd
 export type DividendFlag =
   | 'missing_symbol' | 'missing_fiscal_year' | 'no_price' | 'no_face_value' | 'no_eps';
 
-/** One proposed dividend, WHOLE MARKET (definitions: Backend services/dividends.py). */
+/** One proposed dividend of a tracked company (definitions: Backend services/dividends.py). */
 export interface DividendRow {
   id: number;
   /** '' when the crawled row had no symbol (flags has 'missing_symbol'). */
@@ -193,7 +193,7 @@ export interface DividendRow {
 }
 
 export interface DividendsResponse {
-  scope: 'whole_market';
+  scope: 'tracked_companies';
   fiscal_year: string;
   fiscal_years: string[];
   statuses: { value: DividendStatus; label: string }[];

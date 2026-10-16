@@ -24,7 +24,7 @@ export default function Header() {
   };
 
   return (
-    <header className="h-14 bg-bg-secondary border-b border-bg-border flex items-center gap-4 px-6 shrink-0">
+    <header className="app-header h-14bg-bg-secondary border-b border-bg-border flex items-center gap-4 px-6 shrink-0">
       {/* Search */}
       <div className="flex-1 max-w-md relative">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />

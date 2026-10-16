@@ -1,8 +1,16 @@
 from django.contrib import admin
-from .models import CompanyEarnings, DailyPrice, DividendAnnouncement, FloorsheetTransaction, IntradayCandle, TradingHoliday
+from .models import Broker, CompanyEarnings, DailyPrice, DividendAnnouncement, FloorsheetTransaction, IntradayCandle, TradingHoliday
 # Register your models here.
 admin.site.register(DailyPrice)
 admin.site.register(FloorsheetTransaction)
+
+
+@admin.register(Broker)
+class BrokerAdmin(admin.ModelAdmin):
+    list_display = ("broker_no", "name", "website", "tms_link", "membership_type", "is_active", "directory_synced_at")
+    list_filter = ("is_active", "membership_type", "is_dealer")
+    search_fields = ("broker_code", "name", "short_name", "website")
+    readonly_fields = ("directory_synced_at", "updated_at")
 
 
 @admin.register(TradingHoliday)

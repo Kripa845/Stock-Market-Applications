@@ -193,7 +193,7 @@ function aggregate(bars: KLineData[], mode: '1D' | '1W' | '1M'): KLineData[] {
 }
 
 const themeColors = (dark: boolean) => dark
-  ? { grid: '#2a2e39', axis: '#3a3f4b', text: '#b2b5be', tipBg: '#1e222d', tipBorder: '#2a2e39' }
+  ? { grid: '#2E2654', axis: '#3A3166', text: '#A1A1C2', tipBg: '#1A1433', tipBorder: '#2E2654' }
   : { grid: '#E5E7EB', axis: '#CBD5E1', text: '#64748B', tipBg: '#FFFFFF', tipBorder: '#E2E8F0' };
 
 const isDarkTheme = () => document.documentElement.dataset.theme === 'dark';
@@ -205,8 +205,8 @@ const legendNumber = (value: number) => value.toLocaleString('en-US', { minimumF
 
 // "O 181.69  H 182.36  L 181.31  C 182.05  +0.42 (+0.23%)" for the bar under the crosshair (else the latest).
 function legendTemplate(dark: boolean) {
-  const label = dark ? '#787b86' : '#64748B';
-  const value = dark ? '#d1d4dc' : '#0f172a';
+  const label = dark ? '#A1A1C2' : '#64748B';
+  const value = dark ? '#E2E8F0' : '#0f172a';
   return ({ prev, current }: { prev: KLineData | null; current: KLineData | null }) => {
     if (!current) return [];
     const legends = (['open', 'high', 'low', 'close'] as const).map((key) => ({
@@ -236,13 +236,13 @@ function buildStyles(dark: boolean, chartType: ChartType) {
     },
     candle: {
       // Bars / candles / line / area… (see chartTypes.tsx)
-      ...candleStyles(chartType),
+      ...candleStyles(chartType, dark),
       tooltip: {
         showRule: 'always' as const, showType: 'standard' as const,
         rect: { position: 'fixed' as const, color: c.tipBg, borderColor: c.tipBorder },
         title: {
           show: true, size: 14, weight: '600', family: 'Inter, system-ui, sans-serif',
-          color: dark ? '#d1d4dc' : '#0f172a', template: '{ticker} · {period}',
+          color: dark ? '#E2E8F0' : '#0f172a', template: '{ticker} · {period}',
           marginLeft: 12, marginTop: 10, marginRight: 8, marginBottom: 4,
         },
         legend: {
@@ -648,7 +648,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
     const chart = chartRef.current;
     if (!chart) return;
     const link = document.createElement('a');
-    link.href = chart.getConvertPictureUrl(true, 'png', isDarkTheme() ? '#0d0e14' : '#ffffff');
+    link.href = chart.getConvertPictureUrl(true, 'png', isDarkTheme() ? '#0A0718' : '#ffffff');
     link.download = `${symbol.replace(/\s+/g, '_')}_${INTERVAL_LABELS[interval].replace(/\s+/g, '')}_${new Date().toISOString().slice(0, 10)}.png`;
     link.click();
   };

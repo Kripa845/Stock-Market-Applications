@@ -1,16 +1,17 @@
 """
-Saves IndexDailyItem and MarketStockDailyItem rows (whole NEPSE market).
+Saves MarketStockDailyItem rows (whole NEPSE market).  Index values are not crawled
+here: they come from NEPSE's feed (services/nepse_indices) with ShareSansar as the
+fallback (services/sharesansar_indices).
 
-Register in the spiders' custom_settings (done in market_stocks / market_indices):
+Register in the spider's custom_settings (done in market_stocks):
     "crawlers.market_wide_pipeline.MarketWidePipeline": 450
 
-update_or_create on (index, date) / (symbol, date): re-running a crawl updates,
+update_or_create on (symbol, date): re-running a crawl updates,
 never duplicates.  Items with another item_type pass through untouched.
 """
 
 import logging
 import os
-import re
 import sys
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -51,14 +52,6 @@ def parse_int(value):
     return int(number) if number is not None else None
 
 
-def _normalise_name(text):
-    """'Banking SubIndex' / 'BANKING' / 'Banking Sub-Index' -> 'banking'."""
-    text = re.sub(r"[^a-z0-9]+", "", (text or "").lower())
-    for noise in ("subindex", "index"):
-        text = text.replace(noise, "")
-    return text
-
-
 class MarketWidePipeline:
     # Scrapy runs on the asyncio reactor, where Django refuses synchronous ORM
     # calls (SynchronousOnlyOperation aborts the crawl); like crawlers.pipelines,
@@ -71,18 +64,11 @@ class MarketWidePipeline:
 
     def _load_lookups(self, spider):
         _ensure_django()
-        from apps.market_indices.models import MarketIndex, StockSector
+        from apps.market_indices.models import StockSector
         from apps.market_indices.sectors import normalise_sector
 
-        self.counters = {"index_rows": 0, "stock_rows": 0, "unclassified": 0, "skipped": 0}
+        self.counters = {"stock_rows": 0, "unclassified": 0, "skipped": 0}
         self._unclassified_logged = set()
-
-        self.indices = {}
-        for index in MarketIndex.objects.all():
-            self.indices[_normalise_name(index.code)] = index
-            self.indices[_normalise_name(index.name)] = index
-        if not self.indices:
-            spider.logger.error("MarketIndex catalogue is empty: run `manage.py seed_market_indices`")
 
         self.sectors = dict(StockSector.objects.values_list("symbol", "sector"))
         self._normalise_sector = normalise_sector
@@ -106,35 +92,11 @@ class MarketWidePipeline:
 
     def _process_sync(self, item, spider):
         kind = item.get("item_type")
-        if kind == "index_daily":
-            self._save_index(item, spider)
-        elif kind == "market_stock_daily":
+        if kind == "market_stock_daily":
             self._save_stock(item, spider)
         return item
 
     # ------------------------------------------------------------------
-
-    def _save_index(self, item, spider):
-        from apps.market_indices.models import IndexDaily
-
-        index = self.indices.get(_normalise_name(item.get("index_name")))
-        close = parse_decimal(item.get("close"))
-        if index is None or close is None or item.get("date") is None:
-            self.counters["skipped"] += 1
-            spider.logger.warning("Skipped index row (unknown index / no close / no date): %r", dict(item))
-            return
-        IndexDaily.objects.update_or_create(
-            index=index,
-            date=item["date"],
-            defaults={
-                "open": parse_decimal(item.get("open")),
-                "high": parse_decimal(item.get("high")),
-                "low": parse_decimal(item.get("low")),
-                "close": close,
-                "source": "crawled",
-            },
-        )
-        self.counters["index_rows"] += 1
 
     def _save_stock(self, item, spider):
         from apps.market_indices.models import MarketStockDaily

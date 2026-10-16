@@ -179,6 +179,12 @@ function IndexTableCard({ title, lines, emptyText }: { title: string; lines: Lin
                         <span className="leading-tight">
                           <span className="block font-semibold uppercase text-sky-400">{line.code.replace(/_/g, ' ')}</span>
                           <span className="block text-[10px] text-text-muted">{line.name}</span>
+                          {row?.source === 'sharesansar' && (
+                            <span title="NEPSE's feed was unavailable: this row is from ShareSansar (no volume / transactions). The next NEPSE sync replaces it."
+                              className="mt-0.5 inline-block rounded bg-amber-500/10 px-1 py-px text-[9px] font-semibold text-amber-400">
+                              via ShareSansar
+                            </span>
+                          )}
                         </span>
                       </div>
                     </td>
@@ -318,7 +324,9 @@ export default function IndicesPage() {
       const [indices, subIndices] = await Promise.all([getIndices(), getSubIndices()]);
       setMain(indices);
       setSub(subIndices);
-      setNotice(`Re-scraped from NEPSE: ${result.sync?.saved ?? 0} index rows saved (no duplicates).`);
+      setNotice(result.sync?.fallback === 'sharesansar'
+        ? `NEPSE was unavailable, so missing sessions were filled from ShareSansar: ${result.sync.saved} rows added (NEPSE rows are never overwritten).`
+        : `Re-scraped from NEPSE: ${result.sync?.saved ?? 0} index rows saved (no duplicates).`);
     } catch (err) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
       setError(detail ?? 'Re-sync failed.');
@@ -402,6 +410,13 @@ export default function IndicesPage() {
         </div>
       </div>
 
+      {[...(main?.rows ?? []), ...(sub?.rows ?? [])].some((r) => r.source === 'sharesansar') && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          <AlertTriangle size={14} className="mt-px shrink-0" />
+          Some rows are from ShareSansar because NEPSE's feed was unavailable (marked “via ShareSansar”). Closes and % changes match
+          NEPSE; turnover can differ slightly and volume / transactions are missing. The next successful NEPSE sync replaces them.
+        </div>
+      )}
       {error && <div className="flex items-center gap-2 text-sm text-down"><AlertTriangle size={14} />{error}</div>}
       {notice && <div className="flex items-center gap-2 text-sm text-up"><CheckCircle2 size={14} />{notice}</div>}
 

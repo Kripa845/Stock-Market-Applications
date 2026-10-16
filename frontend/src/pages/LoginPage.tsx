@@ -55,15 +55,15 @@ const LoginPage: React.FC = () => {
 
       <div
         className="
-          hidden lg:flex lg:w-1/2
-          bg-bg-secondary
+          auth-side
+          hidden md:flex md:w-1/2
           border-r border-bg-border
           items-center justify-center
-          p-12
+          p-8 lg:p-12
         "
       >
 
-        <div className="max-w-md">
+        <div className="relative z-10 max-w-md">
 
           {/* Logo */}
 
@@ -73,7 +73,7 @@ const LoginPage: React.FC = () => {
               className="
                 w-11 h-11
                 rounded-xl
-                bg-accent
+                bg-accent text-white
                 flex items-center justify-center
               "
             >
@@ -83,7 +83,7 @@ const LoginPage: React.FC = () => {
             <span
               className="
                 text-xl font-bold
-                text-text-primary
+                text-white
               "
             >
               StockScope
@@ -95,19 +95,19 @@ const LoginPage: React.FC = () => {
 
           <h1
             className="
-              text-4xl font-bold
-              text-text-primary
+              text-3xl lg:text-4xl font-bold
+              text-white
               leading-tight
             "
           >
             Welcome back to
 
-            <span className="text-accent-light">
+            <span className="text-violet-300">
               {' '}StockScope.
             </span>
           </h1>
 
-          <p className="mt-5 text-text-secondary">
+          <p className="mt-5 text-white/70">
             Sign in to access your market
             intelligence dashboard.
           </p>

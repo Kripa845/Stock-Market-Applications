@@ -282,6 +282,58 @@ export interface TopBrokerResponse {
   results: TopBrokerRow[];
 }
 
+// GET /api/analysis/brokers/list/ — the broker directory with turnover over a recent window.
+export interface BrokerBranch {
+  name: string;
+  address: string;
+  phone: string;
+  email: string;
+}
+
+export interface BrokerListRow {
+  broker_code: string;
+  broker_no: number | null;
+  name: string;
+  short_name: string;
+  logo_url: string | null;
+  website: string;
+  tms_link: string;
+  is_active: boolean;
+  /** False for a broker code seen in the floorsheet but missing from the directory. */
+  in_directory: boolean;
+  /** Directory details (manage.py sync_broker_directory: NEPSE member list + ShareHub). */
+  membership_type: string;
+  /** NEPSE status: "A" active, "SUSPEND", "NOT_LISTED". */
+  nepse_status: string;
+  is_dealer: boolean;
+  contact_person: string;
+  address: string;
+  phone: string;
+  email: string;
+  /** Head office city. */
+  city: string;
+  branches: BrokerBranch[];
+  /** Rank by turnover in the window; null when the broker did not trade. */
+  rank: number | null;
+  buy_amount: string;
+  sell_amount: string;
+  /** Buy amount + sell amount. */
+  turnover: string;
+  trades: number;
+}
+
+export interface BrokerListResponse {
+  days: number;
+  day_choices: number[];
+  /** When the directory details were last synced; null before the first sync. */
+  directory_synced_at: string | null;
+  /** Window counted back from the latest collected floorsheet session; null when none is collected. */
+  start_date: string | null;
+  end_date: string | null;
+  summary: { brokers: number; active_brokers: number; trading_brokers: number; unlisted_brokers: number };
+  results: BrokerListRow[];
+}
+
 export interface BrokerProfile {
   broker_code: string;
   broker_no: number | null;
@@ -645,6 +697,10 @@ export const analysisApi = {
 
   getTopBrokers: (date?: string) => apiClient
     .get<TopBrokerResponse>('/analysis/brokers/top/', { params: date ? { date } : undefined })
+    .then((r) => r.data),
+
+  getBrokerList: (days?: number) => apiClient
+    .get<BrokerListResponse>('/analysis/brokers/list/', { params: days ? { days } : undefined })
     .then((r) => r.data),
 
   getBrokerDetail: (broker: string, params?: {

@@ -9,6 +9,10 @@ Every session is stored as its own IndexDaily row (update_or_create), so CH and
 the turnover / volume / transaction changes come from consecutive real rows.
 percentageChange is kept as ``source_change_pct``: NEPSE computes it from unrounded
 values, which differs visibly for tiny indices (Mutual Fund ~19.5 points).
+
+While a session is still trading the feed already lists it, as a placeholder:
+closingIndex 0, percentageChange -100 and open = high = low (checked 2026-10-16, 12:59).
+Such a row is not a session result, so it is never stored; the after-close syncs store it.
 """
 
 import logging
@@ -92,10 +96,17 @@ def _catalogue():
     return catalogue, by_name
 
 
+def _closing_index(value):
+    """closingIndex, or None while the session is unfinished (the feed sends 0 until the close)."""
+    close = _decimal(value)
+    return close if close is not None and close > 0 else None
+
+
 def iter_history(history, catalogue=None):
     """
     Yield (feed name, MarketIndex or None, date or None, IndexDaily field values) per feed row.
     The values are exactly what sync_index_history stores, so the verifier compares like with like.
+    ``close`` is None for a session still in progress (see the module docstring).
     """
     catalogue, by_name = catalogue or _catalogue()
     for name, rows in history.items():
@@ -110,7 +121,7 @@ def iter_history(history, catalogue=None):
                 day = None
             yield str(name), index, day, {
                 "open": _decimal(row.get("openIndex")), "high": _decimal(row.get("highIndex")),
-                "low": _decimal(row.get("lowIndex")), "close": _decimal(row.get("closingIndex")),
+                "low": _decimal(row.get("lowIndex")), "close": _closing_index(row.get("closingIndex")),
                 "turnover": _decimal(row.get("turnoverValue")), "volume": _int(row.get("turnoverVolume")),
                 "transactions": _int(row.get("totalTransaction")),
                 "source_change_pct": _decimal(row.get("percentageChange")),
@@ -122,11 +133,14 @@ def sync_index_history(since=None, history=None):
     since = since or (timezone.now().astimezone(NPT).date() - timedelta(days=DEFAULT_DAYS))
     history = history if history is not None else fetch_index_history(since)
 
-    saved, unmatched, dates = 0, set(), set()
+    saved, unmatched, dates, in_progress = 0, set(), set(), set()
     # update_or_create on the unique (index, date) pair: re-running never duplicates rows,
     # it overwrites earlier values with NEPSE's latest (e.g. totals revised after the close).
     for name, index, day, values in iter_history(history):
-        if index is None or values["close"] is None or day is None:
+        if index is not None and day is not None and values["close"] is None:
+            in_progress.add(day)          # unfinished session: stored by a sync after the close
+            continue
+        if index is None or day is None:
             unmatched.add(name)
             continue
         IndexDaily.objects.update_or_create(index=index, date=day, defaults={**values, "source": "crawled"})
@@ -138,6 +152,7 @@ def sync_index_history(since=None, history=None):
         "sessions": len(dates),
         "latest": max(dates).isoformat() if dates else None,
         "unmatched": sorted(unmatched),
+        "skipped_in_progress": sorted(day.isoformat() for day in in_progress),
     }
 
 

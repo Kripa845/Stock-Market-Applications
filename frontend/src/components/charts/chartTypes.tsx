@@ -19,6 +19,7 @@ const UP = '#22C55E';
 const DOWN = '#EF4444';
 const FLAT = '#64748B';
 const LINE = '#3B82F6';
+const LINE_DARK = '#22D3EE';
 const TRANSPARENT = 'rgba(0,0,0,0)';
 
 // ─── Icons (18×18, drawn in currentColor) ─────────────────────────────────────
@@ -77,19 +78,21 @@ const solidBar = {
 const hiddenBar = Object.fromEntries(Object.keys(solidBar).map((k) => [k, TRANSPARENT])) as typeof solidBar;
 const noPoint = { show: false };
 
-/** The `candle` part of the chart styles for a chart type. */
-export function candleStyles(type: ChartType) {
+/** The `candle` part of the chart styles for a chart type. The dark theme draws line / area in cyan. */
+export function candleStyles(type: ChartType, dark = false) {
+  const line = dark ? LINE_DARK : LINE;
+  const fill = dark ? '34,211,238' : '59,130,246';
   switch (type) {
     case 'bars': return { type: 'ohlc' as const, bar: solidBar };
     case 'hollow': return { type: 'candle_up_stroke' as const, bar: solidBar };
     case 'line':
-      return { type: 'area' as const, area: { lineColor: LINE, lineSize: 2, value: 'close', backgroundColor: TRANSPARENT, point: noPoint } };
+      return { type: 'area' as const, area: { lineColor: line, lineSize: 2, value: 'close', backgroundColor: TRANSPARENT, point: noPoint } };
     case 'area':
       return {
         type: 'area' as const,
         area: {
-          lineColor: LINE, lineSize: 2, value: 'close', point: noPoint,
-          backgroundColor: [{ offset: 0, color: 'rgba(59,130,246,0.02)' }, { offset: 1, color: 'rgba(59,130,246,0.28)' }],
+          lineColor: line, lineSize: 2, value: 'close', point: noPoint,
+          backgroundColor: [{ offset: 0, color: `rgba(${fill},0.02)` }, { offset: 1, color: `rgba(${fill},0.28)` }],
         },
       };
     default:

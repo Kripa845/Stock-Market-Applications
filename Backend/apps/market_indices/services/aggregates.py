@@ -145,6 +145,8 @@ def index_table(kind, day=None):
             "transactions": current.transactions, "trans_ch": trans_ch, "trans_ch_pct": trans_ch_pct,
             # Stored closes, oldest first, for the trend sparkline on Technical Charts.
             "sparkline": [row.close for row in reversed(recent)],
+            # "crawled" = NEPSE's own feed; "sharesansar" = the fallback (services/sharesansar_indices).
+            "source": current.source,
         })
     return rows
 

@@ -1,4 +1,4 @@
-"""Celery task: crawl whole-market stock rows + index values after the close."""
+"""Celery tasks: whole-market stock rows, NEPSE index values (ShareSansar fallback), live index ticks."""
 
 import logging
 import subprocess
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # Backend/crawlers is the Scrapy project root (contains scrapy.cfg).
 CRAWLERS_DIR = Path(__file__).resolve().parents[2] / "crawlers"
-SPIDERS = ("market_stocks", "market_indices")
+SPIDERS = ("market_stocks",)
 SPIDER_TIMEOUT_SECONDS = 600
 
 # snapshot_live_index circuit breaker: after 3 failed runs in a row, stop calling NEPSE
@@ -61,7 +61,7 @@ def crawl_market_wide():
     crawl_run = CrawlRun.objects.create(
         crawl_type=CrawlRun.CrawlType.MARKET_WIDE,
         source="market_wide",
-        target="All listed stocks + indices",
+        target="All listed stocks",
         status=CrawlRun.Status.RUNNING,
         started_at=timezone.now(),
         sources=list(SPIDERS),
@@ -98,9 +98,14 @@ def crawl_market_wide():
 
 @shared_task(name="apps.market_indices.tasks.sync_indices_from_nepse")
 def sync_indices_from_nepse():
-    """After the close: the last 10 days of NEPSE main + sub-index history from NEPSE's own feed."""
+    """
+    After the close: the last 10 days of NEPSE main + sub-index history from NEPSE's own feed.
+    When NEPSE fails, missing sessions are filled from ShareSansar (marked as such); the next
+    successful NEPSE run overwrites them.
+    """
     from django.core.cache import cache
 
+    from apps.market_indices.services import sharesansar_indices
     from apps.market_indices.services.nepse_indices import IndexFeedError, sync_index_history
 
     reason = market_closed_reason()
@@ -109,8 +114,12 @@ def sync_indices_from_nepse():
     try:
         result = sync_index_history()
     except IndexFeedError as exc:
-        logger.warning("sync_indices_from_nepse: %s", exc)
-        return {"skipped": True, "reason": str(exc)}
+        logger.warning("sync_indices_from_nepse: %s; falling back to ShareSansar", exc)
+        try:
+            result = {"fallback": "sharesansar", "nepse_error": str(exc), **sharesansar_indices.backfill_index_history()}
+        except sharesansar_indices.ShareSansarIndexError as fallback_exc:
+            logger.error("sync_indices_from_nepse: ShareSansar fallback failed too: %s", fallback_exc)
+            return {"skipped": True, "reason": f"{exc}; {fallback_exc}"}
     cache.delete_many(["mi:indices:latest", "mi:sub-indices:latest"])
     logger.info("sync_indices_from_nepse: %s", result)
     return result

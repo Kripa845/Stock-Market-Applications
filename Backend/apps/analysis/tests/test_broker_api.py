@@ -183,6 +183,32 @@ class BrokerAnalysisApiTests(TestCase):
         self.assertEqual(response.data["podium"], [])
         self.assertEqual(response.data["summary"]["transaction_count"], 0)
 
+    def test_broker_list_includes_directory_and_unlisted_brokers_with_window_totals(self):
+        Broker.objects.create(broker_no=52, broker_code="52", name="Naasa Securities", logo="52.png")
+        Broker.objects.create(broker_no=1, broker_code="1", name="Kumari Securities", is_active=False)
+        response = self.client.get("/api/analysis/brokers/list/")
+        self.assertEqual(response.status_code, 200, response.content[:500])
+        self.assertEqual((response.data["days"], response.data["end_date"]), (30, "2026-09-12"))
+        rows = {row["broker_code"]: row for row in response.data["results"]}
+        self.assertEqual([row["broker_code"] for row in response.data["results"]], ["1", "17", "44", "52", "88"])
+        # 52 bought 120 + 60 and sold 40, at Rs 100.
+        self.assertEqual((rows["52"]["turnover"], rows["52"]["rank"], rows["52"]["logo_url"]),
+                         ("22000.0000", 1, "/broker-logos/52.png"))
+        self.assertEqual((rows["1"]["rank"], rows["1"]["turnover"], rows["1"]["is_active"]), (None, "0", False))
+        self.assertFalse(rows["17"]["in_directory"])
+        self.assertEqual(response.data["summary"],
+                         {"brokers": 5, "active_brokers": 4, "trading_brokers": 4, "unlisted_brokers": 3})
+
+    def test_broker_list_window_counts_back_from_latest_session(self):
+        response = self.client.get("/api/analysis/brokers/list/", {"days": 7})
+        self.assertEqual(response.data["start_date"], "2026-09-06")
+        self._create_tx("52", "44", 10, self.company, date(2026, 9, 30))
+        response = self.client.get("/api/analysis/brokers/list/", {"days": 7})
+        rows = {row["broker_code"]: row for row in response.data["results"]}
+        self.assertEqual(rows["52"]["turnover"], "1000.0000")
+        self.assertNotIn("88", rows)            # not in the directory and no trades in the window
+        self.assertEqual(self.client.get("/api/analysis/brokers/list/", {"days": 5}).status_code, 400)
+
     def test_detail_returns_daily_trend_and_existing_company_breakdown(self):
         response = self.client.get("/api/analysis/brokers/52/")
         self.assertEqual(response.status_code, 200)

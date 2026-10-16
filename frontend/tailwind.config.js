@@ -8,22 +8,24 @@ export default {
   theme: {
     extend: {
       colors: {
-        "bg-card": "#161a25",
-        "bg-elevated": "#1b1f2a",
-        "bg-border": "#242832",
-        "bg-primary": "#0d0e14",
-        "bg-secondary": "#11141c",
+        // Dark theme (default). The light theme overrides these in index.css.
+        "bg-card": "#1A1433",
+        "bg-elevated": "#221A40",
+        "bg-border": "#2E2654",
+        "bg-primary": "#0A0718",
+        "bg-secondary": "#130E28",
 
         "accent": "#7C3AED",
         "accent-light": "#A78BFA",
         "accent-glow": "#7C3AED24",
+        "cyan": "#22D3EE",
 
-        "text-primary": "#d1d4dc",
-        "text-secondary": "#787b86",
-        "text-muted": "#787b86",
+        "text-primary": "#E2E8F0",
+        "text-secondary": "#A1A1C2",
+        "text-muted": "#A1A1C2",
 
-        "up": "#26a69a",
-        "down": "#ef5350",
+        "up": "#10B981",
+        "down": "#EF4444",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],

@@ -204,6 +204,18 @@ class Broker(models.Model):
     website = models.URLField(blank=True)
     tms_link = models.CharField(max_length=100, blank=True)
     is_active = models.BooleanField(default=True)
+    # Directory details from ``manage.py sync_broker_directory`` (services/broker_directory.py):
+    # NEPSE's member list (official) and ShareHub's broker profiles (website, offices).
+    membership_type = models.CharField(max_length=100, blank=True)
+    nepse_status = models.CharField(max_length=20, blank=True)
+    is_dealer = models.BooleanField(default=False)
+    contact_person = models.CharField(max_length=150, blank=True)
+    address = models.CharField(max_length=255, blank=True)
+    phone = models.CharField(max_length=150, blank=True)
+    email = models.CharField(max_length=254, blank=True)
+    # [{"name", "address", "phone", "email"}], head office first.
+    branches = models.JSONField(default=list, blank=True)
+    directory_synced_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

@@ -8,7 +8,7 @@ import { formatPrice, formatTradeDate } from '../components/market/format';
 import { Filter, ResetButton, formatTradeTime, selectClass } from '../components/market/TopListControls';
 import { marketApi, type DividendFlag, type DividendRow, type DividendStatus, type DividendsResponse } from '../api/market';
 
-// Market -> Proposed Dividend (/market/dividends) for EVERY listed company, crawled from ShareSansar.
+// Market -> Proposed Dividend (/market/dividends) for the tracked companies, crawled from ShareSansar.
 // Every figure (cash per share, yield, payout, ex-bonus price) is calculated by the backend
 // (services/dividends.py); this page only filters, sorts and formats.
 
@@ -180,7 +180,7 @@ export default function DividendsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Proposed Dividend" subtitle="Bonus and cash dividends announced by every listed company" />
+      <PageHeader title="Proposed Dividend" subtitle="Bonus and cash dividends announced by your tracked companies" />
 
       <div className="card space-y-3 !p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 pt-4">

@@ -653,6 +653,99 @@ class TopBrokerAPIView(APIView):
         })
 
 
+class BrokerListAPIView(APIView):
+    """
+    GET /api/analysis/brokers/list/?days=30
+
+    Every broker in the directory (plus any broker code seen in the floorsheet but not in
+    the directory, ``in_directory: false``) with its turnover across the user's accessible
+    companies over the last ``days`` calendar days of collected floorsheet data, counted
+    back from the latest collected session (not today, so a crawl lag shows no false zeros).
+    Brokers without trades in the window keep zero totals and ``rank: null``.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+    DAY_CHOICES = (7, 30, 90, 365)
+    DEFAULT_DAYS = 30
+
+    def get(self, request):
+        raw = request.query_params.get("days", "").strip()
+        try:
+            days = int(raw) if raw else self.DEFAULT_DAYS
+        except ValueError:
+            days = None
+        if days not in self.DAY_CHOICES:
+            return Response({"detail": f"days must be one of {list(self.DAY_CHOICES)}."}, status=400)
+
+        company_ids = get_accessible_company_ids(request.user)
+        coverage = floorsheet_day_coverage(company_ids=company_ids)
+        end_date = coverage[0][0] if coverage else None
+        start_date = end_date - timedelta(days=days - 1) if end_date else None
+        activity = (
+            build_broker_activity(start_date=start_date, end_date=end_date, company_ids=company_ids)["brokers"]
+            if end_date else []
+        )
+        by_code = {row["broker"]: row for row in activity}
+        ranks = {
+            row["broker"]: rank
+            for rank, row in enumerate(sorted(activity, key=lambda r: (-r["total_value"], r["broker"])), start=1)
+        }
+
+        def entry(code, broker=None):
+            row = by_code.get(code, {})
+            buy, sell = row.get("buy_value", Decimal(0)), row.get("sell_value", Decimal(0))
+            return {
+                "broker_code": code,
+                "broker_no": broker.broker_no if broker else (int(code) if code.isdigit() else None),
+                "name": broker.name if broker else f"Broker {code}",
+                "short_name": broker.short_name if broker else "",
+                "logo_url": f"/broker-logos/{broker.logo}" if broker and broker.logo else None,
+                "website": broker.website if broker else "",
+                "tms_link": broker.tms_link if broker else "",
+                "is_active": broker.is_active if broker else True,
+                "in_directory": broker is not None,
+                # Directory details (manage.py sync_broker_directory).
+                "membership_type": broker.membership_type if broker else "",
+                "nepse_status": broker.nepse_status if broker else "",
+                "is_dealer": broker.is_dealer if broker else False,
+                "contact_person": broker.contact_person if broker else "",
+                "address": broker.address if broker else "",
+                "phone": broker.phone if broker else "",
+                "email": broker.email if broker else "",
+                # Head office city: the first branch's name (ShareHub lists the head office first).
+                "city": ((broker.branches or [{}])[0].get("name") or "") if broker else "",
+                "branches": broker.branches if broker else [],
+                "rank": ranks.get(code),
+                "buy_amount": str(buy),
+                "sell_amount": str(sell),
+                "turnover": str(buy + sell),
+                "trades": row.get("trades", 0),
+            }
+
+        directory = list(Broker.objects.all())
+        listed = {broker.broker_code for broker in directory}
+        results = [entry(broker.broker_code, broker) for broker in directory]
+        results += [entry(code) for code in by_code if code not in listed]
+        results.sort(key=lambda r: (r["broker_no"] is None, r["broker_no"] or 0, r["broker_code"]))
+
+        synced = max((b.directory_synced_at for b in directory if b.directory_synced_at), default=None)
+        return Response({
+            "days": days,
+            "day_choices": list(self.DAY_CHOICES),
+            "directory_synced_at": synced,
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+            "summary": {
+                "brokers": len(results),
+                "active_brokers": sum(r["is_active"] for r in results),
+                "trading_brokers": len(activity),
+                "unlisted_brokers": len(results) - len(directory),
+            },
+            "results": results,
+        })
+
+
 def _broker_profile(broker_code):
     """Directory details for one broker, with a name fallback when it is unlisted."""
     from apps.market_data.serializers import broker_metadata, broker_payload

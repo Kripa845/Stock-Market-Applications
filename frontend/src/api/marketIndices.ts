@@ -12,6 +12,8 @@ export interface IndexRow {
   transactions: number | null; trans_ch: number | null; trans_ch_pct: number | null;
   /** Stored closes for the last 30 sessions, oldest first. */
   sparkline?: (number | string)[];
+  /** "crawled" = NEPSE's own feed; "sharesansar" = the fallback used when NEPSE failed. */
+  source?: string;
 }
 export interface SectorShare {
   sector: string;
@@ -88,7 +90,16 @@ export interface IndexVerification {
   last_updated: string | null;
   rows: IndexVerificationRow[];
   summary: Partial<Record<IndexDataStatus | 'total', number>>;
-  sync?: { saved: number; sessions: number; latest: string | null; unmatched: string[] };
+  sync?: {
+    saved: number;
+    /** NEPSE sync: count; ShareSansar fallback: the session dates. */
+    sessions: number | string[];
+    latest?: string | null;
+    unmatched?: string[];
+    /** Set when NEPSE failed and missing sessions were filled from ShareSansar. */
+    fallback?: 'sharesansar';
+    nepse_error?: string;
+  };
 }
 
 export const verifyIndices = (date?: string) =>

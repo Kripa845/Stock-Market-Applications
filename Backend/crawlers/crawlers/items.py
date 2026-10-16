@@ -53,23 +53,6 @@ class FloorsheetItem(scrapy.Item):
     source = scrapy.Field()
 
 
-class IndexDailyItem(scrapy.Item):
-    # MarketWidePipeline dispatches on item_type ("index_daily") and matches index_name.
-    item_type = scrapy.Field()
-    item_code = scrapy.Field()
-    index_name = scrapy.Field()
-
-    
-    date = scrapy.Field()
-
-    open = scrapy.Field()
-    high = scrapy.Field()
-    low = scrapy.Field()
-    close = scrapy.Field()
-
-    source = scrapy.Field()
-    
-    
 class MarketStockDailyItem(scrapy.Item):
     # MarketWidePipeline dispatches on item_type ("market_stock_daily").
     item_type = scrapy.Field()

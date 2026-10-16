@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 
 from apps.market_data.services.trading_days import is_market_open
 from apps.market_indices.models import MarketIndex
-from apps.market_indices.services import aggregates, index_technicals, index_verification
+from apps.market_indices.services import aggregates, index_technicals, index_verification, sharesansar_indices
 from apps.market_indices.services.nepse_indices import IndexFeedError
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
@@ -182,7 +182,13 @@ class IndexVerificationAPIView(APIView):
         try:
             result, data = index_verification.resync_session(day)
         except IndexFeedError as exc:
-            return Response({"detail": f"{exc}. Nothing was saved."}, status=502)
+            # NEPSE is down: fill missing sessions from ShareSansar (never overwrites NEPSE rows).
+            try:
+                result = {"fallback": "sharesansar", "nepse_error": str(exc), **sharesansar_indices.backfill_index_history()}
+            except sharesansar_indices.ShareSansarIndexError as fallback_exc:
+                return Response({"detail": f"{exc}. ShareSansar fallback failed too: {fallback_exc}. Nothing was saved."},
+                                status=502)
+            data = index_verification.verify_session(day)
         cache.delete_many([
             f"mi:verify:{day or 'latest'}", "mi:verify:latest",
             f"mi:indices:{day or 'latest'}", f"mi:sub-indices:{day or 'latest'}",

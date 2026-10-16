@@ -181,7 +181,7 @@ class DividendApiTests(TestCase):
     def test_defaults_to_latest_fiscal_year_and_keeps_rows_without_one(self):
         response = self.client.get("/api/market/dividends/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual((response.data["scope"], response.data["fiscal_year"]), ("whole_market", "2082/2083"))
+        self.assertEqual((response.data["scope"], response.data["fiscal_year"]), ("tracked_companies", "2082/2083"))
         self.assertEqual(response.data["fiscal_years"], ["2082/2083", "2081/2082"])
         self.assertEqual(self.symbols(response), ["BHDC", "NABIL", "NOFY"])
         self.assertIsNotNone(response.data["last_scraped_at"])
@@ -257,6 +257,20 @@ class DividendsSpiderTests(SimpleTestCase):
         self.assertIn("https://www.sharesansar.com/company/bhdc", urls)
         self.assertIn("https://merolagani.com/CompanyDetail.aspx?symbol=BHDC", urls)
         self.assertEqual(sum("start=" in u for u in urls), 2)    # 50 and 100
+
+    def test_tracked_scope_drops_other_companies(self):
+        from scrapy.http import TextResponse
+
+        body = json.dumps({"recordsTotal": 3, "recordsFiltered": 3,
+                           "data": [API_ROW, {**API_ROW, "symbol": "NABIL"}, {**API_ROW, "symbol": ""}]})
+        response = TextResponse(url="https://www.sharesansar.com/proposed-dividend", body=body.encode(), encoding="utf-8")
+        spider = _spider()
+        spider.tracked_symbols = {"NABIL"}                       # what start() loads in tracked scope
+        output = list(spider.parse_page(response, year_id="32", label="2082/2083", start=0))
+        self.assertEqual([o["symbol"] for o in output if not hasattr(o, "url")], ["NABIL"])
+        self.assertEqual({o.cb_kwargs["symbol"] for o in output if hasattr(o, "url")}, {"NABIL"})
+        self.assertTrue(spider.tracked_only)
+        self.assertFalse(_spider(scope="all").tracked_only)
 
     def test_unexpected_json_saves_nothing(self):
         from scrapy.http import TextResponse

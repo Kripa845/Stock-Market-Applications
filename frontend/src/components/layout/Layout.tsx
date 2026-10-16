@@ -7,7 +7,7 @@ export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-bg-primary">
+    <div className="app-shell flex flex-col h-screen overflow-hidden bg-bg-primary">
       <div className="flex flex-1 overflow-hidden">
         <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
         <div className="flex flex-col flex-1 overflow-hidden">

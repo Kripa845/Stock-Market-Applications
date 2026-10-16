@@ -22,6 +22,7 @@ import {
   Zap,
   ScrollText,
   Gift,
+  List,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -96,6 +97,7 @@ const NAV_ITEMS: NavItem[] = [
     children: [
       { label: 'Top Brokers', icon: Trophy, to: '/top-brokers' },
       { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
+      { label: 'Broker List', icon: List, to: '/brokers' },
     ],
   },
   {

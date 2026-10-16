@@ -1,8 +1,9 @@
 """
-Proposed dividends for every listed company (spider ``dividends``, ShareSansar + Merolagani).
+Proposed dividends for the tracked companies (spider ``dividends``, ShareSansar + Merolagani).
 
-SCOPE: the whole market, not only the tracked companies: a symbol does not need a
-Company row.  Every input comes from crawled data:
+SCOPE: the spider keeps only active, tracked companies by default; a manual
+``-a scope=all`` crawl stores every listed company, so a symbol does not need a
+Company row here.  Every input comes from crawled data:
 
     bonus % / cash %, dates           ShareSansar "Proposed Dividend"  (DividendAnnouncement)
     face value (paid-up per share)    ShareSansar company page          (DividendAnnouncement.face_value)

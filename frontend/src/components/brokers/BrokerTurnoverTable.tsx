@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { TopBrokerRow } from '../../api/analysis';
-import CompanyLogo from '../companies/CompanyLogo';
 import { formatCount, formatNprArab } from '../market/format';
 import BrokerBadge from './BrokerBadge';
 import { RankBadge } from './TopBrokers';
@@ -26,6 +25,45 @@ export function BuySellBar({ buy, sell }: { buy: number; sell: number }) {
 
 const th = 'px-2 py-2 font-medium';
 
+/** Tiny overlapping logo for the top-stocks button (logo, or the symbol's first letter). */
+function StockDot({ symbol, logoUrl }: { symbol: string; logoUrl: string | null }) {
+  return logoUrl ? (
+    <img src={logoUrl} alt="" className="h-6 w-6 shrink-0 rounded-full bg-white object-contain p-0.5 ring-2 ring-bg-card" />
+  ) : (
+    <span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/25 text-[9px] font-bold text-accent-light ring-2 ring-bg-card">
+      {symbol.charAt(0)}
+    </span>
+  );
+}
+
+/** One button per broker that opens its top-stocks page: top 3 logos + symbols, and how many there are. */
+function TopStocksButton({ row, to }: { row: TopBrokerRow; to: string }) {
+  const stocks = row.top_stocks ?? [];
+  if (stocks.length === 0) return <span className="text-text-muted">—</span>;
+  const preview = stocks.slice(0, 3);
+  const more = stocks.length - preview.length;
+  return (
+    <Link
+      to={to}
+      title={`${row.name}: top ${stocks.length} of ${row.stock_count} stocks traded`}
+      className="group/top inline-flex w-full max-w-[240px] items-center gap-2.5 rounded-lg border border-bg-border px-2.5 py-1.5 transition-colors hover:border-accent/60 hover:bg-accent/10"
+    >
+      <span className="flex shrink-0 -space-x-2">
+        {preview.map((stock) => <StockDot key={stock.symbol} symbol={stock.symbol} logoUrl={stock.logo_url} />)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11px] font-semibold text-text-primary group-hover/top:text-accent-light">
+          Top {stocks.length} stock{stocks.length > 1 ? 's' : ''}
+        </span>
+        <span className="block truncate font-mono text-[10px] text-text-muted">
+          {preview.map((stock) => stock.symbol).join(' · ')}{more > 0 ? ` +${more}` : ''}
+        </span>
+      </span>
+      <ChevronRight size={14} className="shrink-0 text-text-muted transition-transform group-hover/top:translate-x-0.5 group-hover/top:text-accent-light" />
+    </Link>
+  );
+}
+
 /**
  * `ranks` keeps each broker's overall rank when `rows` is a filtered subset.
  * `day` opens each broker's Broker Explorer detail page on that same day.
@@ -44,12 +82,11 @@ export default function BrokerTurnoverTable({ rows, ranks, day }: { rows: TopBro
             <th className={`${th} text-right text-down`}>Sell Amt</th>
             <th className={`${th} text-right text-down`}>Sell Vol</th>
             <th className={`${th} w-40 text-right`}>Turnover</th>
-            <th className={`${th} text-left`}>Top Stock</th>
+            <th className={`${th} text-left`}>Top Stocks</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, index) => {
-            const listed = row.top_stocks?.length ?? 0;
             const detailLink = `/broker-analysis/${encodeURIComponent(row.broker)}${range}`;
             const stocksLink = `/top-brokers/${encodeURIComponent(row.broker)}${day ? `?date=${day}` : ''}`;
             return (
@@ -68,31 +105,7 @@ export default function BrokerTurnoverTable({ rows, ranks, day }: { rows: TopBro
                 <p className="text-right font-mono font-semibold tabular-nums text-text-primary">{formatNprArab(row.total_value)}</p>
                 <BuySellBar buy={Number(row.buy_value)} sell={Number(row.sell_value)} />
               </td>
-              <td className="px-2 py-2">
-                {row.top_stock ? (
-                  <Link to={`/companies/${row.top_stock.symbol}`} className="flex items-center gap-2 hover:text-accent-light">
-                    <CompanyLogo symbol={row.top_stock.symbol} logoUrl={row.top_stock.logo_url} size="sm" />
-                    <span className="min-w-0">
-                      <span className="block font-semibold text-text-primary">{row.top_stock.symbol}</span>
-                      <span className="block whitespace-nowrap font-mono text-[10px] text-text-muted">
-                        <span className="text-up">B {formatNprArab(row.top_stock.buy_amount)}</span>
-                        {' · '}
-                        <span className="text-down">S {formatNprArab(row.top_stock.sell_amount)}</span>
-                        {' · '}T {formatNprArab(row.top_stock.turnover)}
-                      </span>
-                    </span>
-                  </Link>
-                ) : <span className="text-text-muted">—</span>}
-                {listed > 1 && (
-                  <Link
-                    to={stocksLink}
-                    title={`${row.name}: top ${listed} of ${row.stock_count} stocks`}
-                    className="mt-1 inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] font-medium text-accent-light hover:bg-blue-500/10"
-                  >
-                    Top {listed} stocks <ChevronRight size={11} />
-                  </Link>
-                )}
-              </td>
+              <td className="px-2 py-2"><TopStocksButton row={row} to={stocksLink} /></td>
             </tr>
             );
           })}

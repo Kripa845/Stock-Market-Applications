@@ -385,7 +385,7 @@ def crawl_brokers():
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_dividends")
 def crawl_dividends():
-    """Daily: proposed dividends for every listed company (ShareSansar) + face value / EPS."""
+    """Daily: proposed dividends for the tracked companies (ShareSansar) + face value / EPS."""
     if _has_active_crawl(CrawlRun.CrawlType.DIVIDENDS):
         logger.info("crawl_dividends: skipping because a dividend crawl is active.")
         return {"skipped": True, "reason": "dividend crawl already active"}
@@ -394,7 +394,7 @@ def crawl_dividends():
         crawl_run = CrawlRun.objects.create(
             crawl_type=CrawlRun.CrawlType.DIVIDENDS,
             source="dividends",
-            target="All listed companies",
+            target="Tracked companies",
             status=CrawlRun.Status.PENDING,
             sources=list(DIVIDEND_SPIDERS),
         )

@@ -51,7 +51,7 @@ function RankCard({ spec, rows, emptyText }: { spec: CardSpec; rows: TrackedRow[
   const Icon = spec.icon;
   return (
     <div className={`card flex h-full flex-col border-t-2 !p-0 ${spec.border}`}>
-      <h3 className="flex items-center gap-2 border-b border-bg-border px-4 py-3 text-sm font-semibold text-text-primary">
+      <h3 className="flex items-center gap-2 px-4 pb-2 pt-3.5 text-sm font-semibold text-text-primary">
         <Icon size={15} className={spec.tint} /> {spec.title}
         <Link to={spec.link} className="ml-auto text-xs font-normal text-accent-light hover:underline">View all →</Link>
       </h3>
@@ -101,12 +101,12 @@ function SummaryCard({ summary }: { summary: TrackedSummary | null }) {
   ];
   return (
     <div className="card flex h-full flex-col border-t-2 border-t-accent !p-0">
-      <h3 className="flex items-center gap-2 border-b border-bg-border px-4 py-3 text-sm font-semibold text-text-primary">
+      <h3 className="flex items-center gap-2 px-4 pb-2 pt-3.5 text-sm font-semibold text-text-primary">
         <ArrowUpRight size={15} className="text-accent-light" /> Market Summary
       </h3>
       <dl className="flex-1">
         {items.map((item) => (
-          <div key={item.label} className="border-b border-bg-border px-4 py-3">
+          <div key={item.label} className="border-b border-bg-border px-4 py-3 last:border-0">
             <dt className="text-[10px] uppercase tracking-wide text-text-muted">{item.label}</dt>
             <dd className="mt-1 font-mono text-base font-semibold text-text-primary">{item.value}</dd>
             {item.note && <dd className="text-[10px] text-amber-400">{item.note}</dd>}

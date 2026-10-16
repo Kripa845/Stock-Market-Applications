@@ -25,6 +25,7 @@ import FloorsheetPage from './pages/FloorsheetPage';
 import TopBrokerStocksPage from './pages/TopBrokerStocksPage';
 import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage';
 import TopBrokerPage from './pages/TopBrokerPage';
+import BrokerListPage from './pages/BrokerListPage';
 
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
@@ -415,6 +416,10 @@ function AppRoutes() {
           <Route
             path="/top-brokers/:broker"
             element={<PermissionRoute rule={ROUTE_RULES['/top-brokers']}><TopBrokerStocksPage /></PermissionRoute>}
+          />
+          <Route
+            path="/brokers"
+            element={<PermissionRoute rule={ROUTE_RULES['/brokers']}><BrokerListPage /></PermissionRoute>}
           />
 
 

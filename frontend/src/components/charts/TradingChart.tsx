@@ -169,7 +169,7 @@ function aggregate(bars: KLineData[], mode: '1D' | '1W' | '1M'): KLineData[] {
 }
 
 const themeColors = (dark: boolean) => dark
-  ? { grid: '#2a2e39', axis: '#3a3f4b', text: '#b2b5be', tipBg: '#1e222d', tipBorder: '#2a2e39' }
+  ? { grid: '#2E2654', axis: '#3A3166', text: '#A1A1C2', tipBg: '#1A1433', tipBorder: '#2E2654' }
   : { grid: '#E5E7EB', axis: '#CBD5E1', text: '#64748B', tipBg: '#FFFFFF', tipBorder: '#E2E8F0' };
 
 const isDarkTheme = () => document.documentElement.dataset.theme === 'dark';
@@ -183,6 +183,8 @@ function buildStyles(dark: boolean) {
       vertical:   { color: c.grid, style: 'dashed' as const, dashedValue: [3, 3] },
     },
     candle: {
+      // Line / area colour follows the theme switch (the fill is set per type in applyChartType).
+      area: { lineColor: dark ? '#22D3EE' : '#2962ff' },
       bar: {
         upColor: '#22C55E', downColor: '#EF4444', noChangeColor: '#64748B',
         upBorderColor: '#22C55E', downBorderColor: '#EF4444', noChangeBorderColor: '#64748B',
@@ -581,8 +583,8 @@ function applyChartType(chart: any, type: ChartType) {
       type: styleType,
       area: {
         // "line" is an area with no fill
-        backgroundColor: type === 'line' ? 'transparent' : 'rgba(41, 98, 255, 0.25)',
-        lineColor: '#2962ff',
+        backgroundColor: type === 'line' ? 'transparent' : isDarkTheme() ? 'rgba(34, 211, 238, 0.22)' : 'rgba(41, 98, 255, 0.25)',
+        lineColor: isDarkTheme() ? '#22D3EE' : '#2962ff',
         lineSize: 2,
       },
     },

@@ -136,7 +136,7 @@ function NepseChartCard({ data, theme }: { data: PublicMarketSnapshot; theme: 'd
         ) : chart.points.length ? (
           <OverviewPriceChart points={chart.points} intraday={chart.interval === 'intraday'}
             mode={canCandle ? mode : 'area'} previousClose={previousClose} sessionDate={chart.session_date}
-            gridColor={theme === 'dark' ? '#242832' : '#e7e5ee'} />
+            gridColor={theme === 'dark' ? '#2E2654' : '#e7e5ee'} />
         ) : (
           <p className="flex h-full items-center justify-center px-6 text-center text-xs text-[color:var(--l-faint)]">
             {chart.reason ?? 'No chart data.'}
@@ -163,7 +163,7 @@ function IndicesCard({ data }: { data: PublicMarketSnapshot }) {
   const { rows, as_of: asOf } = data[board];
   return (
     <div className={card}>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--l-border)] px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 pb-2 pt-3.5">
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <Gauge size={15} className="text-[color:var(--l-accent)]" /> NEPSE &amp; Indices
           {asOf && <span className="text-xs font-normal text-[color:var(--l-faint)]">· {formatTradeDate(asOf)}</span>}
@@ -237,7 +237,7 @@ function RankCard({ spec, rows }: { spec: RankSpec; rows: PublicMarketRow[] }) {
   const Icon = spec.icon;
   return (
     <div className={card}>
-      <h3 className="flex items-center gap-2 border-b border-[color:var(--l-border)] px-5 py-3 text-sm font-semibold">
+      <h3 className="flex items-center gap-2 px-5 pb-2 pt-3.5 text-sm font-semibold">
         <Icon size={15} className={spec.tint} /> {spec.title}
       </h3>
       {rows.length === 0 ? (

@@ -132,7 +132,7 @@ export default function WatchlistStrip({ variant = 'app' }: { variant?: Variant 
 
   return (
     <section className={`${s.frame} space-y-3`}>
-      <div className={`flex items-center justify-between border-b pb-2 ${s.border}`}>
+      <div className={`flex items-center justify-between`}>
         <h2 className={`flex items-center gap-2 text-sm font-semibold ${s.title}`}>
           Watchlist
           {listName !== 'Watchlist' && <span className={`text-xs font-normal ${s.muted}`}>· {listName}</span>}

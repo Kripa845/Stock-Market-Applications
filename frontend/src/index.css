@@ -50,8 +50,8 @@
   }
 
   body {
-    background-color: #0d0e14;
-    color: #d1d4dc;
+    background-color: #0A0718;
+    color: #E2E8F0;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -66,11 +66,11 @@
   }
 
   ::-webkit-scrollbar-track {
-    background: #0d0e14;
+    background: #0A0718;
   }
 
   ::-webkit-scrollbar-thumb {
-    background: #242832;
+    background: #2E2654;
     border-radius: 2px;
   }
 
@@ -647,24 +647,24 @@ html[data-theme="light"] .stroke-down {
    ========================= */
 
 .landing {
-  --l-bg: #050409;
-  --l-header: rgba(3, 2, 7, 0.75);
-  --l-surface: rgba(255, 255, 255, 0.03);
-  --l-surface-hover: rgba(255, 255, 255, 0.06);
-  --l-surface-solid: #0d0c12;
-  --l-card-from: rgba(255, 255, 255, 0.05);
-  --l-card-to: rgba(255, 255, 255, 0.01);
+  --l-bg: #0A0718;
+  --l-header: rgba(26, 20, 51, 0.6);
+  --l-surface: rgba(26, 20, 51, 0.45);
+  --l-surface-hover: rgba(34, 211, 238, 0.06);
+  --l-surface-solid: #1A1433;
+  --l-card-from: rgba(26, 20, 51, 0.7);
+  --l-card-to: rgba(26, 20, 51, 0.3);
   --l-text: #ffffff;
-  --l-text-2: #d4d4d8;
-  --l-muted: #a1a1aa;
-  --l-faint: #71717a;
-  --l-border: rgba(255, 255, 255, 0.1);
-  --l-border-strong: rgba(255, 255, 255, 0.28);
-  --l-accent: #c4b5fd;
+  --l-text-2: #E2E8F0;
+  --l-muted: #A1A1C2;
+  --l-faint: #7E7AA3;
+  --l-border: rgba(139, 92, 246, 0.18);
+  --l-border-strong: rgba(34, 211, 238, 0.45);
+  --l-accent: #22D3EE;
   --l-number: rgba(255, 255, 255, 0.06);
   --l-btn-bg: linear-gradient(to bottom, #ffffff, #e4e4e7);
   --l-btn-text: #0b0a12;
-  --l-cta-bg: #0c0918;
+  --l-cta-bg: #140E2C;
 }
 
 html[data-theme="light"] .landing {
@@ -686,4 +686,201 @@ html[data-theme="light"] .landing {
   --l-btn-bg: linear-gradient(to bottom, #8b5cf6, #6d28d9);
   --l-btn-text: #ffffff;
   --l-cta-bg: #efe9ff;
+}
+
+/* =========================
+   DARK THEME — purple + cyan fintech
+   Dark is the default; every rule is scoped so the light theme is untouched.
+   ========================= */
+
+html:not([data-theme="light"]) {
+  color-scheme: dark;
+  --trading-grid: #2E2654;
+  --trading-muted: #A1A1C2;
+  --trading-text-secondary: #A1A1C2;
+  --trading-text-primary: #E2E8F0;
+  --trading-panel: #1A1433;
+  --trading-divider: #2E2654;
+  --trading-up: #10B981;
+  --trading-down: #EF4444;
+  --trading-accent: #22D3EE;
+}
+
+/* App background: soft purple and cyan light behind the glass panels. */
+html:not([data-theme="light"]) .app-shell {
+  background:
+    radial-gradient(1100px 600px at 0% -10%, rgba(139, 92, 246, 0.16), transparent 60%),
+    radial-gradient(900px 520px at 100% 0%, rgba(34, 211, 238, 0.08), transparent 60%),
+    radial-gradient(800px 600px at 60% 110%, rgba(59, 130, 246, 0.08), transparent 60%),
+    #0A0718;
+}
+
+/* Navbar and sidebar glass */
+html:not([data-theme="light"]) .app-header,
+html:not([data-theme="light"]) .sidebar-wrap {
+  background-color: rgba(26, 20, 51, 0.6);
+  border-color: rgba(139, 92, 246, 0.16);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+html:not([data-theme="light"]) .app-header {
+  position: relative;
+}
+
+html:not([data-theme="light"]) .app-header::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 -1px 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.6), rgba(59, 130, 246, 0.5), rgba(34, 211, 238, 0.6), transparent);
+  pointer-events: none;
+}
+
+html:not([data-theme="light"]) .ticker-wrap {
+  background-color: rgba(26, 20, 51, 0.6);
+}
+
+/* Cards: translucent glass, cyan border glow on hover. */
+html:not([data-theme="light"]) .card,
+html:not([data-theme="light"]) .dashboard-card {
+  background-color: rgba(26, 20, 51, 0.62);
+  border-color: rgba(139, 92, 246, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Blur only cards without a fixed-position child: backdrop-filter would trap modals inside the card. */
+html:not([data-theme="light"]) .card:not(:has(.fixed)),
+html:not([data-theme="light"]) .dashboard-card:not(:has(.fixed)) {
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+html:not([data-theme="light"]) .card:hover,
+html:not([data-theme="light"]) .dashboard-card:hover {
+  border-color: rgba(34, 211, 238, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 0 1px rgba(34, 211, 238, 0.14),
+    0 8px 28px -10px rgba(34, 211, 238, 0.45);
+}
+
+html:not([data-theme="light"]) .card-elevated {
+  background-color: rgba(34, 26, 64, 0.7);
+  border-color: rgba(139, 92, 246, 0.18);
+}
+
+/* Primary buttons keep the purple, gain a soft glow on hover. */
+html:not([data-theme="light"]) .btn-primary {
+  transition: background-color 0.2s, box-shadow 0.2s;
+}
+
+html:not([data-theme="light"]) .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.35), 0 6px 22px -4px rgba(139, 92, 246, 0.65);
+}
+
+/* Links: cyan accent with a faint glow. */
+html:not([data-theme="light"]) a.text-accent-light,
+html:not([data-theme="light"]) a.text-accent {
+  color: #22D3EE;
+  transition: color 0.2s, text-shadow 0.2s;
+}
+
+html:not([data-theme="light"]) a.text-accent-light:hover,
+html:not([data-theme="light"]) a.text-accent:hover {
+  color: #67E8F9;
+  text-shadow: 0 0 12px rgba(34, 211, 238, 0.55);
+}
+
+html:not([data-theme="light"]) .table-row:hover {
+  background-color: rgba(34, 211, 238, 0.06);
+}
+
+html:not([data-theme="light"]) ::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(#8B5CF6, #22D3EE);
+}
+
+/* =========================
+   SECTION HEADINGS AND DIVIDERS (both themes)
+   ========================= */
+
+/* Section titles get a short brand-gradient bar on the left instead of a full-width rule underneath. */
+.section-title-accent {
+  border-image: linear-gradient(180deg, #8B5CF6, #3B82F6, #22D3EE) 1;
+}
+
+/* Table row dividers: quieter than card borders so a table reads as one block. */
+html:not([data-theme="light"]) table tr.border-b {
+  border-bottom-color: rgba(139, 92, 246, 0.12);
+}
+
+html:not([data-theme="light"]) table thead tr.border-b {
+  border-bottom-color: rgba(139, 92, 246, 0.24);
+}
+
+html[data-theme="light"] table tbody tr.border-b {
+  border-bottom-color: #F1F5F9 !important;
+}
+
+/* Light cards: a soft lift so they separate from the page without heavy borders. */
+html[data-theme="light"] .card {
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px -6px rgba(15, 23, 42, 0.08);
+}
+
+/* =========================
+   LOGIN / REGISTER — left panel: world map under a purple overlay (both themes)
+   ========================= */
+
+.auth-side {
+  position: relative;
+  overflow: hidden;
+  /* Sized to the panel's width, not `cover`: the panel is tall, so cover would zoom the wide map ~2x and blur it.
+     The fill colour matches the image's near-black edges so the space above and below blends in. */
+  background: #02030F url('./assets/images/login-worldmap.jpg') center / 130% auto no-repeat;
+}
+
+.auth-side::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px 400px at 30% 40%, rgba(124, 58, 237, 0.22), transparent 70%),
+    linear-gradient(135deg, rgba(10, 7, 24, 0.82) 0%, rgba(46, 16, 101, 0.6) 55%, rgba(10, 7, 24, 0.78) 100%);
+  pointer-events: none;
+}
+
+/* =========================
+   DASHBOARD BANNER (both themes)
+   ========================= */
+
+.dashboard-banner {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  background: #0A0718 url('./assets/images/dashboard-banner.jpg') right center / cover no-repeat;
+}
+
+.dashboard-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 7, 24, 0.95) 0%, rgba(46, 16, 101, 0.82) 45%, rgba(10, 7, 24, 0.35) 100%);
+  pointer-events: none;
+}
+
+.dashboard-banner::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  background: linear-gradient(90deg, #8B5CF6, #3B82F6, #22D3EE);
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .dashboard-banner::before {
+    background: linear-gradient(180deg, rgba(10, 7, 24, 0.85) 0%, rgba(46, 16, 101, 0.88) 100%);
+  }
 }
