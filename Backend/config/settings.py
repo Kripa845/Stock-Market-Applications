@@ -245,6 +245,16 @@ TRADING_DAYS_CRONTAB = ",".join(str((day + 1) % 7) for day in NEPSE_TRADING_WEEK
 # worker process (market_data.services.live_prices.shared_nepse_client).  0 = log in every run.
 NEPSE_CLIENT_REUSE_SECONDS = int(os.getenv("NEPSE_CLIENT_REUSE_SECONDS", str(15 * 60)))
 
+# Broker accumulation / distribution (apps.analysis.services.broker_accumulation).
+# ratio = top-5 net buying / |top-5 net selling|: above ACCUMULATION -> accumulation,
+# below DISTRIBUTION -> distribution, otherwise neutral.  EXCLUDE_SELF_TRADES drops
+# trades where the buyer and seller broker are the same (possible wash trades);
+# the API's ?exclude_self=1/0 overrides it per request.
+BROKER_SIGNAL_ACCUMULATION_RATIO = os.getenv("BROKER_SIGNAL_ACCUMULATION_RATIO", "1.2")
+BROKER_SIGNAL_DISTRIBUTION_RATIO = os.getenv("BROKER_SIGNAL_DISTRIBUTION_RATIO", "0.8")
+BROKER_EXCLUDE_SELF_TRADES = os.getenv("BROKER_EXCLUDE_SELF_TRADES", "False") == "True"
+BROKER_ACCUMULATION_CACHE_SECONDS = int(os.getenv("BROKER_ACCUMULATION_CACHE_SECONDS", str(60 * 60)))
+
 from celery.schedules import crontab  # noqa: E402
 
 CELERY_BEAT_SCHEDULE = {

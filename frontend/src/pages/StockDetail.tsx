@@ -26,6 +26,7 @@ import {
 } from '../api/analysis';
 import Badge from '../components/common/Badge';
 import BrokerBadge from '../components/brokers/BrokerBadge';
+import BrokerAccumulationPanel from '../components/brokers/accumulation/BrokerAccumulationPanel';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import EmptyState from '../components/common/EmptyState';
 import TradingChart, { type IntradayInterval } from '../components/charts/TradingChart';
@@ -253,57 +254,15 @@ function BehaviorPanel({ b }: { b: BehaviorSummary }) {
         <p className="text-[10px] text-text-muted mt-2">Flagged when volume is at least 2.5× the SMA of the preceding 20 trading sessions. Current day is excluded; incomplete baselines are not scored.</p>
       </div>
 
-      {/* Broker activity */}
+      {/* Broker accumulation / distribution */}
       <div>
-        <SectionHead icon={Activity} title="Broker Activity (Floorsheet Sample)" />
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-          <Metric label="Most Active Buyer"  value={b.most_active_buyer  ?? '—'} />
-          <Metric label="Most Active Seller" value={b.most_active_seller ?? '—'} />
-          <Metric label="Top Net Buyer"      value={b.top_net_buyer      ?? '—'} color="text-up" />
-          <Metric label="Top Net Seller"     value={b.top_net_seller     ?? '—'} color="text-down" />
-        </div>
+        <SectionHead icon={Activity} title="Broker Accumulation / Distribution" />
+        <BrokerAccumulationPanel symbol={b.symbol} />
+      </div>
 
-        {b.brokers.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs min-w-[560px]">
-              <thead>
-                <tr className="border-b border-bg-border text-text-muted">
-                  <th className="text-left py-1.5 font-medium">Broker</th>
-                  <th className="text-right py-1.5 font-medium">Buy Qty</th>
-                  <th className="text-right py-1.5 font-medium">Sell Qty</th>
-                  <th className="text-right py-1.5 font-medium">Net Qty</th>
-                  <th className="text-right py-1.5 font-medium">Trades</th>
-                </tr>
-              </thead>
-              <tbody>
-                {b.brokers.map(br => (
-                  <tr key={br.broker} className="table-row">
-                    <td className="py-1.5 text-text-secondary font-mono">{br.broker}</td>
-                    <td className="py-1.5 text-right font-mono text-up">{fmt(br.buy_quantity)}</td>
-                    <td className="py-1.5 text-right font-mono text-down">{fmt(br.sell_quantity)}</td>
-                    <td className={clsx(
-                      'py-1.5 text-right font-mono font-semibold',
-                      br.net_quantity > 0 ? 'text-up' : br.net_quantity < 0 ? 'text-down' : 'text-text-secondary',
-                    )}>
-                      {br.net_quantity > 0 ? '+' : ''}{fmt(br.net_quantity)}
-                    </td>
-                    <td className="py-1.5 text-right text-text-muted">{br.trades}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {b.floorsheet_sampled_dates.length > 0 && (
-          <p className="mt-2 text-[10px] text-text-muted">
-            Floorsheet coverage: {b.floorsheet_sampled_dates.join(', ')}.
-            This is a representative sample — not a continuous series.
-          </p>
-        )}
-
+      <div>
         {/* News */}
-        <div className="grid grid-cols-2 gap-2 mt-4">
+        <div className="grid grid-cols-2 gap-2">
           <Metric
             label="News Sentiment (window)"
             value={b.news_sentiment_score.toFixed(3)}

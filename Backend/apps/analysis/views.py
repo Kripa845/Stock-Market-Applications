@@ -1369,3 +1369,139 @@ def get_queryset(self):
     return queryset.filter(
         company_id__in=company_ids
     )
+
+
+# ─── Broker accumulation / distribution ──────────────────────────────────────
+# GET /api/analysis/broker-summary/   per-broker table for a window
+# GET /api/analysis/broker-signal/    signal, ratio, top-5 lists, totals
+# GET /api/analysis/broker-flow/      daily top-5 net flow with the close, for charting
+# One broker's activity across stocks is the existing /api/analysis/brokers/<id>/.
+#
+# Query parameters: symbol (required); window=1d|1w|1m|3m (default 1w) or
+# start_date[/end_date] for a custom range; exclude_self=1|0 to drop trades where
+# buyer == seller (default settings.BROKER_EXCLUDE_SELF_TRADES).
+#
+# Responses are cached per stock + range.  The key carries the stock's newest
+# floorsheet row id, so a crawl that adds trades makes the old entries unreachable
+# without an explicit invalidation (which a per-process cache could not share anyway).
+
+def _accumulation_request(request):
+    """``(company, window, exclude_self, error_response)`` from the shared query parameters."""
+    from .services.broker_accumulation import WINDOW_SESSIONS, resolve_window
+
+    symbol = request.query_params.get("symbol", "").strip().upper()
+    if not symbol:
+        return None, None, None, Response({"detail": "symbol is required."}, status=400)
+    window = request.query_params.get("window", "").strip().lower() or None
+    if window and window not in WINDOW_SESSIONS:
+        return None, None, None, Response(
+            {"detail": f"window must be one of: {', '.join(WINDOW_SESSIONS)}."}, status=400
+        )
+    dates, error = _broker_date_filters(request)
+    if error:
+        return None, None, None, error
+    raw_exclude = request.query_params.get("exclude_self", "").strip().lower()
+    if raw_exclude and raw_exclude not in {"1", "0", "true", "false"}:
+        return None, None, None, Response({"detail": "exclude_self must be 1 or 0."}, status=400)
+    exclude_self = None if not raw_exclude else raw_exclude in {"1", "true"}
+
+    company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
+    require_company_access(request.user, company.pk)
+    return company, resolve_window(company, window, dates["start_date"], dates["end_date"]), exclude_self, None
+
+
+def _accumulation_payload(request, kind, build):
+    """Shared request handling, window header and caching for the three endpoints."""
+    from django.conf import settings
+    from django.core.cache import cache
+
+    from .services.broker_accumulation import exclude_self_trades_default
+
+    company, window, exclude_self, error = _accumulation_request(request)
+    if error:
+        return error
+    if exclude_self is None:
+        exclude_self = exclude_self_trades_default()
+
+    stamp = FloorsheetTransaction.objects.filter(company=company).aggregate(latest=Max("id"))["latest"]
+    key = f"broker-acc:{kind}:{company.pk}:{window.key}:{window.start_date}:{window.end_date}:{int(exclude_self)}:{stamp}"
+    payload = cache.get(key)
+    if payload is None:
+        payload = {
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            "window": {
+                "key": window.key,
+                "start_date": window.start_date,
+                "end_date": window.end_date,
+                "sessions": len(window.sessions),
+            },
+            **build(company, window, exclude_self),
+        }
+        cache.set(key, payload, settings.BROKER_ACCUMULATION_CACHE_SECONDS)
+    return Response(payload)
+
+
+def _accumulation_broker_metadata(rows):
+    from apps.market_data.serializers import broker_metadata
+
+    return {"broker_metadata": broker_metadata(row["broker"] for row in rows)}
+
+
+class BrokerSummaryAPIView(APIView):
+    """Every broker's buy / sell / net, averages and net % of volume for one stock and window."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        from .serializers import AccumulationBrokerRowSerializer
+        from .services.broker_accumulation import build_broker_summary
+
+        def build(company, window, exclude_self):
+            summary = build_broker_summary(company, window, exclude_self)
+            rows = summary.pop("rows")
+            return {
+                **summary,
+                "broker_count": len(rows),
+                "results": AccumulationBrokerRowSerializer(rows, many=True, context=_accumulation_broker_metadata(rows)).data,
+            }
+
+        return _accumulation_payload(request, "summary", build)
+
+
+class BrokerSignalAPIView(APIView):
+    """Accumulation / distribution / neutral, with the top-5 lists behind it."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        from .serializers import AccumulationTopBrokerSerializer
+        from .services.broker_accumulation import build_broker_signal
+
+        def build(company, window, exclude_self):
+            signal = build_broker_signal(company, window, exclude_self)
+            context = _accumulation_broker_metadata(signal["accumulators"] + signal["distributors"])
+            for side in ("accumulators", "distributors"):
+                signal[side] = AccumulationTopBrokerSerializer(signal[side], many=True, context=context).data
+            return signal
+
+        return _accumulation_payload(request, "signal", build)
+
+
+class BrokerFlowAPIView(APIView):
+    """Per-session top-5 net broker flow with the close, oldest first."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        from .serializers import BrokerFlowPointSerializer
+        from .services.broker_accumulation import build_broker_flow
+
+        def build(company, window, exclude_self):
+            flow = build_broker_flow(company, window, exclude_self)
+            return {"points": BrokerFlowPointSerializer(flow["points"], many=True).data, "warnings": flow["warnings"]}
+
+        return _accumulation_payload(request, "flow", build)

@@ -98,7 +98,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Top Brokers', icon: Trophy, to: '/top-brokers' },
       { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
       { label: 'Broker List', icon: List, to: '/brokers' },
-      { label: 'Broker Accumulation and Broker Distribution', icon: List, to: '/brokers' },
+      { label: 'Broker Accumulation and Broker Distribution', icon: List, to: '/brokers-distribution' },
     ],
   },
   {

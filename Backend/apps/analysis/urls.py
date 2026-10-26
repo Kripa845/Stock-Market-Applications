@@ -4,7 +4,10 @@ from .views import (
     CompanyBrokerActivityAPIView,
     BrokerAnalysisAPIView,
     BrokerDetailAPIView,
+    BrokerFlowAPIView,
     BrokerListAPIView,
+    BrokerSignalAPIView,
+    BrokerSummaryAPIView,
     TopBrokerAPIView,
     CompanyCategorizedNewsAPIView,
     CompanyNewsPriceCorrelationAPIView,
@@ -19,6 +22,10 @@ urlpatterns = [
     path("brokers/top/", TopBrokerAPIView.as_view(), name="top-brokers"),
     path("brokers/list/", BrokerListAPIView.as_view(), name="broker-list"),
     path("brokers/<str:broker_id>/", BrokerDetailAPIView.as_view(), name="broker-detail"),
+    # Accumulation / distribution for one stock (?symbol=&window= or start_date/end_date).
+    path("broker-summary/", BrokerSummaryAPIView.as_view(), name="broker-summary"),
+    path("broker-signal/", BrokerSignalAPIView.as_view(), name="broker-signal"),
+    path("broker-flow/", BrokerFlowAPIView.as_view(), name="broker-flow"),
     path("companies/<int:pk>/categorized-news/", CompanyCategorizedNewsAPIView.as_view(), name="company-categorized-news"),
     path(
         "daily/",

@@ -230,3 +230,67 @@ class BrokerActivitySerializer(serializers.Serializer):
         from apps.market_data.serializers import BrokerMetadataListSerializer
 
         list_serializer_class = BrokerMetadataListSerializer
+
+
+# ─── Broker accumulation / distribution ──────────────────────────────────────
+# Shapes for apps.analysis.services.broker_accumulation.  Money and prices are
+# sent as numbers (coerce_to_string=False); the frontend types mirror these.
+
+def _number(**kwargs):
+    return serializers.DecimalField(max_digits=30, decimal_places=4, coerce_to_string=False, **kwargs)
+
+
+class AccumulationBrokerRowSerializer(serializers.Serializer):
+    """One broker in the window. ``context["broker_metadata"]`` supplies names and logos."""
+
+    broker = serializers.CharField()
+    name = serializers.SerializerMethodField()
+    short_name = serializers.SerializerMethodField()
+    logo_url = serializers.SerializerMethodField()
+    buy_qty = serializers.IntegerField()
+    sell_qty = serializers.IntegerField()
+    net_qty = serializers.IntegerField()
+    buy_amount = _number()
+    sell_amount = _number()
+    net_amount = _number()
+    avg_buy = _number(allow_null=True)
+    avg_sell = _number(allow_null=True)
+    net_pct_of_volume = _number(allow_null=True)
+    buy_trades = serializers.IntegerField()
+    sell_trades = serializers.IntegerField()
+
+    def _detail(self, obj, key):
+        from apps.market_data.serializers import broker_payload
+
+        return broker_payload(obj["broker"], self.context.get("broker_metadata", {}))[key]
+
+    def get_name(self, obj):
+        return self._detail(obj, "name")
+
+    def get_short_name(self, obj):
+        return self._detail(obj, "short_name")
+
+    def get_logo_url(self, obj):
+        return self._detail(obj, "logo_url")
+
+
+class BrokerStreakSerializer(serializers.Serializer):
+    direction = serializers.ChoiceField(choices=["buying", "selling"], allow_null=True)
+    days = serializers.IntegerField()
+
+
+class AccumulationTopBrokerSerializer(AccumulationBrokerRowSerializer):
+    close_vs_avg_buy_pct = _number(allow_null=True)
+    close_vs_avg_sell_pct = _number(allow_null=True)
+    streak = BrokerStreakSerializer()
+
+
+class BrokerFlowPointSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    close = _number(allow_null=True)
+    top5_buy_net = serializers.IntegerField()
+    top5_sell_net = serializers.IntegerField()
+    net_flow = serializers.IntegerField()
+    ratio = _number(allow_null=True)
+    signal = serializers.CharField()
+    volume = serializers.IntegerField()
