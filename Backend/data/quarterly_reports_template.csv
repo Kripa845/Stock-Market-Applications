@@ -1,0 +1,21 @@
+symbol,fiscal_year,quarter,reported_on,net_profit,net_worth,distributable_profit,share_count,eps,book_value,dpps,price_on_report_date,sector,name
+ADBL,,,,,,,,,,,,Banking,Agricultural Development Bank Limited
+NABIL,,,,,,,,,,,,Banking,Nabil Bank Limited
+NICA,,,,,,,,,,,,Banking,NIC Asia Bank Limited
+SANIMA,,,,,,,,,,,,Banking,Sanima Bank Limited
+SCB,,,,,,,,,,,,Banking,Standard Chartered Bank Nepal Limited
+MNBBL,,,,,,,,,,,,Development Bank,Muktinath Bikas Bank Limited
+GUFL,,,,,,,,,,,,Finance,Gurkhas Finance Limited
+TRH,,,,,,,,,,,,Hotels And Tourism,Taragaon Regency Hotel Limited
+AKJCL,,,,,,,,,,,,HydroPower,Ankhu Khola Jalvidhyut Company Limited
+CHCL,,,,,,,,,,,,HydroPower,Chilime Hydropower Company Limited
+UPPER,,,,,,,,,,,,HydroPower,Upper Tamakoshi Hydropower Limited
+HIDCL,,,,,,,,,,,,Investment,Hydroelectricity Investment and Development Company Limited
+LICN,,,,,,,,,,,,Life Insurance,Life Insurance Corporation (Nepal) Limited
+NLIC,,,,,,,,,,,,Life Insurance,Nepal Life Insurance Company Limited
+HDL,,,,,,,,,,,,Manufacturing And Processing,Himalayan Distillery Limited
+SHIVM,,,,,,,,,,,,Manufacturing And Processing,Shivam Cements Limited
+CBBL,,,,,,,,,,,,Microfinance,Chhimek Laghubitta Bittiya Sanstha Ltd
+NLG,,,,,,,,,,,,Non Life Insurance,NLG Insurance Company Limited
+NTC,,,,,,,,,,,,Others,Nepal Doorsanchar Company Limited
+STC,,,,,,,,,,,,Trading,Salt Trading Corporation Limited
