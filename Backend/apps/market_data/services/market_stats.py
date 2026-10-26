@@ -32,7 +32,8 @@ from django.db.models import (
 from django.db.models.functions import Trim
 
 from apps.companies.models import Company
-from apps.market_data.models import Broker, DailyPrice
+from apps.floorsheet.models import Broker
+from apps.market_data.models import DailyPrice
 from apps.market_data.services.price_fields import real_floorsheet
 from apps.market_intelligence.models import ProxyIndexSnapshot
 

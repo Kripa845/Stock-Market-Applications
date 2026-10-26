@@ -85,7 +85,7 @@ def rebuild_all_analysis(self, since=None):
             else date_cls.fromisoformat(str(since))
         )
 
-    from apps.companies.selection import tracked_active_companies
+    from apps.companies.services.selection import tracked_active_companies
 
     companies = tracked_active_companies()
 

@@ -201,7 +201,7 @@ class User(AbstractUser):
 
     #     return False
     def get_app_permissions(self):
-        from .serializers import VALID_PERMISSION_KEYS  # local import: avoids circular import
+        from apps.users.api.serializers import VALID_PERMISSION_KEYS  # local import: avoids circular import
 
         if self.is_admin():
             return set(VALID_PERMISSION_KEYS)

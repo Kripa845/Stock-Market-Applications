@@ -2,8 +2,8 @@
  * brokerAccumulation.ts
  *
  * Broker accumulation / distribution for one stock.  Shapes mirror
- * apps/analysis/serializers.py (Accumulation*Serializer, BrokerFlowPointSerializer)
- * and the payloads built in apps/analysis/views.py:
+ * apps/analysis/api/serializers.py (Accumulation*Serializer, BrokerFlowPointSerializer)
+ * and the payloads built in apps/analysis/api/views.py:
  *
  *   BrokerSummaryAPIView → /api/analysis/broker-summary/
  *   BrokerSignalAPIView  → /api/analysis/broker-signal/

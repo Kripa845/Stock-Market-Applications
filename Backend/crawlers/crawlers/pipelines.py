@@ -41,7 +41,8 @@ from apps.news.models import NewsArticle, RawArticle
 from apps.news.services.article_images import extract_image_url
 from apps.news.tasks import categorize_article_task
 from apps.companies.models import Company
-from apps.market_data.models import Broker, DailyPrice, FloorsheetTransaction
+from apps.floorsheet.models import Broker, FloorsheetTransaction
+from apps.market_data.models import DailyPrice
 
 
 
@@ -1450,7 +1451,7 @@ class MoneymitraBrokerPipeline:
         return await sync_to_async(self._save, thread_sensitive=True)(item, spider)
 
     def _save(self, item, spider):
-        from apps.market_data.models import Broker
+        from apps.floorsheet.models import Broker
 
         logo_name = ""
         if item["logo_url"]:

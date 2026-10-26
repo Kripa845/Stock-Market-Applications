@@ -17,9 +17,10 @@ from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 
-from apps.market_data.models import DailyPrice, IntradayCandle
+from apps.market_data.models import DailyPrice
+from apps.floorsheet.models import IntradayCandle
 from apps.market_data.services import movers
-from apps.market_data.services.intraday_candles import NPT, SESSION_CLOSE, latest_candle_date
+from apps.floorsheet.services.intraday_candles import NPT, SESSION_CLOSE, latest_candle_date
 from apps.market_data.services.market_stats import PRICE_SOURCE, tracked_companies
 from apps.market_data.services.trading_days import is_market_open
 from apps.market_indices.models import IndexDaily, IndexIntradayPoint

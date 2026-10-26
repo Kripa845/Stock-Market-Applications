@@ -54,6 +54,8 @@ INSTALLED_APPS = [
     "apps.dashboard",
     "apps.market_intelligence",
     "apps.market_indices",
+    "apps.floorsheet",
+    "apps.reports",
     
 ]
 
@@ -293,12 +295,12 @@ CELERY_BEAT_SCHEDULE = {
     # The task itself also checks TradingHoliday and the session clock.
     # `expires` drops a queued run that a slow previous run has made stale.
     "build-intraday-candles-market-hours": {
-        "task": "apps.market_data.tasks.build_intraday_candles_live",
+        "task": "apps.floorsheet.tasks.build_intraday_candles_live",
         "schedule": crontab(minute="*/5", hour="11-14", day_of_week=TRADING_DAYS_CRONTAB),
         "options": {"expires": 240},
     },
     "build-intraday-candles-at-close": {
-        "task": "apps.market_data.tasks.build_intraday_candles_live",
+        "task": "apps.floorsheet.tasks.build_intraday_candles_live",
         "schedule": crontab(minute="0,5", hour=15, day_of_week=TRADING_DAYS_CRONTAB),
         "options": {"expires": 240},
     },
@@ -329,7 +331,7 @@ CELERY_BEAT_SCHEDULE = {
         "options": {"expires": 100},
     },
     "finalize-intraday-candles-after-close": {
-        "task": "apps.market_data.tasks.finalize_intraday_candles",
+        "task": "apps.floorsheet.tasks.finalize_intraday_candles",
         "schedule": crontab(minute=30, hour=15, day_of_week=TRADING_DAYS_CRONTAB),
     },
 

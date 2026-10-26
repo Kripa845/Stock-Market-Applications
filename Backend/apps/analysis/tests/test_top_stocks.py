@@ -9,7 +9,7 @@ from apps.analysis.services.brokers import (
     build_top_stocks_by_broker,
 )
 from apps.companies.models import Company
-from apps.market_data.models import FloorsheetTransaction
+from apps.floorsheet.models import FloorsheetTransaction
 
 DAY = date(2026, 9, 12)
 OTHER_DAY = date(2026, 9, 10)

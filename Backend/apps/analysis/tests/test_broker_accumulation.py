@@ -32,7 +32,8 @@ from apps.analysis.services.broker_accumulation import (
     Window, broker_rows, build_broker_flow, build_broker_signal, classify, resolve_window, streaks,
 )
 from apps.companies.models import Company
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import DailyPrice
+from apps.floorsheet.models import FloorsheetTransaction
 from apps.users.models import User
 
 D1 = date(2026, 9, 14)

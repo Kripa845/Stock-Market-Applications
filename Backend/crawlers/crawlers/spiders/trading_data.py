@@ -37,7 +37,7 @@ os.environ.setdefault(
 django.setup()
 
 
-from apps.companies.selection import select_crawl_companies
+from apps.companies.services.selection import select_crawl_companies
 # Under ``scrapy crawl`` the Scrapy project root is on sys.path, so
 # ``crawlers`` means Backend/crawlers/crawlers. Imported from Django
 # (tests, management commands) ``crawlers`` means Backend/crawlers

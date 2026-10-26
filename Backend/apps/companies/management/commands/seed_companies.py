@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from apps.companies.models import (
@@ -203,7 +204,7 @@ class Command(BaseCommand):
         # 1. Load company logos
         # -----------------------------------------
 
-        logo_path = Path("company_logos.json")
+        logo_path = Path(settings.BASE_DIR) / "data" / "company_logos.json"
 
         if not logo_path.exists():
             self.stdout.write(

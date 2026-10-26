@@ -24,7 +24,7 @@ export type PressureLabel = 'buying' | 'selling' | 'neutral';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DailyAnalysis
-// Matches DailyAnalysisSerializer (apps/analysis/serializers.py)
+// Matches DailyAnalysisSerializer (apps/analysis/api/serializers.py)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface PressureExplanation {
@@ -81,7 +81,7 @@ export interface DailyAnalysis {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Broker activity
-// Matches BrokerActivitySerializer (apps/analysis/serializers.py)
+// Matches BrokerActivitySerializer (apps/analysis/api/serializers.py)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface BrokerActivity {
@@ -106,7 +106,7 @@ export interface BrokerActivity {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Behavior Summary
-// Matches CompanyBehaviorSummaryAPIView response (apps/analysis/views.py)
+// Matches CompanyBehaviorSummaryAPIView response (apps/analysis/api/views.py)
 //
 // Accessible at THREE equivalent URLs — use /api/companies/<pk>/behavior/
 // ─────────────────────────────────────────────────────────────────────────────

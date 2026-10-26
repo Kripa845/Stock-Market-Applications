@@ -96,6 +96,8 @@ Every manual action creates an unalterable record in `CategorizationCorrection`:
 * **AI/ML**: `sentence-transformers`, `torch`, `scikit-learn`, `numpy`
 * **Frontend**: React 18, Vite, TypeScript, TailwindCSS, Lucide Icons
 
+Backend layout (which app owns what, and which page calls which file): [`Backend/docs/architecture.md`](Backend/docs/architecture.md).
+
 ---
 
 ## 🧪 Running Automated Tests
@@ -161,7 +163,7 @@ Responses are cached for `BROKER_ACCUMULATION_CACHE_SECONDS` (1 hour). The cache
 | `BROKER_ACCUMULATION_CACHE_SECONDS` | `3600` | API cache lifetime |
 
 ### Data collection
-No new fetcher: it reads `market_data.FloorsheetTransaction`, which the existing crawls fill.
+No new fetcher: it reads `floorsheet.FloorsheetTransaction`, which the existing crawls fill.
 * **Daily:** Celery beat runs `crawl_floorsheet` at 18:15 Asia/Kathmandu on trading days and skips weekends and `TradingHoliday` dates. Run it by hand from the admin crawler page if a day was missed.
 * **Backfill:** ShareHub's floorsheet history goes back to October 2023. Backfill it in chunks (roughly 1 GB in total).
 * Re-running a crawl never duplicates trades: `(company, date, transaction_id)` is unique and inserts ignore conflicts.
@@ -183,7 +185,7 @@ venv\Scripts\python.exe -m pytest apps/analysis/tests/test_broker_accumulation.p
 Per sector, the latest quarterly filing of every tracked company with valuation and dividend ratios: **Market → Quarterly Report** (`/market/quarterly-report/:sector`, e.g. `/market/quarterly-report/banking`). Clicking a company opens its stock page.
 
 ### How it is calculated
-Only the figures as filed are stored (`market_data.QuarterlyReport`, `market_data.YearlyDPPS`). Every ratio is calculated per request in `Backend/apps/market_data/services/quarterly_metrics.py` (pure functions), so it follows the price. A null value means *not meaningful* and is shown as **n/m**.
+Only the figures as filed are stored (`reports.QuarterlyReport`, `reports.YearlyDPPS`). Every ratio is calculated per request in `Backend/apps/reports/services/quarterly_metrics.py` (pure functions), so it follows the price. A null value means *not meaningful* and is shown as **n/m**.
 
 * **LTP:** latest **crawled** close (`MarketStockDaily` or `DailyPrice`, whichever is newer; live and unverified prices are never used).
 * **EPS:** the annualized EPS as filed. If it is blank: net profit ÷ share count × 4 ÷ quarter (filings are cumulative for the fiscal year).
@@ -231,5 +233,5 @@ venv\Scripts\python.exe manage.py fill_yearly_dpps [--fiscal-year 2082/83]      
 ### Tests
 ```powershell
 cd Backend
-venv\Scripts\python.exe -m pytest apps/market_data/test_quarterly_reports.py
+venv\Scripts\python.exe -m pytest apps/reports/tests/test_quarterly_reports.py
 ```
