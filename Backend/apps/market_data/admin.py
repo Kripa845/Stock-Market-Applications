@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import Broker, CompanyEarnings, DailyPrice, DividendAnnouncement, FloorsheetTransaction, IntradayCandle, TradingHoliday
+from .models import (
+    Broker, CompanyEarnings, DailyPrice, DividendAnnouncement, FloorsheetTransaction, IntradayCandle, QuarterlyReport,
+    TradingHoliday, YearlyDPPS,
+)
 # Register your models here.
 admin.site.register(DailyPrice)
 admin.site.register(FloorsheetTransaction)
@@ -34,6 +37,22 @@ class CompanyEarningsAdmin(admin.ModelAdmin):
     list_display = ("symbol", "fiscal_year", "quarter", "eps", "source", "scraped_at")
     list_filter = ("fiscal_year", "quarter")
     search_fields = ("symbol",)
+
+
+@admin.register(QuarterlyReport)
+class QuarterlyReportAdmin(admin.ModelAdmin):
+    list_display = ("company", "fiscal_year", "quarter", "reported_on", "eps", "book_value", "dpps", "updated_at")
+    list_filter = ("fiscal_year", "quarter", "company__sector")
+    search_fields = ("company__symbol", "company__name")
+    list_select_related = ("company",)
+
+
+@admin.register(YearlyDPPS)
+class YearlyDPPSAdmin(admin.ModelAdmin):
+    list_display = ("company", "fiscal_year", "dpps")
+    list_filter = ("fiscal_year",)
+    search_fields = ("company__symbol",)
+    list_select_related = ("company",)
 
 
 @admin.register(IntradayCandle)

@@ -23,6 +23,7 @@ import {
   ScrollText,
   Gift,
   List,
+  FileSpreadsheet,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -74,6 +75,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Proposed Dividend',
     icon: Gift,
     to: '/market/dividends',
+  },
+  {
+    label: 'Quarterly Report',
+    icon: FileSpreadsheet,
+    to: '/market/quarterly-report',
   },
   {
     label: 'Companies',

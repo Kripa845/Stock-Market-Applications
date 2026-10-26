@@ -53,6 +53,7 @@ SECTOR_MAP = {
     "hydropower": "HydroPower",
     "investment": "Investment",
     "life insurance": "Life Insurance",
+    "manufacturing": "Manufacturing And Processing",
     "manufacturing and processing": "Manufacturing And Processing",
     "manufacturing & processing": "Manufacturing And Processing",
     "microfinance": "Microfinance",
