@@ -4,7 +4,7 @@ Saves DividendItem, CompanyFaceValueItem and CompanyEpsItem rows (spider ``divid
 Register in the spider's custom_settings (done in spiders/dividends.py):
     "crawlers.dividend_pipeline.DividendPipeline": 450
 
-The upsert rules live in apps.market_data.services.dividends so they are tested
+The upsert rules live in apps.reports.services.dividends so they are tested
 without Scrapy: (symbol, fiscal_year) for dividends, (symbol, fiscal_year, quarter)
 for EPS.  Re-running a crawl updates, never duplicates.  Items with another
 item_type pass through untouched.
@@ -35,7 +35,7 @@ class DividendPipeline:
         return deferToThread(self._process_sync, item, spider)
 
     def _process_sync(self, item, spider):
-        from apps.market_data.services import dividends
+        from apps.reports.services import dividends
 
         kind = item.get("item_type")
         if kind == "dividend":

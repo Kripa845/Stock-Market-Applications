@@ -16,7 +16,8 @@ from django.test import SimpleTestCase, TestCase
 from rest_framework.test import APIClient
 
 from apps.companies.models import Company
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import DailyPrice
+from apps.floorsheet.models import FloorsheetTransaction
 from apps.market_data.services.trading_days import is_trading_weekday
 from apps.market_intelligence.indicators import REGISTRY, compute, registry_payload, resolve_params
 from apps.market_intelligence.indicators import core, custom, market, momentum

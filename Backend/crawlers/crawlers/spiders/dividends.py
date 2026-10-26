@@ -77,7 +77,7 @@ def _text(html):
 
 def _tracked_symbols():
     _ensure_django()
-    from apps.companies.selection import tracked_active_companies
+    from apps.companies.services.selection import tracked_active_companies
 
     return {symbol.upper() for symbol in tracked_active_companies().values_list("symbol", flat=True)}
 

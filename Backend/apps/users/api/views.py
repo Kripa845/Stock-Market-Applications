@@ -1,0 +1,1049 @@
+
+from django.contrib.auth import get_user_model
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+
+from rest_framework import generics, status
+from rest_framework.permissions import (
+    AllowAny,
+    IsAuthenticated,
+)
+from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.views import APIView
+
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+)
+
+from apps.users.permissions import (HasAppPermission, HasViewMethodPermissions,
+                          is_admin_account, missing_grants)
+
+from apps.users.models import CustomRole, RolePermissionConfig, UserCompanyAccess
+
+from apps.users.api.serializers import (
+    AdminUserCreateSerializer,
+    AdminUserUpdateSerializer,
+    CustomTokenObtainPairSerializer,
+    MeSerializer,
+    UserRegistrationSerializer,
+    UserSerializer,
+    UserCompanyAccessListSerializer,
+)
+from apps.users.api.serializers import (
+    CustomRoleSerializer,
+    ROLE_PERMISSIONS,
+    VALID_PERMISSION_KEYS,
+    validate_permission_dependencies,
+)
+# from apps.users.api.serializers import UserCompanyAccessListSerializer
+User = get_user_model()
+
+def _either(user, *keys):
+    """Require one of ``keys``: the first the user holds, else the first (so the check fails)."""
+    return [next((key for key in keys if user.has_app_permission(key)), keys[0])]
+
+
+def assignment_escalation(request, instance=None):
+    """Permissions a non-admin actor tries to hand out (via role or custom role) but does not hold."""
+    actor = request.user
+    if actor.is_admin():
+        return []
+    wanted = set()
+    cid = request.data.get("custom_role_id")
+    if cid and str(cid).isdigit() and (instance is None or int(cid) != instance.custom_role_id):
+        role = CustomRole.objects.filter(pk=int(cid), is_active=True).first()
+        wanted |= set(role.permissions or []) if role else set()
+    new_role = request.data.get("role")
+    if new_role in (User.Role.ANALYST, User.Role.VIEWER) and (instance is None or new_role != instance.role):
+        cfg = RolePermissionConfig.objects.filter(role_key=new_role, is_active=True).first()
+        wanted |= set(cfg.permissions or []) if cfg else set()
+    return missing_grants(actor, wanted)
+class CustomRoleListCreateAPIView(APIView):
+    """
+    GET:
+        Return all custom roles.
+
+    POST:
+        Create a new custom role.
+
+    Admin only.
+    """
+
+    permission_classes = [
+        HasViewMethodPermissions
+    ]
+
+    def get_required_permissions(self, request):
+        return ["view_roles"] if request.method == "GET" else ["create_roles"]
+
+    def get(self, request):
+        roles = CustomRole.objects.all()
+
+        serializer = CustomRoleSerializer(
+            roles,
+            many=True,
+        )
+
+        return Response(
+            {
+                "roles": serializer.data
+            }
+        )
+
+    def post(self, request):
+        serializer = CustomRoleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        missing = missing_grants(request.user, serializer.validated_data.get("permissions", []))
+        if missing:
+            return Response({"detail": "You cannot grant permissions you do not hold.",
+                             "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
+        role = serializer.save()
+
+        return Response(
+            CustomRoleSerializer(role).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CustomRoleDetailAPIView(APIView):
+    """
+    GET:
+        Get one custom role.
+
+    PATCH:
+        Update custom role.
+
+    DELETE:
+        Delete custom role.
+
+    Admin only.
+    """
+
+    permission_classes = [
+        HasViewMethodPermissions
+    ]
+
+    def get_required_permissions(self, request):
+        return {"GET": ["view_roles"], "PATCH": ["edit_roles"], "PUT": ["edit_roles"],
+                "DELETE": ["delete_roles"]}.get(request.method, [])
+
+    def get_object(self, pk):
+        return get_object_or_404(
+            CustomRole,
+            pk=pk,
+        )
+
+    def get(self, request, pk):
+        role = self.get_object(pk)
+
+        serializer = CustomRoleSerializer(role)
+
+        return Response(
+            serializer.data
+        )
+
+    def patch(self, request, pk):
+        role = self.get_object(pk)
+        actor = request.user
+        if not actor.is_admin() and actor.custom_role_id == role.pk:
+            return Response({"detail": "You cannot edit your own role."}, status=status.HTTP_403_FORBIDDEN)
+        serializer = CustomRoleSerializer(
+            role,
+            data=request.data,
+            partial=True,
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        added = set(serializer.validated_data.get("permissions", [])) - set(role.permissions or [])
+        missing = missing_grants(actor, added)
+        if missing:
+            return Response({"detail": "You cannot grant permissions you do not hold.",
+                             "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
+        role = serializer.save()
+
+        return Response(
+            CustomRoleSerializer(role).data
+        )
+
+    def delete(self, request, pk):
+        role = self.get_object(pk)
+
+        # Do not physically remove the role if users
+        # are assigned to it.
+        role.is_active = False
+        role.save(
+            update_fields=[
+                "is_active",
+                "updated_at",
+            ]
+        )
+
+        # Users assigned to this custom role become
+        # normal viewers.
+        User.objects.filter(
+            custom_role=role
+        ).update(
+            custom_role=None,
+            role=User.Role.VIEWER,
+        )
+
+        return Response(
+            status=status.HTTP_204_NO_CONTENT
+        )
+
+
+class RolePermissionDefinitionsAPIView(APIView):
+    """
+    Returns the permission structure used by
+    the Create Role page.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_roles"
+
+    def get(self, request):
+        groups = []
+
+        for group_key, permissions in ROLE_PERMISSIONS.items():
+            groups.append(
+                {
+                    "key": group_key,
+                    "name": group_key.title(),
+                    "permissions": permissions,
+                }
+            )
+
+        return Response(
+            {
+                "groups": groups
+            }
+        )
+
+# ======================================================
+# LOGIN
+# ======================================================
+
+class CustomTokenObtainPairView(
+    TokenObtainPairView
+):
+    serializer_class = (
+        CustomTokenObtainPairSerializer
+    )
+    # Limits password guessing; rate is REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["auth"].
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+
+# ======================================================
+# REGISTRATION
+# ======================================================
+
+class RegisterAPIView(APIView):
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "auth"
+
+    def post(self, request):
+        serializer = (
+            UserRegistrationSerializer(
+                data=request.data
+            )
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        user = serializer.save()
+
+        return Response(
+            {
+                "message":
+                "Registration successful.",
+                "user":
+                UserSerializer(user).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+# ======================================================
+# CURRENT USER
+# ======================================================
+
+class MeAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(
+            MeSerializer(
+                request.user
+            ).data
+        )
+
+    def patch(self, request):
+        serializer = MeSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        user = serializer.save()
+
+        return Response(
+            MeSerializer(user).data
+        )
+
+
+class MePermissionsAPIView(APIView):
+    """
+    Returns the current user's effective permissions.
+    Admins receive all permission keys.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response(
+            {
+                "permissions": sorted(user.get_app_permissions()),
+                "role": user.role,
+                "custom_role_id": user.custom_role_id,
+                "custom_role_name": user.custom_role.name if user.custom_role else None,
+                "effective_role": user.get_effective_role_name(),
+            }
+        )
+
+
+# ======================================================
+# ADMIN USER MANAGEMENT
+# ======================================================
+
+class AdminUserListCreateAPIView(
+    generics.ListCreateAPIView
+):
+    """
+    Admin-only user management.
+
+    GET  -> list users
+    POST -> create user
+    """
+
+    permission_classes = [HasViewMethodPermissions]
+
+    queryset = User.objects.all()
+
+    def get_required_permissions(self, request):
+        if request.method == "GET":
+            # Role managers need the list to assign roles from the Roles page.
+            return _either(request.user, "view_users", "assign_roles")
+        return ["create_users"]
+
+    def get_queryset(self):
+        queryset = (
+            User.objects
+            .all()
+            .order_by("-date_joined")
+        )
+
+        search = (
+            self.request.query_params
+            .get("search")
+        )
+
+        role = (
+            self.request.query_params
+            .get("role")
+        )
+
+        user_status = (
+            self.request.query_params
+            .get("status")
+        )
+
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
+
+        if role in [
+            User.Role.ADMIN,
+            User.Role.ANALYST,
+            User.Role.VIEWER,
+        ]:
+            queryset = queryset.filter(
+                role=role
+            )
+
+        if user_status == "active":
+            queryset = queryset.filter(
+                is_active=True
+            )
+
+        elif user_status == "inactive":
+            queryset = queryset.filter(
+                is_active=False
+            )
+
+        return queryset
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return AdminUserCreateSerializer
+
+        return UserSerializer
+
+    def create(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        if request.data.get("role") == User.Role.ADMIN and not request.user.is_admin():
+            return Response({"detail": "Only admins can create admin accounts."}, status=status.HTTP_403_FORBIDDEN)
+        missing = assignment_escalation(request)
+        if missing:
+            return Response({"detail": "You cannot assign permissions you do not hold.",
+                             "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
+        serializer = self.get_serializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        user = serializer.save()
+
+        return Response(
+            UserSerializer(user).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+# ======================================================
+# ADMIN USER DETAIL
+# ======================================================
+
+class AdminUserDetailAPIView(
+    generics.RetrieveUpdateDestroyAPIView
+):
+    """
+    Admin-only individual user management.
+    """
+
+    permission_classes = [HasViewMethodPermissions]
+
+    queryset = User.objects.all()
+
+    def get_required_permissions(self, request):
+        if request.method == "GET":
+            return ["view_users"]
+        if request.method == "DELETE":
+            return ["delete_users"]
+
+        required = []
+        fields = request.data.keys()
+        if any(field in fields for field in ("first_name", "last_name", "email", "password")):
+            required.append("edit_users")
+        if any(field in fields for field in ("role", "custom_role_id")):
+            required += _either(request.user, "change_user_roles", "assign_roles")
+        if "is_active" in fields:
+            required.append("activate_users")
+        return required or ["edit_users"]
+
+    def get_serializer_class(self):
+        if self.request.method in [
+            "PUT",
+            "PATCH",
+        ]:
+            return AdminUserUpdateSerializer
+
+        return UserSerializer
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        actor = request.user
+
+        if (
+            is_admin_account(instance)
+            and not actor.is_admin()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Only admins can modify admin accounts."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if (
+            request.data.get("role") == User.Role.ADMIN
+            and instance.role != User.Role.ADMIN
+            and not actor.is_admin()
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Only admins can grant the admin role."
+                    )
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if (
+            is_admin_account(instance)
+            and request.data.get("custom_role_id")
+        ):
+            return Response(
+                {
+                    "detail": (
+                        "Custom roles cannot be assigned "
+                        "to admin accounts."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        missing = assignment_escalation(
+            request,
+            instance,
+        )
+
+        if missing:
+            return Response(
+                {
+                    "detail": (
+                        "You cannot assign permissions "
+                        "you do not hold."
+                    ),
+                    "missing_permissions": missing,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # Prevent role changes on admin accounts by non-superusers
+        new_role = request.data.get("role")
+        if (
+            instance.role == User.Role.ADMIN
+            and not request.user.is_superuser
+            and new_role is not None
+            and new_role != User.Role.ADMIN
+        ):
+            return Response(
+                {"detail": "Admin user roles cannot be changed."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Prevent self-demotion for admins
+        if (
+            instance.id == request.user.id
+            and new_role is not None
+            and new_role != User.Role.ADMIN
+            and request.user.role == User.Role.ADMIN
+        ):
+            return Response(
+                {"detail": "You cannot demote your own admin account."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().update(request, *args, **kwargs)
+
+    def destroy(
+        self,
+        request,
+        *args,
+        **kwargs,
+    ):
+        instance = self.get_object()
+
+        if instance.id == request.user.id:
+            return Response(
+                {
+                    "detail":
+                    "You cannot delete your "
+                    "own account."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Prevent deleting admin accounts (only superusers can)
+        if (instance.role == User.Role.ADMIN or instance.is_superuser) and not request.user.is_superuser:
+            return Response(
+                {"detail": "Admin accounts cannot be deleted."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        self.perform_destroy(instance)
+
+        return Response(
+            status=status.HTTP_204_NO_CONTENT
+        )
+# ======================================================
+# ADMIN ANALYSTS
+# ======================================================
+
+class AnalystListAPIView(
+    generics.ListAPIView
+):
+    permission_classes = [HasAppPermission]
+    permission_key = "view_users"
+
+    serializer_class = UserSerializer
+
+    def get_queryset(self):
+        queryset = (
+            User.objects
+            .filter(
+                role=User.Role.ANALYST
+            )
+            .order_by("-date_joined")
+        )
+
+        search = (
+            self.request.query_params
+            .get("search")
+        )
+
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search)
+                | Q(email__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+            )
+
+        return queryset
+
+
+# ======================================================
+# ROLE PERMISSIONS
+# ======================================================
+
+class RolePermissionDetailAPIView(APIView):
+    """
+    GET/PATCH a single built-in editable role
+    (analyst or viewer).
+
+    Admin only.
+    """
+
+    permission_classes = [HasViewMethodPermissions]
+
+    def get_required_permissions(self, request):
+        return ["view_roles"] if request.method == "GET" else ["edit_roles"]
+
+    def get_object(self, role_key):
+        config = (
+            RolePermissionConfig.objects
+            .filter(
+                role_key=role_key,
+                is_active=True,
+            )
+            .first()
+        )
+
+        if not config:
+            return None
+
+        return config
+
+    def get(self, request, role_key):
+        config = self.get_object(role_key)
+
+        if not config:
+            return Response(
+                {
+                    "detail": "Role not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "key": config.role_key,
+                "name": config.name,
+                "description": config.description,
+                "permissions": list(
+                    config.permissions or []
+                ),
+                "editable":True
+            }
+        )
+
+    def patch(self, request, role_key):
+        if role_key == "admin":
+            return Response(
+                {
+                    "detail": (
+                        "Admin permissions cannot be "
+                        "modified through this endpoint."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        config = self.get_object(role_key)
+
+        if not config:
+            return Response(
+                {
+                    "detail": "Role not found."
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        permissions = request.data.get(
+            "permissions"
+        )
+
+        if not isinstance(permissions, list):
+            return Response(
+                {
+                    "permissions": [
+                        "Permissions must be a list."
+                    ]
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        actor = request.user
+        if not actor.is_admin():
+            if not actor.custom_role_id and actor.role == role_key:
+                return Response({"detail": "You cannot edit your own role."}, status=status.HTTP_403_FORBIDDEN)
+            missing = missing_grants(actor, set(permissions) - set(config.permissions or []))
+            if missing:
+                return Response({"detail": "You cannot grant permissions you do not hold.",
+                                 "missing_permissions": missing}, status=status.HTTP_403_FORBIDDEN)
+
+        invalid = [
+            permission
+            for permission in permissions
+            if permission not in VALID_PERMISSION_KEYS
+        ]
+
+        if invalid:
+            return Response(
+                {
+                    "invalid_permissions": invalid
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Dependency validation — prerequisites must be included
+        dep_errors = validate_permission_dependencies(permissions)
+        if dep_errors:
+            return Response(
+                {"permissions": dep_errors},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        config.permissions = list(
+            dict.fromkeys(permissions)
+        )
+        config.save()
+
+        return Response(
+            {
+                "key": config.role_key,
+                "name": config.name,
+                "description": config.description,
+                "permissions": list(
+                    config.permissions or []
+                ),
+                "editable":True
+            }
+        )
+
+    # PUT is the documented replacement operation; PATCH is retained for
+    # backwards compatibility with the existing admin page.
+    put = patch
+
+
+class RolePermissionsAPIView(APIView):
+    """
+    Returns the editable role permission matrix.
+
+    Admin is NOT included as an editable role.
+    Admin always has full access.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_roles"
+
+    def get(self, request):
+        configs = (
+            RolePermissionConfig.objects
+            .filter(is_active=True)
+            .order_by("role_key")
+        )
+
+        roles = []
+        for config in configs:
+            roles.append(
+                {
+                    "key": config.role_key,
+                    "name": config.name,
+                    "description": config.description,
+                    "permissions": list(
+                        config.permissions or []
+                    ),
+                    "editable":True,
+                }
+            )
+
+        custom_roles_qs = (
+            CustomRole.objects
+            .prefetch_related("users")
+        )
+
+        custom_roles = []
+        for role in custom_roles_qs:
+            custom_roles.append(
+                {
+                    "id": role.id,
+                    "key": f"custom:{role.id}",
+                    "name": role.name,
+                    "description": role.description,
+                    "permissions": list(
+                        role.permissions or []
+                    ),
+                    "editable": True,
+                    "is_active": role.is_active,
+                    "user_count": role.users.count(),
+                }
+            )
+
+        return Response(
+            {
+                "roles": roles,
+                "custom_roles": custom_roles,
+            }
+        )
+
+
+# ======================================================
+
+# ROLE STATISTICS
+# ======================================================
+
+class RoleStatisticsAPIView(APIView):
+    permission_classes = [HasAppPermission]
+    permission_key = "view_roles"
+
+    def get(self, request):
+        return Response(
+            {
+                "total_users":
+                    User.objects.count(),
+
+                "admins":
+                    User.objects.filter(
+                        role=User.Role.ADMIN
+                    ).count(),
+
+                "analysts":
+                    User.objects.filter(
+                        role=User.Role.ANALYST
+                    ).count(),
+
+                "viewers":
+                    User.objects.filter(
+                        role=User.Role.VIEWER
+                    ).count(),
+
+                "active_users":
+                    User.objects.filter(
+                        is_active=True
+                    ).count(),
+
+                "inactive_users":
+                    User.objects.filter(
+                        is_active=False
+                    ).count(),
+            }
+         )
+
+
+# ======================================================
+
+
+# ======================================================
+# USER COMPANY ACCESS
+# ======================================================
+
+# from users.serializers import UserCompanyAccessListSerializer  # noqa: E402
+
+# ======================================================
+# USER COMPANY ACCESS
+# ======================================================
+
+class UserCompanyAccessAPIView(APIView):
+    """
+    GET:
+        Return ALL active companies for the selected user.
+
+        Existing UserCompanyAccess rows are returned with their
+        actual status.
+
+        If a company has no UserCompanyAccess row, it is returned
+        with status=0 (OFF).
+
+    POST:
+        Full replacement of company access.
+
+        Body:
+        {
+            "company_access": [
+                {"company_id": 1, "status": 1},
+                {"company_id": 2, "status": 0}
+            ]
+        }
+
+        Requires:
+            edit_users permission
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "edit_users"
+
+    def _get_target_user(self, pk):
+        return get_object_or_404(User, pk=pk)
+
+    def get(self, request, pk):
+        target = self._get_target_user(pk)
+
+        # Non-admin users cannot inspect admin accounts.
+        if is_admin_account(target) and not request.user.is_admin():
+            return Response(
+                {
+                    "detail": "Only admins can view admin accounts."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # --------------------------------------------------
+        # Get existing access records for this user.
+        # --------------------------------------------------
+
+        access_map = {
+            access.company_id: access.status
+            for access in UserCompanyAccess.objects.filter(
+                user=target
+            )
+        }
+
+        # --------------------------------------------------
+        # Get ALL active companies.
+        #
+        # If a company does not have a UserCompanyAccess row,
+        # it will still appear in the response with status=0.
+        # --------------------------------------------------
+        from apps.companies.models import Company
+
+        companies = (
+            Company.objects
+            .filter(is_active=True)
+            .order_by("name")
+        )
+
+        company_access = [
+            {
+                "company_id": company.id,
+                "company_symbol": company.symbol,
+                "company_name": company.name,
+                "status": access_map.get(company.id, 0),
+            }
+            for company in companies
+        ]
+
+        return Response(
+            {
+                "company_access": company_access
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request, pk):
+        target = self._get_target_user(pk)
+
+        # Non-admin users cannot modify admin accounts.
+        if is_admin_account(target) and not request.user.is_admin():
+            return Response(
+                {
+                    "detail": "Only admins can modify admin accounts."
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # --------------------------------------------------
+        # Validate submitted company access.
+        # --------------------------------------------------
+
+        serializer = UserCompanyAccessListSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        # --------------------------------------------------
+        # Replace the user's company access.
+        # --------------------------------------------------
+
+        from apps.users.company_access import set_company_access
+
+        set_company_access(
+            target,
+            serializer.validated_data["company_access"]
+        )
+
+        # --------------------------------------------------
+        # Return the complete saved state.
+        #
+        # This is important because the frontend expects
+        # ALL active companies, including OFF companies.
+        # --------------------------------------------------
+        from apps.companies.models import Company
+
+        access_map = {
+            access.company_id: access.status
+            for access in UserCompanyAccess.objects.filter(
+                user=target
+            )
+        }
+
+        companies = (
+            Company.objects
+            .filter(is_active=True)
+            .order_by("name")
+        )
+
+        company_access = [
+            {
+                "company_id": company.id,
+                "company_symbol": company.symbol,
+                "company_name": company.name,
+                "status": access_map.get(company.id, 0),
+            }
+            for company in companies
+        ]
+
+        return Response(
+            {
+                "company_access": company_access
+            },
+            status=status.HTTP_200_OK,
+        )

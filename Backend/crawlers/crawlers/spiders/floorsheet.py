@@ -29,8 +29,8 @@ os.environ.setdefault(
 django.setup()
 
 
-from apps.companies.selection import select_crawl_companies
-from apps.market_data.models import FloorsheetTransaction
+from apps.companies.services.selection import select_crawl_companies
+from apps.floorsheet.models import FloorsheetTransaction
 from apps.market_data.services.price_fields import SYNTHETIC_TRANSACTION_PREFIX
 from apps.market_data.services.trading_calendar import (
     DEFAULT_SAMPLE_OFFSETS,

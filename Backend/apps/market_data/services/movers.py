@@ -23,7 +23,8 @@ from django.db.models import (
 from django.db.models.functions import Abs, Cast, Coalesce, Exp, Ln, RowNumber
 
 from apps.crawler_runs.models import CrawlRun
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import DailyPrice
+from apps.floorsheet.models import FloorsheetTransaction
 from apps.market_data.services.trading_calendar import latest_trading_date, previous_trading_sessions
 from apps.market_data.services.market_stats import PRICE_SOURCE, tracked_companies
 

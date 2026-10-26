@@ -1,18 +1,18 @@
 import json
 from pathlib import Path
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from apps.companies.models import Company
-from apps.companies.utils import normalize_symbol
+from apps.companies.services.utils import normalize_symbol
 
 
 class Command(BaseCommand):
     help = "Import company logo URLs from company_logos.json"
 
     def handle(self, *args, **options):
-        # company_logos.json is located beside manage.py
-        json_path = Path("company_logos.json")
+        json_path = Path(settings.BASE_DIR) / "data" / "company_logos.json"
 
         if not json_path.exists():
             self.stdout.write(

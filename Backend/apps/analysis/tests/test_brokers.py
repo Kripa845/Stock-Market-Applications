@@ -12,7 +12,7 @@ from django.test import TestCase
 
 from apps.analysis.services.brokers import build_broker_activity
 from apps.companies.models import Company
-from apps.market_data.models import FloorsheetTransaction
+from apps.floorsheet.models import FloorsheetTransaction
 
 
 class BrokerTestBase(TestCase):

@@ -15,7 +15,7 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce, Trim
 
-from apps.market_data.models import FloorsheetTransaction
+from apps.floorsheet.models import FloorsheetTransaction
 
 
 ZERO = Decimal("0")

@@ -48,7 +48,7 @@ def is_market_day(value: date | None = None) -> bool:
 
 def is_market_open(moment: datetime | None = None) -> bool:
     """True during the 11:00-15:00 Asia/Kathmandu session of a market day (holidays included)."""
-    from apps.market_data.services.intraday_candles import NPT, session_bounds
+    from apps.floorsheet.services.intraday_candles import NPT, session_bounds
 
     moment = (moment or timezone.now()).astimezone(NPT)
     session_open, session_close = session_bounds(moment.date())

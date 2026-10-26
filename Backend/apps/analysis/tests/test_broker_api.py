@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from apps.companies.models import Company
 from apps.crawler_runs.models import CrawlRun
-from apps.market_data.models import Broker, FloorsheetTransaction
+from apps.floorsheet.models import Broker, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle, RawArticle
 from apps.users.models import CustomRole, User, UserCompanyAccess
 

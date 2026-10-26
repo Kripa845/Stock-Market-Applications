@@ -36,7 +36,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from django.db import transaction
 
 from apps.analysis.models import DailyAnalysis
-from apps.companies.selection import tracked_active_companies
+from apps.companies.services.selection import tracked_active_companies
 from apps.market_data.models import DailyPrice
 from apps.market_data.services.price_source import with_crawled_price
 from apps.market_intelligence.indicators.price import fractals

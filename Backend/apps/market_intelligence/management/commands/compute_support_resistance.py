@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from apps.companies.models import Company
-from apps.companies.selection import parse_symbols
+from apps.companies.services.selection import parse_symbols
 from apps.market_intelligence.models import SupportResistanceSet
 from apps.market_intelligence.services.support_resistance import compute_support_resistance
 

@@ -21,7 +21,8 @@ import logging
 
 from django.db.models import BigIntegerField, Count, Exists, F, OuterRef, Subquery, Sum
 
-from apps.market_data.models import DailyPrice, FloorsheetTransaction
+from apps.market_data.models import DailyPrice
+from apps.floorsheet.models import FloorsheetTransaction
 
 logger = logging.getLogger(__name__)
 
