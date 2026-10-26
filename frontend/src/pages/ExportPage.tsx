@@ -1,14 +1,4 @@
-/**
- * ExportPage.tsx
- *
- * Export Data / Reports page.
- *
- * UI permission gate: "view_reports" opens the page and its company list
- * (/api/reports/export/companies/); "export_reports" enables the download.
- *
- * Backend permission gate: every API call is independently authorised
- * server-side (HasAppPermission). Hiding the UI is NOT the security mechanism.
- */
+
 
 import { useEffect, useState } from 'react';
 import {

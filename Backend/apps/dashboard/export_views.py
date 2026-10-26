@@ -1,34 +1,4 @@
-"""
-Export Data / Reports
-=====================
 
-Permission gate: ``export_reports``  (existing key — wired through the
-existing dynamic role/permission system; no role name is hard-coded here).
-
-Two-level authorisation on every request
------------------------------------------
-1. HasAppPermission checks ``export_reports`` via the existing
-   ``user.has_app_permission()`` mechanism.
-2. Every endpoint that accepts ``company_id`` validates that the company
-   exists and is active before touching any data.
-
-Supported exports
------------------
-GET /api/reports/export/news/        → CSV | XLSX | PDF
-GET /api/reports/export/trading/     → CSV | XLSX | PDF
-GET /api/reports/export/floorsheet/  → CSV | XLSX
-GET /api/reports/export/report/      → PDF  (combined analysis report)
-GET /api/reports/export/companies/   → JSON list of all active companies
-                                        (used to populate the frontend dropdown)
-
-Common query parameters
------------------------
-format      csv | xlsx | pdf   (default: csv)
-company_id  integer             (optional — filter to one company)
-date_from   YYYY-MM-DD          (optional)
-date_to     YYYY-MM-DD          (optional)
-sentiment   positive|negative|neutral  (news only)
-"""
 
 import csv
 import io
@@ -98,14 +68,7 @@ def _forbidden(msg: str):
 
 
 def _resolve_companies(company_id_strs, user):
-    """
-    Validate and return a list of Company instances.
-    Returns (companies_list, error_response_or_None).
-
-    If company_id_strs is empty/None  → ([], None) — no filter requested
-    If any company is not found/inactive → (None, 400 response)
-    If all valid                          → (companies, None)
-    """
+  
     if not company_id_strs:
         accessible_ids = get_accessible_company_ids(user)
         qs = Company.objects.filter(is_active=True)
@@ -316,14 +279,7 @@ class ExportContentNegotiation(DefaultContentNegotiation):
 
 
 class ExportCompanyListAPIView(APIView):
-    """
-    GET /api/reports/export/companies/
-
-    Returns the list of all active companies — used by the frontend to
-    populate the company selector in the Export UI.
-
-    Permission: view_reports (opening the Reports page; each download needs export_reports)
-    """
+    
     permission_classes = [HasAppPermission]
     permission_key = "view_reports"
 
@@ -750,18 +706,7 @@ class ExportBrokerActivityAPIView(APIView):
 
 
 class ExportFloorsheetAPIView(APIView):
-    """
-    GET /api/reports/export/floorsheet/
-
-    Query params
-    ------------
-    format      csv | xlsx  (default: csv; PDF not offered — too many rows)
-    company_id  integer      (optional)
-    date_from   YYYY-MM-DD   (optional)
-    date_to     YYYY-MM-DD   (optional)
-
-    Permission: export_reports
-    """
+    
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
     content_negotiation_class = ExportContentNegotiation
@@ -860,24 +805,7 @@ class ExportFloorsheetAPIView(APIView):
 # ============================================================
 
 class ExportReportAPIView(APIView):
-    """
-    GET /api/reports/export/report/
-
-    Generates a combined analysis report for a company over a date range.
-    Includes: trading summary, news summary, sentiment distribution,
-    floorsheet summary, and analysis metrics.
-
-    Query params
-    ------------
-    format      pdf | xlsx  (default: pdf)
-    company_id  integer     (required for a meaningful report;
-                             optional — if omitted a market-wide summary
-                             is generated)
-    date_from   YYYY-MM-DD  (optional)
-    date_to     YYYY-MM-DD  (optional)
-
-    Permission: export_reports
-    """
+   
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
     content_negotiation_class = ExportContentNegotiation

@@ -345,3 +345,62 @@ class CompanyEarnings(models.Model):
 
     def __str__(self):
         return f"{self.symbol} {self.fiscal_year} Q{self.quarter}: EPS {self.eps}"
+
+
+class QuarterlyReport(models.Model):
+    """
+    Figures as filed in a tracked company's quarterly report (``manage.py import_quarterly_reports``).
+    Only raw filed numbers are stored; PE, PB, yields and YoY are calculated per request
+    (services/quarterly_reports.py) so they follow the latest price.  Filings are often
+    unaudited and later revised: a re-import overwrites the row (unique company, FY, quarter).
+
+    Figures are cumulative for the fiscal year.  ``eps`` is the annualized EPS as filed; when
+    it is blank it is derived from net profit / share count, annualized by 4 / quarter.
+    """
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="quarterly_reports")
+    fiscal_year = models.CharField(max_length=20, help_text="Nepali fiscal year, e.g. 2082/2083.")
+    quarter = models.PositiveSmallIntegerField()
+    reported_on = models.DateField(null=True, blank=True)
+
+    net_profit = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    net_worth = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    distributable_profit = models.DecimalField(max_digits=20, decimal_places=2, null=True, blank=True)
+    share_count = models.BigIntegerField(null=True, blank=True)
+
+    eps = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    book_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    dpps = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # Kept for reference only: ratios always use the latest crawled price.
+    price_on_report_date = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["company__symbol", "-fiscal_year", "-quarter"]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "fiscal_year", "quarter"], name="unique_quarterly_report"),
+        ]
+        indexes = [models.Index(fields=["fiscal_year", "quarter"])]
+
+    def __str__(self):
+        return f"{self.company.symbol} {self.fiscal_year} Q{self.quarter}"
+
+
+class YearlyDPPS(models.Model):
+    """Distributable profit per share for a full fiscal year; feeds the N-year average."""
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="yearly_dpps")
+    fiscal_year = models.CharField(max_length=20)
+    dpps = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        verbose_name = "Yearly DPPS"
+        verbose_name_plural = "Yearly DPPS"
+        ordering = ["company__symbol", "-fiscal_year"]
+        constraints = [
+            models.UniqueConstraint(fields=["company", "fiscal_year"], name="unique_yearly_dpps"),
+        ]
+
+    def __str__(self):
+        return f"{self.company.symbol} {self.fiscal_year}: DPPS {self.dpps}"

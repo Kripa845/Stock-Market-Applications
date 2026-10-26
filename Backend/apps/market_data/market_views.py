@@ -11,6 +11,7 @@ never share a cached response.
 """
 
 import hashlib
+import re
 from datetime import datetime
 from decimal import Decimal
 
@@ -33,7 +34,9 @@ from apps.users.models import Watchlist, WatchlistItem
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
 from .models import DividendAnnouncement
-from .services import dividends, heatmap, live_prices, market_overview, market_stats, movers, top_movers
+from .services import (
+    dividends, heatmap, live_prices, market_overview, market_stats, movers, quarterly_reports, top_movers,
+)
 from .services import watchlist as watchlist_service
 
 CACHE_SECONDS = 60
@@ -409,9 +412,70 @@ class DividendListAPIView(APIView):
         return Response(payload)
 
 
+FISCAL_YEAR_PARAM = re.compile(r"^\d{4}/(\d{2}|\d{4})$")
+
+
+def _quarterly_params(request, *, period=True):
+    """(sector_code, fiscal_year, quarter, error_response) from the query string."""
+    def bad(detail):
+        return None, None, None, Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
+
+    sector = request.query_params.get("sector", "").strip().upper()
+    if sector not in quarterly_reports.SECTORS:
+        return bad(f"sector must be one of {sorted(quarterly_reports.SECTORS)}.")
+    if not period:
+        return sector, None, None, None
+
+    raw_year = request.query_params.get("fiscal_year", "").strip()
+    fiscal_year = None
+    if raw_year:
+        fiscal_year = dividends.normalise_fiscal_year(raw_year) if FISCAL_YEAR_PARAM.match(raw_year) else ""
+        if not fiscal_year:
+            return bad("fiscal_year must look like 2082/83 or 2082/2083.")
+
+    raw_quarter = request.query_params.get("quarter", "").strip()
+    quarter = None
+    if raw_quarter:
+        if raw_quarter not in ("1", "2", "3", "4"):
+            return bad("quarter must be 1, 2, 3 or 4.")
+        quarter = int(raw_quarter)
+    return sector, fiscal_year, quarter, None
+
+
+class QuarterlyReportAPIView(APIView):
+    """
+    GET /api/market/quarterly-report/?sector=BANKING&fiscal_year=2082/83&quarter=4
+
+    The tracked companies of one sector that filed that quarter, with PE / PB / yields / YoY
+    calculated on the latest crawled close (services.quarterly_reports).  A missing
+    fiscal_year / quarter means the latest one filed in the sector.  Not narrowed to the
+    caller's companies, like the dividends list.  Null values are "not meaningful".
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        sector, fiscal_year, quarter, error = _quarterly_params(request)
+        if error:
+            return error
+        return Response(quarterly_reports.quarterly_report(sector, fiscal_year, quarter))
+
+
+class QuarterlyReportPeriodsAPIView(APIView):
+    """GET /api/market/quarterly-report/periods/?sector=BANKING -> fiscal years and quarters filed, newest first."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        sector, _, _, error = _quarterly_params(request, period=False)
+        if error:
+            return error
+        return Response({"sector": sector, "periods": quarterly_reports.periods(sector)})
+
+
 class WatchlistAPIView(APIView):
     """
-    GET    /api/market/watchlist/            the user's default list with latest ltp / change
+    GET    /api/market/watchlist/          the user's default list with latest ltp / change
     POST   /api/market/watchlist/            {"symbol": "NABIL"}
     DELETE /api/market/watchlist/<symbol>/
     Not cached: it is per user and changes on every POST / DELETE.

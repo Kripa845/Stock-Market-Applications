@@ -4,6 +4,7 @@ export const ROUTE_RULES: Record<string, RouteRule> = {
   '/market':            { permissions: ['view_companies', 'view_market_data'], mode: 'all' },
   '/market/indices':    { permissions: ['view_market_data'], mode: 'all' },
   '/market/dividends':  { permissions: ['view_market_data'], mode: 'all' },
+  '/market/quarterly-report': { permissions: ['view_market_data'], mode: 'all' },
   '/market/gainers':    { permissions: ['view_market_data'], mode: 'all' },
   '/market/losers':     { permissions: ['view_market_data'], mode: 'all' },
   '/market/turnover':   { permissions: ['view_market_data'], mode: 'all' },
