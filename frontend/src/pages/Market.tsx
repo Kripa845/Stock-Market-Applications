@@ -7,7 +7,7 @@ import EmptyState from '../components/common/EmptyState';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
 import { useLiveRefresh } from '../hooks/useLiveRefresh';
-import MarketHeatmap from '../components/market-intelligence/MarketHeatmap';
+import WatchlistHeatmap from '../components/market/WatchlistHeatmap';
 import TrackedTopCards from '../components/market/TrackedTopCards';
 import TopMoversCards from '../components/market/TopMoversCards';
 import CompanyLogo from '../components/companies/CompanyLogo';
@@ -24,16 +24,23 @@ export default function MarketPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const loadCompanies = useCallback(() => {
-    setLoading(true);
+  const fetchCompanies = useCallback((silent: boolean) => {
+    // Background refreshes keep the table mounted; only the initial load / new search shows the spinner.
+    if (!silent) setLoading(true);
     getCompanies({ search: search || undefined, status: 'active' })
-      .then((data) => setCompanies(data.results))
-      .catch(() => setError('Unable to load companies.'))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        setCompanies(data.results);
+        setError('');
+      })
+      .catch(() => { if (!silent) setError('Unable to load companies.'); })
+      .finally(() => { if (!silent) setLoading(false); });
   }, [search]);
 
+  const loadCompanies = useCallback(() => fetchCompanies(false), [fetchCompanies]);
+  const refreshCompanies = useCallback(() => fetchCompanies(true), [fetchCompanies]);
+
   useEffect(() => { loadCompanies(); }, [loadCompanies]);
-  useLiveRefresh(loadCompanies);
+  useLiveRefresh(refreshCompanies);
 
   return (
     <div className="space-y-8">
@@ -54,7 +61,7 @@ export default function MarketPage() {
 
       <TrackedTopCards />
 
-      <MarketHeatmap />
+      <WatchlistHeatmap />
 
       <Section
         title="All companies"

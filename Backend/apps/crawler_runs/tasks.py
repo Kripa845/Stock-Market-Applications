@@ -100,12 +100,7 @@ def _finish_run(crawl_run_id, *, success, results=None, logs=""):
     name="apps.crawler_runs.tasks.run_crawl",
 )
 def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
-    """
-    Execute all spiders belonging to a CrawlRun.
-
-    Guarantees that ``completed_at`` is always written, even when the
-    task raises an exception or is killed by the Celery time limit.
-    """
+   
     try:
         crawl_run = CrawlRun.objects.get(pk=crawl_run_id)
     except CrawlRun.DoesNotExist:
@@ -228,11 +223,7 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
         raise
 
     finally:
-        # ------------------------------------------------------------------
-        # SAFETY NET — always clear the PID so the record is never left
-        # pointing at a dead process.  _finish_run already sets
-        # completed_at; this guard is a second line of defence.
-        # ------------------------------------------------------------------
+     
         try:
             CrawlRun.objects.filter(pk=crawl_run_id).update(process_id=None)
         except Exception:
@@ -240,11 +231,7 @@ def run_crawl(self, crawl_run_id, spider_name=None, spider_args=None):
 
 
 def _mark_failed(crawl_run_id, reason: str) -> None:
-    """
-    Unconditionally mark a CrawlRun as FAILED with a reason.
-
-    Safe to call from exception handlers; never raises.
-    """
+   
     try:
         updated = CrawlRun.objects.filter(
             pk=crawl_run_id,
@@ -265,18 +252,11 @@ def _mark_failed(crawl_run_id, reason: str) -> None:
         logger.exception("_mark_failed failed for CrawlRun #%s.", crawl_run_id)
 
 
-# -------
-# Scheduled: hourly news crawl
-# -------
+
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_all_news")
 def crawl_all_news():
-    """
-    Scheduled hourly news crawl.
-
-    Skipped if a news crawl is already PENDING or RUNNING, so a slow
-    crawl that overruns the 1-hour window doesn't create a duplicate.
-    """
+    
     if _has_active_crawl(CrawlRun.CrawlType.NEWS):
         logger.info(
             "crawl_all_news: skipping — a news crawl is already active."
@@ -309,13 +289,7 @@ def crawl_all_news():
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_daily_prices")
 def crawl_daily_prices():
-    """
-    Scheduled daily trading-data crawl.
-
-    Chains ``derive_price_fields_task`` (transactions), ``rebuild_all_analysis``
-    and ``compute_support_resistance_task`` so VWAP / volume baseline / pressure
-    and the S&R levels are recomputed immediately after fresh prices land.
-    """
+   
     closed = _market_closed_today("crawl_daily_prices")
     if closed:
         return closed
@@ -417,15 +391,7 @@ def crawl_dividends():
 
 @shared_task(name="apps.crawler_runs.tasks.crawl_floorsheet")
 def crawl_floorsheet():
-    """
-    Scheduled daily floorsheet crawl in ``mode=latest``: every trade for every
-    tracked company on the latest session.  ShareSansar's company-floor-sheet
-    endpoint only returns the current session (a past date returns
-    recordsFiltered=0), so ``mode=full`` cannot back-fill anything and would
-    only send ~60 empty requests per company; it stays available for manual
-    runs.  Chains ``derive_price_fields_task`` so DailyPrice.transactions is
-    filled from the new trades.
-    """
+    
     closed = _market_closed_today("crawl_floorsheet")
     if closed:
         return closed
@@ -532,13 +498,7 @@ def run_full_crawl_pipeline(crawl_run_id):
 
 @shared_task(name="apps.crawler_runs.tasks.recover_stale_crawls")
 def recover_stale_crawls(max_age_minutes: int = 90) -> dict:
-    """
-    Celery-callable version of ``manage.py recover_crawls``.
-
-    Marks RUNNING/PENDING CrawlRuns that are older than
-    ``max_age_minutes`` as FAILED.  Runs that are newer than the
-    threshold are left untouched.
-    """
+   
     from datetime import timedelta
 
     cutoff = timezone.now() - timedelta(minutes=max_age_minutes)

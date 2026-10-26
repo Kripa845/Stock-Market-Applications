@@ -37,6 +37,11 @@ class LivePricesTests(TestCase):
         self.assertEqual(up.prices_updated_at.astimezone(live_prices.NPT).strftime("%H:%M"), "11:59")
         self.assertIsNone(Company.objects.get(symbol="OTHER").ltp)  # untracked companies are not touched
 
+    def test_sync_stores_session_volume_and_turnover(self):
+        self.sync([{**feed_row("UP", 105, 100), "totalTradeQuantity": 6151, "totalTradeValue": 3355875.5}])
+        up = Company.objects.get(symbol="UP")
+        self.assertEqual((up.session_volume, up.session_turnover), (6151, Decimal("3355875.50")))
+
     def test_movers_rank_only_companies_that_traded_in_the_latest_session(self):
         self.sync([
             feed_row("OLD", 90, 80, at="2026-10-09 14:59:00"),   # last traded on an earlier session

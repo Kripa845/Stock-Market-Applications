@@ -56,7 +56,7 @@ const NAV_ITEMS: NavItem[] = [
     to: '/dashboard',
   },
 
-  { type: 'divider', label: 'Market' },
+  // { type: 'divider', label: 'Market' },
 
   {
     label: 'Market Overview',
@@ -98,6 +98,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Top Brokers', icon: Trophy, to: '/top-brokers' },
       { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
       { label: 'Broker List', icon: List, to: '/brokers' },
+      { label: 'Broker Accumulation and Broker Distribution', icon: List, to: '/brokers' },
     ],
   },
   {
@@ -119,7 +120,7 @@ const NAV_ITEMS: NavItem[] = [
     requiredPermissions: ['view_analysis'],
   },
 
-  { type: 'divider', label: 'News' },
+  // { type: 'divider', label: 'News' },
 
   {
     label: 'News Feed',
@@ -127,7 +128,7 @@ const NAV_ITEMS: NavItem[] = [
     to: '/news',
   },
 
-  { type: 'divider', label: 'Data Collection' },
+  // { type: 'divider', label: 'Data Collection' },
 
   {
     label: 'Crawl Management',
@@ -135,7 +136,7 @@ const NAV_ITEMS: NavItem[] = [
     to: '/crawl',
   },
 
-  { type: 'divider', label: 'Reports' },
+  // { type: 'divider', label: 'Reports' },
 
   {
     label: 'Reports',
@@ -144,7 +145,7 @@ const NAV_ITEMS: NavItem[] = [
     requiredPermissions: ['view_reports'],
   },
 
-  { type: 'divider', label: 'Administration' },
+  // { type: 'divider', label: 'Administration' },
 
   {
     label: 'User Management',

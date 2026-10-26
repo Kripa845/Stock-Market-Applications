@@ -215,9 +215,14 @@ def sync_live_prices(companies=None, rows=None):
         if ltp is None or traded_at is None:
             continue
         company.ltp, company.previous_close, company.prices_updated_at = ltp, previous_close, traded_at
+        volume = _decimal(row.get("totalTradeQuantity"))
+        company.session_volume = None if volume is None else int(volume)
+        company.session_turnover = _decimal(row.get("totalTradeValue"))
         changed.append(company)
     if changed:
-        type(changed[0]).objects.bulk_update(changed, ["ltp", "previous_close", "prices_updated_at"])
+        type(changed[0]).objects.bulk_update(
+            changed, ["ltp", "previous_close", "prices_updated_at", "session_volume", "session_turnover"]
+        )
     record_successful_fetch()  # reached only when the fetch and the save both succeeded
     return {
         "feed_rows": len(rows),

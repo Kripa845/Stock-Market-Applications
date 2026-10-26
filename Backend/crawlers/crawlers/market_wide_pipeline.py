@@ -1,14 +1,3 @@
-"""
-Saves MarketStockDailyItem rows (whole NEPSE market).  Index values are not crawled
-here: they come from NEPSE's feed (services/nepse_indices) with ShareSansar as the
-fallback (services/sharesansar_indices).
-
-Register in the spider's custom_settings (done in market_stocks):
-    "crawlers.market_wide_pipeline.MarketWidePipeline": 450
-
-update_or_create on (symbol, date): re-running a crawl updates,
-never duplicates.  Items with another item_type pass through untouched.
-"""
 
 import logging
 import os

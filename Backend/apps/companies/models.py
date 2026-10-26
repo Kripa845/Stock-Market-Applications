@@ -27,6 +27,11 @@ class Company(models.Model):
     ltp = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     previous_close = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     prices_updated_at = models.DateTimeField(null=True, blank=True)
+    # Shares traded / turnover (NPR) so far in the session of prices_updated_at, from the same live feed.
+    session_volume = models.BigIntegerField(null=True, blank=True)
+    session_turnover = models.DecimalField(max_digits=18, decimal_places=2, null=True, blank=True)
+    # Market cap = ltp x listed_shares.  Edited in the admin or filled by `manage.py sync_listed_shares`.
+    listed_shares = models.BigIntegerField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "Companies"

@@ -55,7 +55,7 @@ const LoginPage: React.FC = () => {
 
       <div
         className="
-          auth-side
+          auth-side auth-side--login
           hidden md:flex md:w-1/2
           border-r border-bg-border
           items-center justify-center

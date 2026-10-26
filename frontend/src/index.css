@@ -840,6 +840,17 @@ html[data-theme="light"] .card {
   background: #02030F url('./assets/images/login-worldmap.jpg') center / 130% auto no-repeat;
 }
 
+/* Login variant: globe with a rising candlestick chart. The source is landscape (2504x1668), so cover crops
+   the sides of the tall panel; anchored slightly right to keep both the globe and the rally in view. */
+.auth-side--login {
+  background: #0A0F1A url('./assets/images/login-globe-rally.jpg') 60% center / cover no-repeat;
+}
+
+/* Lighter tint than the default so the image stays visible; darker on the left behind the text. */
+.auth-side.auth-side--login::before {
+  background: linear-gradient(90deg, rgba(10, 7, 24, 0.7) 0%, rgba(30, 12, 70, 0.35) 60%, rgba(10, 7, 24, 0.2) 100%);
+}
+
 .auth-side::before {
   content: '';
   position: absolute;
@@ -859,7 +870,7 @@ html[data-theme="light"] .card {
   overflow: hidden;
   border-radius: 1rem;
   border: 1px solid rgba(139, 92, 246, 0.25);
-  background: #0A0718 url('./assets/images/dashboard-banner.jpg') right center / cover no-repeat;
+  background: #0A0718;
 }
 
 .dashboard-banner::before {
@@ -883,4 +894,13 @@ html[data-theme="light"] .card {
   .dashboard-banner::before {
     background: linear-gradient(180deg, rgba(10, 7, 24, 0.85) 0%, rgba(46, 16, 101, 0.88) 100%);
   }
+}
+
+/* Pinned first column of a scrolling table (Indices): solid so numbers scroll under it,
+   and it takes the same hover tint as .table-row (bg-card + blue-500/10, pre-blended). */
+.table-row:hover > .table-sticky {
+  background-color: #1D1F47;
+}
+html[data-theme="light"] .table-row:hover > .table-sticky {
+  background-color: #EFF6FF !important;
 }

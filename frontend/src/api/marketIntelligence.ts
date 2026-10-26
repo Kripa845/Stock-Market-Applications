@@ -19,19 +19,6 @@ export interface MarketBreadth {
   computed_at: string;
 }
 
-export interface MarketTile {
-  id?: number;
-  symbol?: string;
-  name?: string;
-  sector: string;
-  close?: number | string;
-  change_pct: number | string | null;
-  turnover: number | string;
-  company_count?: number;
-  excluded_count?: number;
-  possible_corporate_action?: boolean;
-}
-
 export type RankingMetric = 'gainers' | 'losers' | 'volume' | 'turnover';
 
 export interface RankedStock {
@@ -84,13 +71,6 @@ export const marketIntelligenceApi = {
   },
   async getBreadth() {
     const { data } = await apiClient.get<MarketBreadth>('/market-intelligence/breadth/');
-    return data;
-  },
-  async getHeatmap(group: 'sector' | 'company' = 'sector') {
-    const { data } = await apiClient.get<{
-      date: string | null; group: string; size_metric: string; color_metric: string;
-      tiles: MarketTile[]; universe_label: string; computed_at: string | null;
-    }>('/market-intelligence/heatmap/', { params: { group } });
     return data;
   },
   async getRankings(metric: RankingMetric) {

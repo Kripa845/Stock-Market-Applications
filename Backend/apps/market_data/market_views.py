@@ -33,7 +33,7 @@ from apps.users.models import Watchlist, WatchlistItem
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
 from .models import DividendAnnouncement
-from .services import dividends, live_prices, market_overview, market_stats, movers, top_movers
+from .services import dividends, heatmap, live_prices, market_overview, market_stats, movers, top_movers
 from .services import watchlist as watchlist_service
 
 CACHE_SECONDS = 60
@@ -139,6 +139,20 @@ class LiveTrackedMoversAPIView(APIView):
     def get(self, request):
         limit = _limit(request, 10)
         return _cached(request, lambda ids: live_prices.live_movers(ids, limit))
+
+
+class HeatmapAPIView(APIView):
+    """
+    GET /api/market/heatmap/
+
+    Tracked companies by sector with market cap and the day's change, from the live
+    prices (services.heatmap).  The last session's snapshot until the next one trades.
+    """
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        return _cached(request, heatmap.heatmap)
 
 
 class TopMoversAPIView(APIView):

@@ -6,7 +6,7 @@ import {
 import { getCompanies } from '../../api/companies';
 import { stocksApi } from '../../api/stocks';
 import type { DailyPrice } from '../../types';
-import { useLiveRefresh } from '../../hooks/useLiveRefresh';
+// import { useLiveRefresh } from '../../hooks/useLiveRefresh';
 import clsx from 'clsx';
 
 const TABS = ['1W','1M','3M'] as const;
@@ -43,7 +43,7 @@ export default function MarketOverviewChart() {
   });
 
   useEffect(() => { load(); }, []);
-  useLiveRefresh(load, 10000);
+  // useLiveRefresh(load, 10000);
 
   const data = useMemo(() => {
     const sliced = prices.slice(-DAYS[tab]);

@@ -302,6 +302,47 @@ export interface LiveMoversResponse {
   action?: string;
 }
 
+/** One company on the watchlist heatmap (definition: Backend services/heatmap.py). */
+export interface HeatmapCompany {
+  symbol: string;
+  name: string;
+  ltp: number | string | null;
+  /** NEPSE's previous close; null when the company has not traded this session. */
+  prev_close: number | string | null;
+  /** Null for no trade, no volume or no previous close: drawn grey. */
+  change_pct: number | string | null;
+  /** ltp x listed shares; null until listed shares are set. */
+  market_cap: number | string | null;
+  volume: number | null;
+  turnover: number | string | null;
+  traded: boolean;
+}
+
+export interface HeatmapSector {
+  name: string;
+  /** Cap-weighted; untraded members count as unchanged. */
+  change_pct: number | string | null;
+  market_cap: number | string | null;
+  companies: HeatmapCompany[];
+}
+
+export interface HeatmapResponse {
+  /** Time of the latest trade seen in the live feed, in NPT. */
+  last_updated: string | null;
+  session_date: string | null;
+  market_open: boolean;
+  /** Market open, but no successful fetch in the last 10 minutes. */
+  stale: boolean;
+  last_successful_fetch: string | null;
+  source: string;
+  tracked_count: number;
+  /** Companies without listed shares (no market cap). */
+  missing_shares: string[];
+  sectors: HeatmapSector[];
+  reason?: string;
+  action?: string;
+}
+
 export type TopMetric = 'turnover' | 'volume' | 'transactions';
 
 // --- Top Gainers / Losers pages (/api/market/top-gainers/) -------------------------------------
@@ -521,6 +562,7 @@ export const marketApi = {
   movers: (period: MoverPeriod = '1D', limit = 5, date?: string) =>
     get<Scoped & MoversResponse>('/market/movers/', { period, limit, date }),
   liveMovers: (limit = 10) => get<Scoped & LiveMoversResponse>('/market/movers/live/', { limit }),
+  heatmap: () => get<Scoped & HeatmapResponse>('/market/heatmap/'),
   topMovers: ({ sector, ...params }: TopMoversParams) =>
     get<Scoped & TopMoversResponse>('/market/top-gainers/', { ...params, sector: sector || undefined }),
   topActivity: (params: { metric: ActivityMetric; period: TopMoversPeriod; sector?: string; page: number; page_size: number }) =>
