@@ -209,7 +209,15 @@ Permission: `view_market_data`. Not narrowed to the caller's companies (like the
 The filed figures for one (sector, fiscal year, quarter) are cached for 10 minutes. Prices are read on every request (one query), so PE / PB / yields are never stale. An import clears the cache.
 
 ### Importing data
-Prepare a CSV, one row per company and quarter. Only `symbol`, `fiscal_year` and `quarter` are required, and any other cell may be blank:
+Prepare a CSV, one row per company and quarter. Only `symbol`, `fiscal_year` and `quarter` are required, and any other cell may be blank. `Backend/data/quarterly_reports_template.csv` lists every tracked symbol, grouped by sector, with the cells empty. Rows you leave without a fiscal year and quarter are skipped, so an unfinished template never imports empty reports. The trailing `sector` / `name` columns are for reference only.
+
+**More companies per sector.** The table covers tracked companies only. To add one, create or track it in **Admin → Companies**, using a sector label the app recognises (see `SECTOR_MAP` in `apps/market_indices/sectors.py`). It then appears in its sector tab with no code change. Then regenerate the template. `--force` overwrites the file, so pass `--output` to keep a template you've already filled in. The command also lists any tracked company whose sector label isn't recognised:
+
+```powershell
+venv\Scripts\python.exe manage.py quarterly_reports_template [--sector HYDROPOWER] [--output new.csv] [--force]
+```
+
+Tracking a company also adds it to the price, floorsheet and dividend crawls, and to news matching, so each one you add makes those crawls a little longer.
 
 ```csv
 symbol,fiscal_year,quarter,reported_on,net_profit,net_worth,distributable_profit,share_count,eps,book_value,dpps,price_on_report_date

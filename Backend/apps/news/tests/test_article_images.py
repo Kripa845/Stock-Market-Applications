@@ -50,7 +50,16 @@ class ExtractImageUrlTests(SimpleTestCase):
 
     def test_relative_url_made_absolute(self):
         html = page('<meta property="og:image" content="/uploads/pic.jpg">')
-        self.assertEqual(extract_image_url(html, PAGE), "https://www.sharesansar.com/uploads/pic.jpg")
+        self.assertEqual(
+            extract_image_url(html, "https://example.com/news/1"), "https://example.com/uploads/pic.jpg",
+        )
+
+    def test_sharesansar_relative_image_uses_content_host(self):
+        # Real ShareSansar value since Oct 2026; www.sharesansar.com/admin/... is a 404.
+        html = page('<meta property="og:image" content="/admin/Raju/pMO office.jpg" />')
+        self.assertEqual(
+            extract_image_url(html, PAGE), "https://content.sharesansar.com/admin/Raju/pMO%20office.jpg",
+        )
 
     def test_logo_skipped_for_article_image(self):
         html = page(

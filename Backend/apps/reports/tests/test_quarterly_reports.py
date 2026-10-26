@@ -7,7 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from django.core.cache import cache
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import SimpleTestCase, TestCase
 from rest_framework.test import APIClient
 
@@ -264,3 +264,41 @@ class ImportCommandTests(TestCase):
         self.assertEqual(quarterly_reports.quarterly_report("BANKING")["results"][0]["eps"], D("30"))
         self.run_import("NABIL,2082/83,4,,,,35,200,8\n")
         self.assertEqual(quarterly_reports.quarterly_report("BANKING")["results"][0]["eps"], D("35"))
+
+
+class TemplateCommandTests(TestCase):
+
+    def setUp(self):
+        for symbol, sector in (("UPPER", "Hydropower"), ("NABIL", "Commercial Bank"), ("ODD", "Hydro")):
+            TrackedCompany.objects.create(company=Company.objects.create(symbol=symbol, name=f"{symbol} Ltd", sector=sector))
+        self.folder = tempfile.TemporaryDirectory()
+        self.path = Path(self.folder.name) / "template.csv"
+
+    def tearDown(self):
+        self.folder.cleanup()
+
+    def write(self, *args):
+        out, err = StringIO(), StringIO()
+        call_command("quarterly_reports_template", "--output", str(self.path), *args, stdout=out, stderr=err)
+        return out.getvalue(), err.getvalue()
+
+    def test_lists_tracked_companies_by_sector_and_flags_unknown_sectors(self):
+        out, err = self.write()
+        lines = self.path.read_text(encoding="utf-8").splitlines()
+        self.assertEqual([line.split(",")[0] for line in lines[1:]], ["NABIL", "UPPER"])   # Banking before HydroPower
+        self.assertIn("Banking 1, HydroPower 1", out)
+        self.assertIn("ODD ('Hydro')", err)
+
+    def test_blank_template_imports_nothing(self):
+        self.write()
+        out = StringIO()
+        call_command("import_quarterly_reports", "--file", str(self.path), stdout=out, stderr=StringIO())
+        self.assertIn("0 created, 0 updated, 2 skipped", out.getvalue())
+        self.assertFalse(QuarterlyReport.objects.exists())
+
+    def test_refuses_to_overwrite_without_force(self):
+        self.write()
+        with self.assertRaises(CommandError):
+            self.write()
+        self.write("--force", "--sector", "HYDROPOWER")
+        self.assertEqual(len(self.path.read_text(encoding="utf-8").splitlines()), 2)
