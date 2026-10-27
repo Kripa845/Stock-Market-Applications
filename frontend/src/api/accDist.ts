@@ -1,17 +1,15 @@
 /**
  * accDist.ts
  *
- * Stocks being accumulated / distributed, as (stock, broker) pairs ranked by
- * absolute net amount over a period.  Signed numbers: distribution rows carry negative
- * netQty / netAmount.
+ * Market-wide accumulation / distribution: (stock, broker) pairs with the largest net buying
+ * and net selling over a period.  Shapes mirror AccDistRowSerializer and AccDistAPIView in
+ * apps/analysis/api/ (service: apps/analysis/services/acc_dist.py).
  *
- * Every call is served from data/accDistMock.ts for now.  To switch to the backend, replace
- * each body with an apiClient call that returns the same shape, e.g.
- *
- *   snapshot: (period) => apiClient.get<AccDistSnapshot>('/analysis/acc-dist/', { params: { period } }).then((r) => r.data)
+ * Signed numbers: distribution rows carry negative net_qty / net_amount.  Money, prices and
+ * percentages arrive as numbers; dates as YYYY-MM-DD.
  */
 
-import { MOCK_WATCHLIST, mockAccDist } from '../data/accDistMock';
+import { apiClient } from './client';
 
 export const ACC_DIST_PERIODS = ['1D', '2D', '1W', '2W', '1M', '3M', '6M', '1Y', '2Y', '3Y'] as const;
 export type AccDistPeriod = (typeof ACC_DIST_PERIODS)[number];
@@ -21,26 +19,29 @@ export interface AccDistRow {
   symbol: string;
   sector: string;
   /** Broker number: the net buyer on the accumulation side, net seller on distribution. */
-  broker: number;
-  netQty: number;
-  netAmount: number;
-  avgRate: number;
-  /** Net quantity as % of the stock's free-float shares. */
-  floatQtyPct: number;
-  /** 1 = largest |netAmount| for the period. */
+  broker: string;
+  net_qty: number;
+  net_amount: number;
+  /** Average buy price (accumulation) or sell price (distribution). */
+  avg_rate: number | null;
+  float_qty_pct: number | null;
+  /** "public" = % of non-promoter shares; "listed" = % of all listed shares (public count unknown). */
+  float_basis: 'public' | 'listed' | null;
+  /** 1 = largest |net_amount| for the period. */
   rank: number;
 }
 
 export interface AccDistSnapshot {
   period: AccDistPeriod;
+  /** Floorsheet sessions the period covered; fewer than asked when history is shorter. */
+  sessions: number;
+  start_date: string | null;
+  end_date: string | null;
   accumulation: AccDistRow[];
   distribution: AccDistRow[];
 }
 
-const mockLatency = <T,>(value: T, ms = 350 + Math.random() * 250) =>
-  new Promise<T>((resolve) => { setTimeout(() => resolve(value), ms); });
-
 export const accDistApi = {
-  snapshot: (period: AccDistPeriod): Promise<AccDistSnapshot> => mockLatency(mockAccDist(period)),
-  watchlistSymbols: (): Promise<string[]> => mockLatency(MOCK_WATCHLIST, 150),
+  snapshot: (period: AccDistPeriod) =>
+    apiClient.get<AccDistSnapshot>('/analysis/acc-dist/', { params: { period } }).then((r) => r.data),
 };

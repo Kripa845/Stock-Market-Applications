@@ -150,6 +150,7 @@ All take `symbol` plus either `window=1d|1w|1m|3m` (default `1w`) or `start_date
 | `GET` | `/api/analysis/broker-signal/` | Signal, ratio, thresholds, top-5 accumulators / distributors with P/L vs close and streaks, totals |
 | `GET` | `/api/analysis/broker-summary/` | Every broker's row for the range, with totals |
 | `GET` | `/api/analysis/broker-flow/` | One point per session: close, top-5 buy / sell net, net flow, ratio, volume; plus bought ≠ sold warnings |
+| `GET` | `/api/analysis/acc-dist/?period=1D` | Market-wide (stock, broker) net buyers / sellers over `1D`…`3Y` sessions, ranked by net amount, with float % (public shares, else listed) |
 | `GET` | `/api/analysis/brokers/<broker>/` | (existing) One broker's activity across stocks, `start_date` / `end_date` |
 
 Responses are cached for `BROKER_ACCUMULATION_CACHE_SECONDS` (1 hour). The cache key includes the stock's newest floorsheet row, so a crawl that adds trades is picked up straight away.

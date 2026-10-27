@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { accDistApi, type AccDistPeriod, type AccDistSnapshot } from '../api/accDist';
+import { marketApi } from '../api/market';
 
 // Both acc / dist tables for one period, loaded together.  A response for an older period
 // is dropped so fast clicking through the period buttons can't show stale rows.
@@ -16,7 +17,11 @@ export function useAccDist(period: AccDistPeriod) {
     setError('');
     accDistApi.snapshot(period)
       .then((snapshot) => { if (id === latest.current) setData(snapshot); })
-      .catch(() => { if (id === latest.current) setError('Unable to load accumulation / distribution data.'); })
+      .catch((err: unknown) => {
+        if (id !== latest.current) return;
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setError(detail ?? 'Unable to load accumulation / distribution data.');
+      })
       .finally(() => { if (id === latest.current) setLoading(false); });
   }, [period]);
 
@@ -25,14 +30,14 @@ export function useAccDist(period: AccDistPeriod) {
   return { data, loading, error, reload: load };
 }
 
-/** The user's saved symbols, for the Watchlist filter.  Empty until loaded. */
+/** Symbols on the user's default watchlist, for the Watchlist filter.  Empty until loaded. */
 export function useWatchlistSymbols() {
   const [symbols, setSymbols] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     let active = true;
-    accDistApi.watchlistSymbols()
-      .then((list) => { if (active) setSymbols(new Set(list)); })
+    marketApi.watchlist()
+      .then((data) => { if (active) setSymbols(new Set(data.rows.map((row) => row.symbol))); })
       .catch(() => {});
     return () => { active = false; };
   }, []);

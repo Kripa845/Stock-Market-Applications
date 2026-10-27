@@ -294,3 +294,18 @@ class BrokerFlowPointSerializer(serializers.Serializer):
     ratio = _number(allow_null=True)
     signal = serializers.CharField()
     volume = serializers.IntegerField()
+
+
+class AccDistRowSerializer(serializers.Serializer):
+    """One (stock, broker) pair on the market-wide accumulation / distribution page."""
+
+    symbol = serializers.CharField()
+    sector = serializers.CharField()
+    broker = serializers.CharField()
+    net_qty = serializers.IntegerField()
+    net_amount = _number()
+    avg_rate = _number(allow_null=True)
+    float_qty_pct = _number(allow_null=True)
+    # "public" (non-promoter shares) or "listed" (fallback); null when neither is known.
+    float_basis = serializers.CharField(allow_null=True)
+    rank = serializers.IntegerField()

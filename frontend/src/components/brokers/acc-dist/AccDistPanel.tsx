@@ -7,6 +7,8 @@ const FLOAT_OPTIONS = [
   { label: '≥ 0.01 %', min: 0.01 },
   { label: '≥ 0.05 %', min: 0.05 },
   { label: '≥ 0.10 %', min: 0.1 },
+  { label: '≥ 0.50 %', min: 0.5 },
+  { label: '≥ 1.00 %', min: 1 },
 ] as const;
 
 const fieldClass = 'input py-2 text-[13px]';
@@ -48,7 +50,10 @@ export default function AccDistPanel({ side, period, onPeriodChange, rows, loadi
 
   const all = useMemo(() => rows ?? [], [rows]);
   const sectors = useMemo(() => [...new Set(all.map((row) => row.sector))].sort(), [all]);
-  const brokers = useMemo(() => [...new Set(all.map((row) => row.broker))].sort((a, b) => a - b), [all]);
+  const brokers = useMemo(
+    () => [...new Set(all.map((row) => row.broker))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    [all],
+  );
 
   const visible = useMemo(() => {
     const query = symbol.trim().toUpperCase();
@@ -57,8 +62,8 @@ export default function AccDistPanel({ side, period, onPeriodChange, rows, loadi
       (!query || row.symbol.includes(query))
       && (!sector || row.sector === sector)
       // Compare against the value as displayed, so "0.01 %" passes "≥ 0.01 %".
-      && (floatMin === null || Math.round(row.floatQtyPct * 100) / 100 >= floatMin)
-      && (!broker || row.broker === Number(broker))
+      && (floatMin === null || (row.float_qty_pct !== null && Math.round(Math.abs(row.float_qty_pct) * 100) / 100 >= floatMin))
+      && (!broker || row.broker === broker)
       && (!watchOnly || watchlist.has(row.symbol)));
     return [...filtered].sort((a, b) => (rankOrder === 'asc' ? a.rank - b.rank : b.rank - a.rank));
   }, [all, symbol, sector, floatIndex, broker, watchOnly, watchlist, rankOrder]);

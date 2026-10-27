@@ -1506,3 +1506,41 @@ class BrokerFlowAPIView(APIView):
             return {"points": BrokerFlowPointSerializer(flow["points"], many=True).data, "warnings": flow["warnings"]}
 
         return _accumulation_payload(request, "flow", build)
+
+
+class AccDistAPIView(APIView):
+    """
+    Market-wide accumulation / distribution: (stock, broker) pairs with the
+    largest net buying and net selling over ?period= (1D ... 3Y, default 1D),
+    across the stocks the user can access.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        import hashlib
+
+        from django.conf import settings
+        from django.core.cache import cache
+
+        from apps.analysis.api.serializers import AccDistRowSerializer
+        from apps.analysis.services.acc_dist import DEFAULT_PERIOD, PERIOD_SESSIONS, build_acc_dist
+
+        period = (request.query_params.get("period") or DEFAULT_PERIOD).upper()
+        if period not in PERIOD_SESSIONS:
+            return Response({"detail": f"period must be one of {', '.join(PERIOD_SESSIONS)}."}, status=400)
+
+        company_ids = get_accessible_company_ids(request.user)
+        scope = "all" if company_ids is None else hashlib.md5(",".join(map(str, sorted(company_ids))).encode()).hexdigest()
+        stamp = FloorsheetTransaction.objects.aggregate(latest=Max("id"))["latest"]
+        key = f"acc-dist:{period}:{scope}:{stamp}"
+
+        payload = cache.get(key)
+        if payload is None:
+            result = build_acc_dist(period, company_ids)
+            for side in ("accumulation", "distribution"):
+                result[side] = AccDistRowSerializer(result[side], many=True).data
+            payload = result
+            cache.set(key, payload, settings.BROKER_ACCUMULATION_CACHE_SECONDS)
+        return Response(payload)
