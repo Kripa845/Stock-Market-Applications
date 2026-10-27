@@ -5,16 +5,10 @@ import PageHeader from '../components/common/PageHeader';
 import QuarterlyReportTable from '../components/market/QuarterlyReportTable';
 import { Filter, selectClass } from '../components/market/TopListControls';
 import { useQuarterlyReport, useQuarterlyReportPeriods } from '../hooks/useQuarterlyReport';
-import { SECTOR_CODES, shortFiscalYear, type Quarter, type SectorCode } from '../api/quarterlyReports';
+import { SECTOR_CODES, SECTOR_LABELS, shortFiscalYear, type Quarter, type SectorCode } from '../api/quarterlyReports';
 
-// Market -> Quarterly Report (/market/quarterly-report/:sector?fiscal_year=2082/2083&quarter=4).
+// Latest Report (/market/quarterly-report/:sector?fiscal_year=2082/2083&quarter=4).
 // The sector comes from the route; no fiscal year / quarter means the latest one filed.
-
-const SECTOR_LABELS: Record<SectorCode, string> = {
-  BANKING: 'Banking', DEVBANK: 'Devbank', FINANCE: 'Finance', HOTELS: 'Hotels', HYDROPOWER: 'Hydropower',
-  INVESTMENT: 'Investment', LIFEINSU: 'Lifeinsu', MANUFACTURE: 'Manufacture', MICROFINANCE: 'Microfinance',
-  NONLIFEINSU: 'Nonlifeinsu', OTHERS: 'Others', TRADING: 'Trading',
-};
 
 const isSector = (value: string): value is SectorCode => (SECTOR_CODES as readonly string[]).includes(value);
 const toQuarter = (value: string | null): Quarter | undefined =>
@@ -71,9 +65,10 @@ function QuarterlyReport({ sector }: { sector: SectorCode }) {
             {meta?.fiscal_year && meta.quarter ? (
               <>
                 <span className="font-mono font-semibold text-text-primary">Q{meta.quarter} {shortFiscalYear(meta.fiscal_year)}</span>
-                {' · '}{meta.reported_count} of {meta.total_companies} companies have reported so far
+                {' · '}{meta.reported_count} of {meta.total_companies} tracked companies have reported so far.
+                {' '}Figures come from each company's own filing; the season is ongoing, so this list grows as more report.
               </>
-            ) : report.isPending ? 'Loading…' : 'No filings imported for this sector yet'}
+            ) : report.isPending ? 'Loading…' : 'No filings crawled for this sector yet'}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Filter label="Fiscal Year">
@@ -106,7 +101,7 @@ function QuarterlyReport({ sector }: { sector: SectorCode }) {
           <p className="px-4 py-12 text-center text-sm text-text-muted">
             {meta?.fiscal_year
               ? 'No tracked company in this sector has filed this quarter yet.'
-              : 'No quarterly reports imported for this sector: run `manage.py import_quarterly_reports --file …`.'}
+              : 'No quarterly reports for this sector yet: they are crawled daily, or run `manage.py crawl_quarterly_reports`.'}
           </p>
         ) : (
           <QuarterlyReportTable rows={rows} avgWindow={meta?.avg_window ?? 3} dimmed={report.isPlaceholderData} />
@@ -115,7 +110,8 @@ function QuarterlyReport({ sector }: { sector: SectorCode }) {
         <p className="flex items-start gap-1.5 px-4 pb-4 text-[11px] text-text-muted">
           <Info size={12} className="mt-px shrink-0" />
           <span>
-            n/m = not meaningful. Filed figures are often unaudited and may be revised.
+            n/m = not meaningful. Filed figures (from nepsetrading.com) are often unaudited and may be revised.
+            {' '}LTP, PE, PB and yields use the latest crawled close.
             {meta && ` The ${meta.avg_window}Y average needs at least ${meta.avg_min_years} years; a tag like (2y) marks a shorter history.`}
             {' '}Informational only, not financial advice.
           </span>

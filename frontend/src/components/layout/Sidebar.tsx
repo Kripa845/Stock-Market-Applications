@@ -29,6 +29,7 @@ import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROUTE_RULES } from '../../config/routePermissions';
 import { TOP_LIST_PAGES } from '../market/TopListControls';
+import { SECTOR_CODES, SECTOR_LABELS } from '../../api/quarterlyReports';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -77,9 +78,14 @@ const NAV_ITEMS: NavItem[] = [
     to: '/market/dividends',
   },
   {
-    label: 'Quarterly Report',
+    label: 'Latest Report',
     icon: FileSpreadsheet,
     to: '/market/quarterly-report',
+    end: true,
+    children: SECTOR_CODES.map((code) => ({
+      label: SECTOR_LABELS[code],
+      to: `/market/quarterly-report/${code.toLowerCase()}`,
+    })),
   },
   {
     label: 'Companies',
@@ -105,6 +111,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
       { label: 'Broker List', icon: List, to: '/brokers' },
       { label: 'Broker Accumulation and Broker Distribution', icon: List, to: '/brokers-distribution' },
+      { label: 'Stock Accumulation / Distribution', icon: List, to: '/broker-acc-dist' },
     ],
   },
   {

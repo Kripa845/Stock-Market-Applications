@@ -26,6 +26,19 @@ export function formatNprArab(value: number | string | null | undefined, digits 
   return formatNprCompact(value, digits);
 }
 
+const THOUSAND = 1e3;
+
+/** 6.39 Cr., 2.02 Lac., 72.85 K, or the plain figure below a thousand. */
+export function formatNepaliUnits(value: number | string | null | undefined, digits = 2): string {
+  const n = toNumber(value);
+  if (n === null || Number.isNaN(n)) return '—';
+  const abs = Math.abs(n);
+  if (abs >= CRORE) return `${(n / CRORE).toFixed(digits)} Cr.`;
+  if (abs >= LAKH) return `${(n / LAKH).toFixed(digits)} Lac.`;
+  if (abs >= THOUSAND) return `${(n / THOUSAND).toFixed(digits)} K`;
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+
 /** Shares / counts with Indian digit grouping (5,73,825). */
 export function formatCount(value: number | string | null | undefined): string {
   const n = toNumber(value);

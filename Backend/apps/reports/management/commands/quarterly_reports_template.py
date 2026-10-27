@@ -1,14 +1,4 @@
-"""
-Write a blank CSV for import_quarterly_reports with one row per tracked company, grouped
-by sector, so a newly tracked company shows up in the template.  Fiscal year and quarter
-are left blank: an unfilled row is skipped by the import instead of saving an empty report.
-The trailing sector / name columns are for reference; the import ignores them.
 
-Tracked companies whose sector label is not recognised are listed: they would appear in no
-sector tab until their sector is fixed (Admin -> Companies) or SECTOR_MAP is extended.
-
-    python manage.py quarterly_reports_template [--sector HYDROPOWER] [--output path.csv] [--force]
-"""
 
 import csv
 from pathlib import Path

@@ -2,7 +2,8 @@
 Market -> Quarterly Report: the latest quarterly filings of the tracked companies in one
 sector, with valuation and dividend ratios (definitions: quarterly_metrics).
 
-Filed figures come from QuarterlyReport / YearlyDPPS (``manage.py import_quarterly_reports``).
+Filed figures come from QuarterlyReport / YearlyDPPS, crawled daily from nepsetrading.com
+(services/nepsetrading.py) or hand-imported (``manage.py import_quarterly_reports``).
 The price is the latest crawled close, MarketStockDaily or DailyPrice, whichever is newer
 (the same rule as services/dividends.py; live and unverified prices are never used).
 
