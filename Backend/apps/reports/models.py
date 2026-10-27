@@ -105,13 +105,19 @@ class CompanyEarnings(models.Model):
 
 class QuarterlyReport(models.Model):
     """
-    Figures as filed in a tracked company's quarterly report (``manage.py import_quarterly_reports``).
+    Figures as filed in a tracked company's quarterly report, crawled from nepsetrading's
+    Latest Report pages (``manage.py crawl_quarterly_reports``) or hand-imported from a CSV
+    (``manage.py import_quarterly_reports``).
     Only raw filed numbers are stored; PE, PB, yields and YoY are calculated per request
     (services/quarterly_reports.py) so they follow the latest price.  Filings are often
     unaudited and later revised: a re-import overwrites the row (unique company, FY, quarter).
 
     Figures are cumulative for the fiscal year.  ``eps`` is the annualized EPS as filed; when
     it is blank it is derived from net profit / share count, annualized by 4 / quarter.
+
+    ``dpps_avg`` / ``dpps_avg_years`` / ``previous_dpps`` come from the crawled source, which
+    has years of history we do not; when blank they are derived from YearlyDPPS and last
+    year's report.
     """
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="quarterly_reports")
@@ -130,6 +136,14 @@ class QuarterlyReport(models.Model):
     # Kept for reference only: ratios always use the latest crawled price.
     price_on_report_date = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
+    dpps_avg = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True,
+                                   help_text="Average yearly DPPS as given by the source.")
+    dpps_avg_years = models.PositiveSmallIntegerField(null=True, blank=True)
+    previous_dpps = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True,
+                                        help_text="DPPS of the same quarter last year, as given by the source.")
+
+    source = models.CharField(max_length=32, default="manual")
+    scraped_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

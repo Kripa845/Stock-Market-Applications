@@ -8,16 +8,18 @@ would be meaningless; the API sends null and the UI shows "n/m".
     DPPS         as filed, else distributable profit / shares (can be negative)
     PE / PB      LTP / EPS, LTP / BV                         n/m when EPS / BV <= 0
     DPPS yield   DPPS / LTP x 100
-    N-year avg   mean of the yearly DPPS in the AVG_WINDOW_YEARS fiscal years ending at the
-                 company's newest year, divided by the years present (>= AVG_MIN_YEARS)
-    YoY          (EPS - same quarter last year) / |last year| x 100, n/m when last year <= 0
+    N-year avg   as given by the source (report.dpps_avg), else the mean of the yearly DPPS in
+                 the AVG_WINDOW_YEARS fiscal years ending at the company's newest year, divided
+                 by the years present; n/m below AVG_MIN_YEARS either way
+    YoY          (DPPS - same quarter last year) / |last year| x 100, n/m when last year <= 0;
+                 last year as given by the source (report.previous_dpps), else last year's report
 """
 
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 # The only place the averaging window is set; the API sends it so the column labels follow.
-AVG_WINDOW_YEARS = 3
+AVG_WINDOW_YEARS = 5
 AVG_MIN_YEARS = 2
 
 QUARTERS = (1, 2, 3, 4)
@@ -146,12 +148,19 @@ def build_report_row(report, ltp, dpps_by_year, previous_report=None):
     report           a QuarterlyReport (or any object with its attributes and ``company``)
     ltp              latest price, or None
     dpps_by_year     {fiscal_year: yearly DPPS} for this company
-    previous_report  the same quarter of the previous fiscal year, for YoY on EPS
+    previous_report  the same quarter of the previous fiscal year, for YoY on DPPS
     """
     ltp = _d(ltp)
     eps, bv, dpps = report_eps(report), report_book_value(report), report_dpps(report)
-    previous_eps = report_eps(previous_report) if previous_report is not None else None
-    avg = n_year_average(dpps_window(dpps_by_year, report.fiscal_year))
+    if report.previous_dpps is not None:
+        previous_dpps = _d(report.previous_dpps)
+    else:
+        previous_dpps = report_dpps(previous_report) if previous_report is not None else None
+    if report.dpps_avg is not None:
+        years = report.dpps_avg_years or AVG_WINDOW_YEARS
+        avg = AvgResult(_round(_d(report.dpps_avg)) if years >= AVG_MIN_YEARS else None, years)
+    else:
+        avg = n_year_average(dpps_window(dpps_by_year, report.fiscal_year))
 
     return {
         "symbol": report.company.symbol,
@@ -167,6 +176,6 @@ def build_report_row(report, ltp, dpps_by_year, previous_report=None):
         "avg_dpps": avg.average,
         "avg_years_used": avg.years_used,
         "avg_yield": calc_yield(avg.average, ltp),
-        "previous_eps": previous_eps,
-        "yoy": calc_yoy(eps, previous_eps),
+        "previous_dpps": previous_dpps,
+        "yoy": calc_yoy(dpps, previous_dpps),
     }

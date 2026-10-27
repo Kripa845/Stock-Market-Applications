@@ -9,6 +9,12 @@ export const SECTOR_CODES = [
 ] as const;
 export type SectorCode = (typeof SECTOR_CODES)[number];
 
+export const SECTOR_LABELS: Record<SectorCode, string> = {
+  BANKING: 'Banking', DEVBANK: 'Devbank', FINANCE: 'Finance', HOTELS: 'Hotels', HYDROPOWER: 'Hydropower',
+  INVESTMENT: 'Investment', LIFEINSU: 'Lifeinsu', MANUFACTURE: 'Manufacture', MICROFINANCE: 'Microfinance',
+  NONLIFEINSU: 'Nonlifeinsu', OTHERS: 'Others', TRADING: 'Trading',
+};
+
 export type Quarter = 1 | 2 | 3 | 4;
 
 export interface QuarterlyReportMeta {
@@ -41,7 +47,8 @@ export interface QuarterlyReportRow {
   avg_dpps: number | null;
   avg_years_used: number;
   avg_yield: number | null;
-  previous_eps: number | null;
+  /** DPPS of the same quarter last year; YoY compares DPPS against it. */
+  previous_dpps: number | null;
   yoy: number | null;
 }
 

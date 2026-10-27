@@ -1,30 +1,4 @@
-"""
-Proposed dividends (bonus % / cash %) for the tracked companies, per fiscal year.
 
-Source: ShareSansar "Proposed Dividend" (checked against the live page 2026-10-15).
-The table is drawn by DataTables from a JSON endpoint on the same URL, so no browser is
-needed.  The spider loads the page once (session cookie + the fiscal-year <select>), then
-pages through
-    GET /proposed-dividend?type=YEARWISE&year=<id>&sector=0&start=<n>&length=50
-with ``X-Requested-With: XMLHttpRequest``.  The server answers an empty result when
-length > 50, and a 500 unless every DataTables column is listed (COLUMNS).
-    fiscal years   <select id="year"> options: value = ShareSansar id, text = "2082/2083"
-    row keys       symbol / companyname (HTML links), bonus_share, cash_dividend, year,
-                   announcement_date, bookclose_date ("2026-07-03 [Closed]"),
-                   distribution_date, bonus_listing_date, id
-The endpoint has no symbol filter, so every page is read, but only rows for active, tracked
-companies are yielded (-a scope=all keeps every listed company, and rows without a symbol).
-Then, once per kept symbol (-a fundamentals=0 skips both):
-    ShareSansar /company/<symbol>        "Paid Up  Rs. 100.00"            -> CompanyFaceValueItem
-    Merolagani CompanyDetail.aspx        "EPS  27.01 (FY:082-083, Q:4)"   -> CompanyEpsItem
-With scope=all a row without a symbol or fiscal year is still yielded: the pipeline stores it marked.
-
-Respects the project's ROBOTSTXT_OBEY = True.  Manual run:
-    scrapy crawl dividends                  # tracked companies, the latest 2 fiscal years
-    scrapy crawl dividends -a years=5
-    scrapy crawl dividends -a years=all -a fundamentals=0
-    scrapy crawl dividends -a scope=all     # every listed company
-"""
 
 import json
 import re

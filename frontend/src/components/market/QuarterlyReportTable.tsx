@@ -30,9 +30,9 @@ function columns(avgWindow: number): Column[] {
     { key: 'pb', label: 'PB', title: 'LTP ÷ BV; n/m when BV ≤ 0', kind: 'ratio' },
     { key: 'dpps', label: 'DPPS', title: 'Distributable profit per share', kind: 'price' },
     { key: 'dpps_yield', label: 'DPPS Yield', title: 'DPPS ÷ LTP', kind: 'pct' },
-    { key: 'avg_dpps', label: `${avgWindow}Y Avg`, title: `Average yearly DPPS over the last ${avgWindow} fiscal years on file`, kind: 'price' },
+    { key: 'avg_dpps', label: `${avgWindow}Y Avg`, title: `Average yearly DPPS over the last ${avgWindow} fiscal years`, kind: 'price' },
     { key: 'avg_yield', label: `${avgWindow}Y Avg Yield`, title: `${avgWindow}Y average DPPS ÷ LTP`, kind: 'pct' },
-    { key: 'yoy', label: 'YoY', title: 'EPS vs the same quarter last year; n/m when last year is missing or ≤ 0', kind: 'pct' },
+    { key: 'yoy', label: 'YoY', title: 'DPPS vs the same quarter last year; n/m when last year is missing or ≤ 0', kind: 'pct' },
   ];
 }
 
@@ -127,7 +127,7 @@ export default function QuarterlyReportTable({ rows, avgWindow, dimmed }: Props)
                   return (
                     <td key={column.key}
                       className={clsx('px-2 pr-4 text-right font-mono font-semibold', value !== null && value > 0 && 'text-up', value !== null && value < 0 && 'text-down')}
-                      title={row.previous_eps !== null ? `Same quarter last year: EPS ${formatPrice(row.previous_eps)}` : undefined}>
+                      title={row.previous_dpps !== null ? `Same quarter last year: DPPS ${formatPrice(row.previous_dpps)}` : undefined}>
                       {value !== null && value > 0 ? '+' : ''}{cell}
                     </td>
                   );

@@ -281,6 +281,11 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.crawler_runs.tasks.crawl_dividends",
         "schedule": crontab(minute=30, hour=19),
     },
+    # Every day: companies file through the reporting season, revisions come any day.
+    "crawl-quarterly-reports-daily": {
+        "task": "apps.reports.tasks.crawl_quarterly_reports",
+        "schedule": crontab(minute=45, hour=19),
+    },
 
     # ---- Floorsheet ----
     # Floorsheet for every tracked company, latest session only: ShareSansar

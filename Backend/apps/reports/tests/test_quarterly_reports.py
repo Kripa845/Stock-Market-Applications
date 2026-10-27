@@ -26,7 +26,8 @@ URL = "/api/market/quarterly-report/"
 def report(**overrides):
     data = {"company": SimpleNamespace(symbol="NABIL", name="Nabil Bank"), "fiscal_year": "2082/2083", "quarter": 4,
             "reported_on": None, "net_profit": None, "net_worth": None, "distributable_profit": None,
-            "share_count": None, "eps": D("30"), "book_value": D("200"), "dpps": D("8.82")}
+            "share_count": None, "eps": D("30"), "book_value": D("200"), "dpps": D("8.82"),
+            "dpps_avg": None, "dpps_avg_years": None, "previous_dpps": None}
     return SimpleNamespace(**{**data, **overrides})
 
 
@@ -51,8 +52,8 @@ class RatioTests(SimpleTestCase):
 class AverageTests(SimpleTestCase):
 
     def test_window_limits_to_newest_years(self):
-        result = m.n_year_average([10, 20, 30, 1000])
-        self.assertEqual((result.average, result.years_used), (D("20.00"), 3))
+        result = m.n_year_average([10, 20, 30, 40, 50, 1000])
+        self.assertEqual((result.average, result.years_used), (D("30.00"), 5))
 
     def test_fewer_years_than_window_divides_by_years_present(self):
         result = m.n_year_average([10, None, 20])
@@ -72,7 +73,7 @@ class AverageTests(SimpleTestCase):
     def test_dpps_window_anchors_on_newest_year_on_file(self):
         by_year = {"2081/2082": 9, "2080/2081": 8, "2078/2079": 6, "2083/2084": 99}
         # Viewing 2082/83 Q2: 2082/83 has no full-year DPPS yet, 2083/84 is in the future.
-        self.assertEqual(m.dpps_window(by_year, "2082/2083"), [9, 8, None])
+        self.assertEqual(m.dpps_window(by_year, "2082/2083"), [9, 8, None, 6, None])
         self.assertEqual(m.dpps_window({}, "2082/2083"), [])
 
 
@@ -101,13 +102,20 @@ class RowTests(SimpleTestCase):
                      share_count=100000)
         self.assertEqual((m.report_book_value(raw), m.report_dpps(raw)), (D("250.00"), D("-1.50")))
 
-    def test_row_uses_ltp_and_previous_eps(self):
+    def test_row_uses_ltp_and_previous_dpps(self):
         row = m.build_report_row(report(), D("339.30"), {"2082/2083": D("8.82"), "2081/2082": D("5")},
-                                 report(fiscal_year="2081/2082", eps=D("24")))
+                                 report(fiscal_year="2081/2082", dpps=D("7.84")))
         self.assertEqual(row["dpps_yield"], D("2.60"))
         self.assertEqual((row["avg_dpps"], row["avg_years_used"]), (D("6.91"), 2))
-        self.assertEqual(row["yoy"], D("25.00"))
+        self.assertEqual((row["previous_dpps"], row["yoy"]), (D("7.84"), D("12.50")))
         self.assertIsNone(m.build_report_row(report(), None, {})["pe"])
+
+    def test_source_average_and_previous_dpps_win_over_derived_ones(self):
+        filed = report(dpps_avg=D("14.414"), dpps_avg_years=4, previous_dpps=D("15.58"))
+        row = m.build_report_row(filed, D("332.10"), {"2082/2083": D("1")}, report(dpps=D("99")))
+        self.assertEqual((row["avg_dpps"], row["avg_years_used"], row["avg_yield"]), (D("14.41"), 4, D("4.34")))
+        self.assertEqual(row["yoy"], D("-43.39"))
+        self.assertIsNone(m.build_report_row(report(dpps_avg=D("3"), dpps_avg_years=1), D("100"), {})["avg_dpps"])
 
 
 class QuarterlyReportApiTests(TestCase):
@@ -167,20 +175,21 @@ class QuarterlyReportApiTests(TestCase):
         self.assertEqual({k: meta[k] for k in ("sector", "fiscal_year", "quarter", "reported_count",
                                                 "total_companies", "avg_window")},
                          {"sector": "BANKING", "fiscal_year": "2082/2083", "quarter": 4, "reported_count": 3,
-                          "total_companies": 4, "avg_window": 3})
+                          "total_companies": 4, "avg_window": 5})
         nabil = self.rows(response)["NABIL"]
         self.assertEqual((nabil["ltp"], nabil["pe"], nabil["pb"], nabil["dpps_yield"]), (339.3, 11.31, 1.7, 2.6))
         self.assertEqual((nabil["avg_dpps"], nabil["avg_years_used"], nabil["avg_yield"]), (4.27, 3, 1.26))
 
     def test_previous_year_lookup_and_not_meaningful_cases(self):
         rows = self.rows(self.get(fiscal_year="2082/2083", quarter="4"))
-        self.assertEqual(rows["NABIL"]["yoy"], 25.0)
+        self.assertEqual(rows["NABIL"]["yoy"], 76.4)                    # DPPS 8.82 vs 5
         self.assertEqual(rows["NICA"]["ltp"], 339.3)                     # crawled DailyPrice, not unverified
         self.assertEqual(rows["NICA"]["dpps_yield"], 4.25)
         self.assertIsNone(rows["NICA"]["yoy"])                           # no report last year
         self.assertIsNone(rows["NICA"]["avg_dpps"])                      # 1 year < minimum
         loss = rows["LOSSB"]
-        self.assertEqual((loss["pe"], loss["pb"], loss["yoy"], loss["ltp"]), (None, None, None, None))
+        self.assertEqual((loss["pe"], loss["pb"], loss["ltp"]), (None, None, None))
+        self.assertEqual(loss["yoy"], -300.0)                            # DPPS -2 vs 1
         self.assertEqual(loss["dpps"], -2.0)
 
     def test_defaults_to_latest_period(self):
