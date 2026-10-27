@@ -1,5 +1,6 @@
 from django.urls import path
 from apps.analysis.api.views import (
+    AccDistAPIView,
     CompanyBehaviorSummaryAPIView,
     CompanyBrokerActivityAPIView,
     BrokerAnalysisAPIView,
@@ -26,6 +27,8 @@ urlpatterns = [
     path("broker-summary/", BrokerSummaryAPIView.as_view(), name="broker-summary"),
     path("broker-signal/", BrokerSignalAPIView.as_view(), name="broker-signal"),
     path("broker-flow/", BrokerFlowAPIView.as_view(), name="broker-flow"),
+    # Market-wide (stock, broker) net buying / selling (?period=1D..3Y).
+    path("acc-dist/", AccDistAPIView.as_view(), name="acc-dist"),
     path("companies/<int:pk>/categorized-news/", CompanyCategorizedNewsAPIView.as_view(), name="company-categorized-news"),
     path(
         "daily/",

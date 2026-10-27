@@ -111,7 +111,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
       { label: 'Broker List', icon: List, to: '/brokers' },
       { label: 'Broker Accumulation and Broker Distribution', icon: List, to: '/brokers-distribution' },
-      { label: 'Stock Accumulation / Distribution', icon: List, to: '/broker-acc-dist' },
+      { label: 'Stock Accumulation & Distribution', icon: List, to: '/broker-acc-dist' },
     ],
   },
   {

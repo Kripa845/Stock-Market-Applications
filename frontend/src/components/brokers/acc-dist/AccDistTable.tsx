@@ -15,6 +15,20 @@ interface AccDistTableProps {
 }
 
 const SKELETON_ROWS = 12;
+
+/** Float %, with a * when it is of listed rather than public shares. */
+function FloatPill({ row, tone }: { row: AccDistRow; tone: string }) {
+  if (row.float_qty_pct === null) return <span className="text-text-muted">—</span>;
+  const listed = row.float_basis === 'listed';
+  return (
+    <span
+      className={`inline-block rounded-full bg-bg-elevated px-2.5 py-0.5 font-mono text-[12px] font-medium tabular-nums ${tone}`}
+      title={listed ? 'Of listed shares: public (free-float) share count not available for this stock' : 'Of public (free-float) shares'}
+    >
+      {Math.abs(row.float_qty_pct).toFixed(2)} %{listed && '*'}
+    </span>
+  );
+}
 const SKELETON_WIDTHS = [56, 64, 32, 56, 56, 56, 24];
 const th = 'whitespace-nowrap px-3 py-2.5 font-medium';
 
@@ -71,15 +85,13 @@ export default function AccDistTable({ side, rows, loading, emptyMessage, rankOr
                 <td className="px-3 text-left font-semibold text-text-primary">
                   <Link to={`/companies/${row.symbol}`} className="hover:text-accent-light" title={row.sector}>{row.symbol}</Link>
                 </td>
-                <td className={`px-3 text-right font-mono tabular-nums ${tone}`}>{formatNepaliUnits(row.netQty)}</td>
+                <td className={`px-3 text-right font-mono tabular-nums ${tone}`}>{formatNepaliUnits(row.net_qty)}</td>
                 <td className="px-3 text-center font-semibold text-text-primary">{row.broker}</td>
                 <td className="px-3 text-center">
-                  <span className={`inline-block rounded-full bg-bg-elevated px-2.5 py-0.5 font-mono text-[12px] font-medium tabular-nums ${tone}`}>
-                    {row.floatQtyPct.toFixed(2)} %
-                  </span>
+                  <FloatPill row={row} tone={tone} />
                 </td>
-                <td className={`px-3 text-right font-mono font-semibold tabular-nums ${tone}`}>{formatNepaliUnits(row.netAmount)}</td>
-                <td className="px-3 text-right font-mono tabular-nums text-text-secondary">{formatPrice(row.avgRate)}</td>
+                <td className={`px-3 text-right font-mono font-semibold tabular-nums ${tone}`}>{formatNepaliUnits(row.net_amount)}</td>
+                <td className="px-3 text-right font-mono tabular-nums text-text-secondary">{formatPrice(row.avg_rate)}</td>
                 <td className="px-3 text-right font-mono tabular-nums text-text-muted">{row.rank}</td>
               </tr>
             ))
