@@ -37,26 +37,34 @@ The floorsheet and reports models moved out of `market_data`; their `db_table` k
 
 ## Frontend page → backend
 
-| Page | API | Backend |
-|---|---|---|
-| Dashboard | `/api/dashboard/…` | `dashboard/api/views.py` |
-| Market | `/api/market/summary`, `overview`, `movers`, `heatmap`, `top-*` | `market_data/api/market_views.py` |
-| Indices | `/api/market-indices/…` | `market_indices/api/views.py` |
-| Dividends | `/api/market/dividends/` | `reports/api/views.py`, `reports/services/dividends.py` |
-| Quarterly Report | `/api/market/quarterly-report/` | `reports/api/views.py`, `reports/services/quarterly_reports.py` |
-| Companies, Stock detail | `/api/companies/…`, `/api/stocks/<symbol>/intraday/` | `companies/api/views.py`, `floorsheet/api/views.py` |
-| Floorsheet | `/api/floorsheet/`, `/api/floorsheet/summary/` | `floorsheet/api/views.py` |
-| Broker analysis, Top brokers, Brokers | `/api/analysis/brokers/…` | `analysis/api/views.py`, `analysis/services/brokers.py` |
-| Broker accumulation / distribution | `/api/analysis/broker-summary`, `broker-signal`, `broker-flow` | `analysis/services/broker_accumulation.py` |
-| Company analysis | `/api/analysis/…`, `/api/market-intelligence/…` | `analysis/`, `market_intelligence/` |
-| Technical charts | `/api/market-intelligence/…` | `market_intelligence/services/technicals.py` |
-| Watchlist | `/api/market/watchlists/…` | `market_data/api/watchlists.py`, `market_data/services/watchlist.py` |
-| News | `/api/news/…` | `news/api/views.py` |
-| Crawl | `/api/crawler-runs/…` | `crawler_runs/api/views.py`, `crawler_runs/tasks.py` |
-| Reports (export) | `/api/reports/export/…` | `reports/exports/` |
-| Users | `/api/users/admin/…` | `users/api/views.py` |
+Routes are in `frontend/src/App.tsx`, their permission rules in `config/routePermissions.ts`. Page files are in `frontend/src/pages/`.
 
-All routes are wired in `config/urls.py`.
+| Route → page | API | Backend |
+|---|---|---|
+| `/dashboard` → `Dashboard.tsx` | `/api/dashboard/…` | `dashboard/api/views.py` |
+| `/market` → `Market.tsx` | `/api/market/summary`, `overview`, `movers`, `heatmap` | `market_data/api/market_views.py` |
+| `/market/gainers`, `/market/losers` → `TopMoversPage.tsx` | `/api/market/movers/`, `top-gainers/` | `market_data/services/movers.py`, `top_movers.py` |
+| `/market/turnover`, `volume`, `transactions` → `TopActivityPage.tsx` | `/api/market/top-activity/`, `top-*` | `market_data/api/market_views.py` |
+| `/market/indices` → `IndicesPage.tsx` | `/api/market-indices/…` | `market_indices/api/views.py` |
+| `/market/dividends` → `DividendsPage.tsx` | `/api/market/dividends/` | `reports/api/views.py`, `reports/services/dividends.py` |
+| `/market/quarterly-report/:sector` → `QuarterlyReportPage.tsx` | `/api/market/quarterly-report/` | `reports/services/quarterly_reports.py`, `quarterly_metrics.py` |
+| `/companies` → `admin/CompaniesPage.tsx` (`/tracked` redirects here) | `/api/companies/` | `companies/api/views.py` |
+| `/companies/:symbol` → `StockDetail.tsx` | `/api/companies/<id>/…`, `/api/stocks/<symbol>/intraday/`, `/api/analysis/broker-*` | `companies/`, `floorsheet/`, `analysis/services/broker_accumulation.py` |
+| `/floorsheet` → `FloorsheetPage.tsx` | `/api/floorsheet/`, `summary/` | `floorsheet/api/views.py` |
+| `/technical-charts` → `TechnicalCharts.tsx` | `/api/market-intelligence/…`, `/api/market-indices/…` | `market_intelligence/indicators/`, `services/technicals.py` |
+| `/company-analysis` → `CompanyAnalysisDashboard.tsx` | `/api/analysis/…`, `/api/market-intelligence/…` | `analysis/`, `market_intelligence/` |
+| `/broker-analysis[/:brokerId]` → `BrokerAnalysisPage.tsx` | `/api/analysis/brokers/…` | `analysis/services/brokers.py` |
+| `/top-brokers[/:broker]` → `TopBrokerPage.tsx`, `TopBrokerStocksPage.tsx` | `/api/analysis/brokers/top/`, `brokers/<id>/` | `analysis/services/brokers.py` |
+| `/brokers` → `BrokerListPage.tsx` | `/api/analysis/brokers/list/` | `analysis/api/views.py` |
+| `/broker-acc-dist` → `AccDistPage.tsx` (`/brokers-distribution` redirects here) | `/api/analysis/acc-dist/` | `analysis/services/broker_accumulation.py` |
+| `/watchlist` → `MyWatchlistPage.tsx` | `/api/market/watchlists/…` | `market_data/api/watchlists.py`, `services/watchlist.py` |
+| `/live-trading` → `WatchlistPage.tsx` (admin: `admin/WatchlistPage.tsx`), `/watchlist-comparison` → `WatchlistComparison.tsx` | `/api/market/…`, `/api/floorsheet/` | `market_data/`, `floorsheet/` |
+| `/news[/:id]` → `News.tsx`, `NewsDetail.tsx` | `/api/news/…` | `news/api/views.py` |
+| `/crawl` → `CrawlerStatus.tsx` | `/api/crawler-runs/…` | `crawler_runs/api/views.py`, `tasks.py` |
+| `/reports` → `ExportPage.tsx` | `/api/reports/export/…` | `reports/exports/` |
+| `/users`, `/roles-permissions` → `admin/UserManagementPage.tsx`, `admin/RolesPermissionPage.tsx` | `/api/users/admin/…` | `users/api/views.py` |
+
+`/admin/*` and `/analyst/*` are redirects to the routes above. Full endpoint list with permissions: [`docs/api.md`](../../docs/api.md). All API routes are wired in `config/urls.py`.
 
 ## Other folders
 
@@ -65,4 +73,6 @@ All routes are wired in `config/urls.py`.
 | `config/` | settings, root URLs, Celery app and beat schedule |
 | `crawlers/` | Scrapy project: spiders and pipelines that fill the tables above |
 | `scripts/` | one-off scripts run by hand (`crawl_company_logos.py`) |
-| `data/` | seed files (`brokers.csv`, `stock_sectors.csv`, `company_logos.json`) and `backups/` |
+| `data/` | seed files (`brokers.csv`, `stock_sectors.csv`, `company_logos.json`, `quarterly_reports_template.csv`) and `backups/` |
+
+Tables, keys and data rules: [`docs/data-model.md`](../../docs/data-model.md).
