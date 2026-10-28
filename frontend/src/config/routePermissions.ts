@@ -18,7 +18,6 @@ export const ROUTE_RULES: Record<string, RouteRule> = {
   '/broker-analysis':   { permissions: ['view_analysis'], mode: 'all' },
   '/top-brokers':       { permissions: ['view_analysis'], mode: 'all' },
   '/brokers':           { permissions: ['view_analysis'], mode: 'all' },
-  '/brokers-distribution': { permissions: ['view_analysis'], mode: 'all' },
   '/broker-acc-dist':   { permissions: ['view_analysis'], mode: 'all' },
   '/watchlist':             { permissions: ['view_watchlist', 'view_companies'], mode: 'all' },
   '/live-trading':          { permissions: ['view_watchlist', 'view_companies'], mode: 'all' },
