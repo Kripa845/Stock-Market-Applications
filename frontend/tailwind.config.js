@@ -30,6 +30,7 @@ export default {
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["IBM Plex Mono", "SFMono-Regular", "Consolas", "monospace"],
+        devanagari: ["Noto Sans Devanagari", "Nirmala UI", "Mangal", "sans-serif"],
       },
     },
   },

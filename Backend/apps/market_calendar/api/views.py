@@ -1,0 +1,50 @@
+"""
+/api/market-calendar/ -- BS month calendar of NEPSE sessions and corporate-action events.
+
+The index is whole-market; events cover the tracked companies the user may access
+(services.calendar).
+"""
+
+from datetime import date
+
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.market_calendar.services import calendar
+from apps.users.permissions import HasAppPermission
+
+
+class _CalendarView(APIView):
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def build(self, request):
+        raise NotImplementedError
+
+    def get(self, request):
+        try:
+            return Response(self.build(request))
+        except calendar.CalendarError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        except calendar.IndexNotFound as exc:
+            return Response({"detail": str(exc)}, status=404)
+
+
+class CalendarMonthAPIView(_CalendarView):
+    """?bs_year=2083&bs_month=7 (both or neither; default: today's BS month)."""
+
+    def build(self, request):
+        bs_year, bs_month = (request.query_params.get(key, "").strip() or None for key in ("bs_year", "bs_month"))
+        return calendar.month_view(bs_year, bs_month, user=request.user)
+
+
+class CalendarDayAPIView(_CalendarView):
+    """?date=YYYY-MM-DD (default: today)."""
+
+    def build(self, request):
+        raw = request.query_params.get("date", "").strip()
+        try:
+            day = date.fromisoformat(raw) if raw else None
+        except ValueError:
+            raise calendar.CalendarError("date must use YYYY-MM-DD format.") from None
+        return calendar.day_view(day, user=request.user)

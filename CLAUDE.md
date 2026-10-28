@@ -52,7 +52,7 @@ There is no CI: run pytest and the `tsc` check yourself before committing.
 ## Architecture
 
 - **`Backend/apps/<app>/`** share one layout (`models.py`, `api/`, `services/`, `tasks.py`, `management/commands/`, `tests/test_<feature>.py`). Put logic in `services/`, keep views thin.
-- **Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`. Don't import upward.
+- **Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`, `market_calendar`. Don't import upward.
 - **`Backend/config/`**: `settings.py` holds `CELERY_BEAT_SCHEDULE`, `CELERY_TASK_ROUTES`, `NEPSE_TRADING_WEEKS` and feature thresholds; `urls.py` wires every app's routes under `/api/`. `TIME_ZONE` = `CELERY_TIMEZONE` = Asia/Kathmandu.
 - **`Backend/crawlers/`** is a separate Scrapy project. `crawlers/pipelines.py` bootstraps Django and writes models; pipelines upsert (`update_or_create` / unique keys with ignore-conflicts), so re-running a crawl is safe. `runner.py` launches spiders as subprocesses; Celery tasks in `apps/crawler_runs` trigger them and record `CrawlRun`.
 - **News tags:** manual tags (`is_manual=True`) are never overwritten by automatic categorization, and every manual change writes a `CategorizationCorrection`.

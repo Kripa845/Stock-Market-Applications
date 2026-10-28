@@ -7,7 +7,7 @@ Every route is under `/api/` and wired in `Backend/config/urls.py`. Requests sen
 Two layers, both on the backend:
 
 1. **App permission.** The view sets `permission_key = "<key>"` and uses `HasAppPermission`. Views whose permission depends on the method use `HasViewMethodPermissions` + `get_required_permissions(request)` (e.g. GET needs `view_watchlist`, POST `add_watchlist`, DELETE `remove_watchlist`). The keys and their groups are in `apps/users/api/serializers.py` → `ROLE_PERMISSIONS`. Within a group, each key implies the earlier ones are needed.
-2. **Company access.** Non-admin users can be limited to some companies (`UserCompanyAccess`). Helpers in `apps/users/company_access.py`: `filter_company_queryset()`, `require_company_access()`, `get_accessible_company_ids()` (None = unrestricted). They apply to company lists, prices, floorsheet, analysis, market intelligence, dashboards, crawl runs, watchlists and exports. **Not** narrowed: reading news, dividends, the quarterly report, and the market-wide indices. Manual news correction needs `correct_categories` **and** access to that company.
+2. **Company access.** Non-admin users can be limited to some companies (`UserCompanyAccess`). Helpers in `apps/users/company_access.py`: `filter_company_queryset()`, `require_company_access()`, `get_accessible_company_ids()` (None = unrestricted). They apply to company lists, prices, floorsheet, analysis, market intelligence, dashboards, crawl runs, watchlists and exports. **Not** narrowed: reading news, dividends, the quarterly report, the market-wide indices, and public-issue (IPO) events on the market calendar (its dividend events are narrowed). Manual news correction needs `correct_categories` **and** access to that company.
 
 When adding an endpoint: choose a `permission_key`, apply a company-access helper if it returns per-company data, and add the matching frontend rule in `config/routePermissions.ts`.
 
@@ -79,6 +79,16 @@ All `view_analysis` except `dashboard-summary/` (`view_market_data`).
 |---|---|
 | `indices/`, `sub-indices/`, `analysis/`, `top/`, `tracked-sectors/`, `history/`, `verify/`, `intraday/` | `view_market_data` |
 | `support-resistance/` | `view_analysis` |
+
+### `market-calendar/`
+Bikram Sambat month calendar (`market_calendar/services/calendar.py`). The NEPSE index figures are whole-market; dividend events (book closure, bonus listing, cash distribution, announcement) cover **tracked companies only, narrowed by company access**. Public-issue events (`ipo_open` / `ipo_close`: IPO, FPO, right share, mutual fund, debenture, from `IpoIssue`) are whole-market and not narrowed, since the issuer is usually not listed or tracked yet. `data_notes` contains `ipo_not_crawled` until `IpoIssue` has rows.
+
+| Endpoint | Permission |
+|---|---|
+| `month/?bs_year=2083&bs_month=7` (both or neither; default today's BS month) | `view_market_data` |
+| `day/?date=YYYY-MM-DD` (default today): full index row and event detail | `view_market_data` |
+
+Each day has a `status`: `traded`, `holiday`, `weekend` (from the trading week in force on that date), `pending` (today, before the close is stored), `no_data` (before the first stored index session), `no_session` (a trading weekday with no stored session and no `TradingHoliday` entry) or `future` (no index figures; holidays and events still shown). A stored session wins over a holiday entry, and the holiday name is kept.
 
 ### `news/`
 | Endpoint | Permission |

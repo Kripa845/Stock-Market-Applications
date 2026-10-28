@@ -53,7 +53,12 @@ DIVIDEND_SPIDERS = [
     "dividends",
 ]
 
-ALL_SPIDERS = NEWS_SPIDERS + MARKET_DATA_SPIDERS + FLOORSHEET_SPIDERS + BROKER_SPIDERS + DIVIDEND_SPIDERS
+# Run on their own schedule (crawl_ipo_issues), never as part of an "all" crawl.
+IPO_SPIDERS = [
+    "ipo_issues",
+]
+
+ALL_SPIDERS = NEWS_SPIDERS + MARKET_DATA_SPIDERS + FLOORSHEET_SPIDERS + BROKER_SPIDERS + DIVIDEND_SPIDERS + IPO_SPIDERS
 
 
 class SpiderRunResult:

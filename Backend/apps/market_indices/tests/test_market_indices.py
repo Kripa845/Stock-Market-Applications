@@ -144,6 +144,24 @@ class IndexCandlesTests(TestCase):
         self.assertIsNone(data["fifty_two_week"]["high"])
         self.assertEqual(aggregates.index_candles(MarketIndex.objects.create(code="X", name="X", kind="sub"))["latest"], None)
 
+    def test_daily_changes_seed_previous_close_from_before_the_range(self):
+        changes = aggregates.index_daily_changes(self.nepse, YESTERDAY, TODAY)
+        self.assertEqual(list(changes), [YESTERDAY, TODAY])
+        # YESTERDAY's previous stored session is 200 days back, outside the range.
+        self.assertEqual(changes[YESTERDAY]["change"], "91.81")
+        self.assertEqual(changes[YESTERDAY]["previous_date"], TODAY - timedelta(days=200))
+        self.assertEqual(changes[TODAY]["change"], "4.78")
+        self.assertEqual(changes[TODAY]["change_pct"], "0.1844")
+        self.assertEqual(changes[TODAY]["source"], "crawled")
+
+    def test_daily_changes_first_stored_session_has_no_change(self):
+        oldest = TODAY - timedelta(days=400)
+        row = aggregates.index_daily_changes(self.nepse, oldest, oldest)[oldest]
+        self.assertIsNone(row["change"])
+        self.assertIsNone(row["previous_date"])
+        self.assertEqual(row["change_pct"], "1.0000")
+        self.assertEqual(aggregates.index_daily_changes(self.nepse, TODAY + timedelta(days=1), TODAY + timedelta(days=5)), {})
+
     def test_endpoint(self):
         from django.contrib.auth import get_user_model
         from rest_framework.test import APIClient

@@ -8,9 +8,10 @@ would be meaningless; the API sends null and the UI shows "n/m".
     DPPS         as filed, else distributable profit / shares (can be negative)
     PE / PB      LTP / EPS, LTP / BV                         n/m when EPS / BV <= 0
     DPPS yield   DPPS / LTP x 100
-    N-year avg   as given by the source (report.dpps_avg), else the mean of the yearly DPPS in
-                 the AVG_WINDOW_YEARS fiscal years ending at the company's newest year, divided
-                 by the years present; n/m below AVG_MIN_YEARS either way
+    N-year avg   the mean of the yearly DPPS in the AVG_WINDOW_YEARS fiscal years ending at the
+                 company's newest year, divided by the years present; the source's own average
+                 (report.dpps_avg) is used instead only when its window matches; n/m below
+                 AVG_MIN_YEARS either way
     YoY          (DPPS - same quarter last year) / |last year| x 100, n/m when last year <= 0;
                  last year as given by the source (report.previous_dpps), else last year's report
 """
@@ -19,8 +20,10 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 # The only place the averaging window is set; the API sends it so the column labels follow.
-AVG_WINDOW_YEARS = 5
+AVG_WINDOW_YEARS = 3
 AVG_MIN_YEARS = 2
+# nepsetrading's dpps_avg5 covers 5 years; a different window can't reuse it.
+SOURCE_AVG_WINDOW_YEARS = 5
 
 QUARTERS = (1, 2, 3, 4)
 HUNDRED = Decimal(100)
@@ -156,7 +159,7 @@ def build_report_row(report, ltp, dpps_by_year, previous_report=None):
         previous_dpps = _d(report.previous_dpps)
     else:
         previous_dpps = report_dpps(previous_report) if previous_report is not None else None
-    if report.dpps_avg is not None:
+    if report.dpps_avg is not None and AVG_WINDOW_YEARS == SOURCE_AVG_WINDOW_YEARS:
         years = report.dpps_avg_years or AVG_WINDOW_YEARS
         avg = AvgResult(_round(_d(report.dpps_avg)) if years >= AVG_MIN_YEARS else None, years)
     else:

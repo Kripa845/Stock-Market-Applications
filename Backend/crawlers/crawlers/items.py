@@ -108,3 +108,22 @@ class CompanyEpsItem(scrapy.Item):
     eps = scrapy.Field()
 
     source = scrapy.Field()
+
+
+class IpoIssueItem(scrapy.Item):
+    # IpoIssuePipeline: upserted on (source, source_id), see apps.reports.services.ipo_issues.
+    issue_type = scrapy.Field()
+    source_id = scrapy.Field()
+    symbol = scrapy.Field()
+    company_name = scrapy.Field()
+    units = scrapy.Field()
+    price = scrapy.Field()
+    ratio = scrapy.Field()
+    issue_manager = scrapy.Field()
+    open_date = scrapy.Field()
+    close_date = scrapy.Field()
+    final_date = scrapy.Field()
+    listing_date = scrapy.Field()
+    source_status = scrapy.Field()
+    announcement_url = scrapy.Field()
+    source = scrapy.Field()

@@ -27,10 +27,11 @@ apps/<app>/
 | `news` | Crawled news, categorization, sentiment | RawArticle, NewsArticle, ArticleCompanyTag |
 | `crawler_runs` | Running Scrapy spiders and their history | CrawlRun |
 | `dashboard` | Admin / analyst / viewer dashboard summaries | — |
+| `market_calendar` | Bikram Sambat month calendar: NEPSE index per day, trading holidays, dividend events | — |
 | `users` | Users, roles, permissions, company access | User, CustomRole, Watchlist, … |
 
 Dependencies point one way: `users` and `companies` are the base, `market_data` / `floorsheet` / `reports`
-build on them, and `analysis` / `market_intelligence` / `dashboard` read from everything below.
+build on them, and `analysis` / `market_intelligence` / `dashboard` / `market_calendar` read from everything below.
 
 The floorsheet and reports models moved out of `market_data`; their `db_table` keeps the original
 `market_data_*` table names, so no data was copied.

@@ -295,6 +295,36 @@ def index_candles(index, start=None, end=None):
     }
 
 
+def index_daily_changes(index, start, end):
+    """
+    {date: row} for every stored session of ``index`` from ``start`` to ``end`` (inclusive).
+
+    Same change rule as ``index_candles``: ``change`` = close minus the previous stored
+    close, ``change_pct`` = NEPSE's own ``source_change_pct``.  The previous close of the
+    first session comes from the last row before ``start``, so a month view doesn't lose
+    its first day's change.
+    """
+    rows = list(index.daily.filter(date__gte=start, date__lte=end).order_by("date"))
+    previous = index.daily.filter(date__lt=start).order_by("-date").first()
+    changes = {}
+    for row in rows:
+        changes[row.date] = {
+            "open": _text(row.open),
+            "high": _text(row.high),
+            "low": _text(row.low),
+            "close": _text(row.close),
+            "change": _text(row.close - previous.close) if previous else None,
+            "change_pct": _text(row.source_change_pct),
+            "previous_date": previous.date if previous else None,
+            "turnover": _text(row.turnover),
+            "volume": row.volume,
+            "transactions": row.transactions,
+            "source": row.source,
+        }
+        previous = row
+    return changes
+
+
 # ----------------------------------------------------------------------
 # Panel B: tracked companies only
 # ----------------------------------------------------------------------
