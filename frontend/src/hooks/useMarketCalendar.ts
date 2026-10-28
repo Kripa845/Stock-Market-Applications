@@ -17,5 +17,7 @@ export function useCalendarDay(date: string | null) {
     queryKey: ['market-calendar', 'day', date],
     queryFn: () => marketCalendarApi.day(date as string),
     enabled: date !== null,
+    // Stepping through days keeps the last one (and the open tab) on screen while the next loads.
+    placeholderData: keepPreviousData,
   });
 }

@@ -27,6 +27,14 @@ export default {
         "up": "#10B981",
         "down": "#EF4444",
       },
+      keyframes: {
+        "panel-in": { from: { transform: "translateX(100%)" }, to: { transform: "translateX(0)" } },
+        "fade-in": { from: { opacity: "0" }, to: { opacity: "1" } },
+      },
+      animation: {
+        "panel-in": "panel-in 180ms ease-out",
+        "fade-in": "fade-in 180ms ease-out",
+      },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
         mono: ["IBM Plex Mono", "SFMono-Regular", "Consolas", "monospace"],

@@ -11,6 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.market_calendar.services import calendar
+from apps.market_calendar.services.market_day import market_day
+from apps.users.company_access import get_accessible_company_ids
 from apps.users.permissions import HasAppPermission
 
 
@@ -39,7 +41,11 @@ class CalendarMonthAPIView(_CalendarView):
 
 
 class CalendarDayAPIView(_CalendarView):
-    """?date=YYYY-MM-DD (default: today)."""
+    """
+    ?date=YYYY-MM-DD (default: today).
+    ?include=market adds that session's summary, gainers / losers, top volume / transactions
+    and (with view_analysis) top brokers, for the tracked companies the user may access.
+    """
 
     def build(self, request):
         raw = request.query_params.get("date", "").strip()
@@ -47,4 +53,11 @@ class CalendarDayAPIView(_CalendarView):
             day = date.fromisoformat(raw) if raw else None
         except ValueError:
             raise calendar.CalendarError("date must use YYYY-MM-DD format.") from None
-        return calendar.day_view(day, user=request.user)
+        data = calendar.day_view(day, user=request.user)
+        if "market" in request.query_params.get("include", "").split(","):
+            data["market"] = market_day(
+                data["date"],
+                company_ids=get_accessible_company_ids(request.user),
+                include_brokers=request.user.has_app_permission("view_analysis"),
+            )
+        return data

@@ -86,7 +86,7 @@ Bikram Sambat month calendar (`market_calendar/services/calendar.py`). The NEPSE
 | Endpoint | Permission |
 |---|---|
 | `month/?bs_year=2083&bs_month=7` (both or neither; default today's BS month) | `view_market_data` |
-| `day/?date=YYYY-MM-DD` (default today): full index row and event detail | `view_market_data` |
+| `day/?date=YYYY-MM-DD` (default today): full index row and event detail. `&include=market` adds that session's summary, top 5 gainers / losers / volume / transactions (tracked companies, narrowed by company access; `market_calendar/services/market_day.py` reuses `movers.py`) and top 5 brokers by turnover (only with `view_analysis`). `market.available` is false when no prices were crawled for that exact day: it never falls back to the previous session. | `view_market_data` |
 
 Each day has a `status`: `traded`, `holiday`, `weekend` (from the trading week in force on that date), `pending` (today, before the close is stored), `no_data` (before the first stored index session), `no_session` (a trading weekday with no stored session and no `TradingHoliday` entry) or `future` (no index figures; holidays and events still shown). A stored session wins over a holiday entry, and the holiday name is kept.
 

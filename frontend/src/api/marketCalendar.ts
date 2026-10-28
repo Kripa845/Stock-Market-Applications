@@ -101,6 +101,41 @@ export interface CalendarMonth {
   data_notes: string[];
 }
 
+type Num = number | string | null;
+
+/** One tracked company's session row (Backend market_data/services/movers.py). */
+export interface MarketDayRow {
+  symbol: string; name: string; logo_url: string | null;
+  close: Num; change: Num; change_pct: Num;
+  volume: number | null; turnover: Num;
+  /** NULL until the day's trade count is derived; never 0 for "unknown". */
+  transactions: number | null;
+}
+
+export interface MarketDayBroker {
+  broker: string; name: string;
+  buy_value: Num; sell_value: Num; net_value: Num; total_value: Num; trades: number;
+}
+
+/** ?include=market: the session for the tracked companies the user may access. */
+export type MarketDay =
+  | { scope: 'tracked_companies'; date: string; available: false; reason: string }
+  | {
+      scope: 'tracked_companies'; date: string; available: true;
+      summary: {
+        previous_trade_date: string | null; tracked_count: number;
+        advanced: number; declined: number; unchanged: number;
+        positive_circuit: number; negative_circuit: number;
+        total_turnover: Num; total_traded_shares: Num; total_transactions: Num;
+        transactions_reported: number; warning?: string | null;
+      };
+      gainers: MarketDayRow[]; losers: MarketDayRow[];
+      top_volume: MarketDayRow[]; top_transactions: MarketDayRow[];
+      /** Absent without view_analysis; null when no floorsheet is stored for the day. */
+      brokers?: { transaction_count: number; broker_count: number; rows: MarketDayBroker[] } | null;
+      floorsheet_from?: string | null;
+    };
+
 export interface CalendarDay extends CalendarDayBase {
   scope: 'tracked_companies';
   index_code: string;
@@ -108,12 +143,14 @@ export interface CalendarDay extends CalendarDayBase {
   bs: { year: number; month: number; day: number; month_name: string; label_np: string; weekday_np: string };
   index: CalendarIndexRow | null;
   events: CalendarEvent[];
+  market?: MarketDay;
 }
 
 export const marketCalendarApi = {
   /** No argument: today's BS month. */
   month: (ref?: BsMonthRef | null) =>
     apiClient.get<CalendarMonth>('/market-calendar/month/', { params: ref ?? {} }).then((r) => r.data),
+  /** Always with the session's market sections (include=market). */
   day: (date: string) =>
-    apiClient.get<CalendarDay>('/market-calendar/day/', { params: { date } }).then((r) => r.data),
+    apiClient.get<CalendarDay>('/market-calendar/day/', { params: { date, include: 'market' } }).then((r) => r.data),
 };
