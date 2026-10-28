@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CalendarX, Info } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
@@ -8,12 +8,20 @@ import CalendarToolbar from '../components/calendar/CalendarToolbar';
 import CalendarGrid from '../components/calendar/CalendarGrid';
 import DayDetailPanel from '../components/calendar/DayDetailPanel';
 import CalendarLegend from '../components/calendar/CalendarLegend';
-import { useCalendarMonth } from '../hooks/useMarketCalendar';
+import MonthSummary from '../components/calendar/MonthSummary';
+import { useCalendarDay, useCalendarMonth } from '../hooks/useMarketCalendar';
 import type { BsMonthRef } from '../api/marketCalendar';
 
 // Market -> Calendar (/market/calendar): a Bikram Sambat month of NEPSE sessions and the
 // tracked companies' corporate actions.  ?y=&m= pick the BS month (default: today's),
 // ?d=YYYY-MM-DD opens a day in the side panel.
+
+/** AD date ``days`` away; BS months are never computed here (the API returns them). */
+const shiftDate = (iso: string, days: number) => {
+  const day = new Date(`${iso}T00:00:00Z`);
+  day.setUTCDate(day.getUTCDate() + days);
+  return day.toISOString().slice(0, 10);
+};
 
 export default function MarketCalendarPage() {
   const [params, setParams] = useSearchParams();
@@ -23,6 +31,8 @@ export default function MarketCalendarPage() {
   const selectedDate = params.get('d');
 
   const { data: month, isLoading, isFetching, isError } = useCalendarMonth(ref);
+  // Same query as the panel (shared cache): tells which BS month the open day is in.
+  const { data: openDay } = useCalendarDay(selectedDate);
 
   const update = useCallback((changes: Record<string, string | null>) => {
     setParams((current) => {
@@ -32,9 +42,22 @@ export default function MarketCalendarPage() {
     });
   }, [setParams]);
 
+  // Stepping the panel past the month's edge moves the grid along with it.
+  useEffect(() => {
+    if (!openDay || !month || openDay.date !== selectedDate) return;
+    if (openDay.bs.year !== month.bs_year || openDay.bs.month !== month.bs_month) {
+      update({ y: String(openDay.bs.year), m: String(openDay.bs.month) });
+    }
+  }, [openDay, month, selectedDate, update]);
+
   const goTo = (target: BsMonthRef | null) =>
     update(target ? { y: String(target.bs_year), m: String(target.bs_month) } : { y: null, m: null });
+  const select = useCallback((date: string) => update({ d: date }), [update]);
   const closePanel = useCallback(() => update({ d: null }), [update]);
+  const step = useCallback(
+    (days: number) => selectedDate && update({ d: shiftDate(selectedDate, days) }),
+    [selectedDate, update],
+  );
 
   const noHistory = month && (!month.index_history_from || month.index_history_from > month.ad_end) && month.ad_start <= month.today;
 
@@ -59,7 +82,8 @@ export default function MarketCalendarPage() {
               onNext={() => goTo(month.next)}
               onToday={() => goTo(null)}
             />
-            <CalendarGrid month={month} selectedDate={selectedDate} onSelect={(date) => update({ d: date })} />
+            <MonthSummary month={month} onSelect={select} />
+            <CalendarGrid month={month} selectedDate={selectedDate} onSelect={select} />
             <CalendarLegend />
           </>
         )}
@@ -76,12 +100,13 @@ export default function MarketCalendarPage() {
           <p>
             “No session” means a trading weekday with no stored index and no holiday entered. Book closure (BC), bonus listing,
             cash distribution and dividend announcements cover tracked companies you can access; IPO, FPO, right share,
-            mutual fund and debenture open / close dates cover the whole market.
+            mutual fund and debenture open / close dates cover the whole market. Click a day for its gainers, losers, volume,
+            trades and brokers; ← → step through days.
           </p>
         </div>
       )}
 
-      {selectedDate && <DayDetailPanel date={selectedDate} onClose={closePanel} />}
+      {selectedDate && <DayDetailPanel date={selectedDate} onClose={closePanel} onStep={step} />}
     </div>
   );
 }

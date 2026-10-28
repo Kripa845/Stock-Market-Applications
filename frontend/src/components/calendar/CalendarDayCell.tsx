@@ -37,15 +37,19 @@ export default function CalendarDayCell({ day, selected, onSelect }: CalendarDay
       aria-pressed={selected}
       aria-label={`${day.date}${day.holiday ? `, ${day.holiday}` : ''}${day.is_today ? ', today' : ''}`}
       className={clsx(
-        'group relative flex h-full min-h-[64px] min-w-0 flex-col overflow-hidden rounded-md border border-l-[3px] p-1 text-left transition',
-        'hover:border-accent-light/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:min-h-[118px] sm:p-2',
-        tone === 'up' && 'border-l-up bg-up/[0.07]',
-        tone === 'down' && 'border-l-down bg-down/[0.07]',
-        tone === 'flat' && (closed ? 'bg-bg-secondary/70' : 'bg-bg-card'),
-        tone === 'flat' && (index ? 'border-l-text-muted/40' : 'border-l-transparent'),
+        'group relative flex h-full min-h-[64px] min-w-0 flex-col overflow-hidden rounded-md border p-1 pl-1.5 text-left transition',
+        'hover:border-accent-light focus:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:min-h-[118px] sm:p-2 sm:pl-2.5',
+        tone === 'up' && 'bg-up/[0.07]',
+        tone === 'down' && 'bg-down/[0.07]',
+        // Plain token classes: the light theme (index.css) overrides them, not their /opacity variants.
+        tone === 'flat' && (closed ? 'bg-bg-secondary' : 'bg-bg-card'),
         selected ? 'border-accent ring-2 ring-accent' : day.is_today ? 'border-accent-light ring-1 ring-accent-light' : 'border-bg-border',
       )}
     >
+      {/* An element, not a border colour: the light theme overrides border colours. */}
+      {index && tone !== 'flat' && (
+        <span aria-hidden className={clsx('absolute inset-y-0 left-0 w-[3px]', tone === 'up' ? 'bg-up' : 'bg-down')} />
+      )}
       <div className="flex items-start justify-between gap-1">
         <span
           className={clsx(
@@ -67,7 +71,8 @@ export default function CalendarDayCell({ day, selected, onSelect }: CalendarDay
         <p className="mt-1 truncate text-[9px] font-medium text-down sm:text-[11px]" title={day.holiday}>{day.holiday}</p>
       )}
 
-      <div className="mt-auto space-y-1 pt-1">
+      {/* Figures sit right under the date in every cell; events are pinned to the bottom. */}
+      <div className="mt-1 sm:mt-2">
         {index ? (
           <div className="font-mono leading-tight">
             <p className="hidden text-sm font-semibold text-text-primary sm:block">{formatPrice(index.close)}</p>
@@ -80,7 +85,9 @@ export default function CalendarDayCell({ day, selected, onSelect }: CalendarDay
         ) : (
           note && <p className="hidden text-[11px] italic text-text-muted sm:block">{note}</p>
         )}
+      </div>
 
+      <div className="mt-auto pt-1">
         {day.events.length > 0 && (
           <div className="flex min-w-0 flex-wrap gap-0.5">
             {day.events.slice(0, MAX_CHIPS).map((event) => (

@@ -33,7 +33,7 @@ export default function CalendarGrid({ month, selectedDate, onSelect }: Calendar
       {/* auto-rows-fr: every week row as tall as the tallest, so the grid stays even. */}
       <div className="grid auto-rows-fr grid-cols-7 gap-0.5 sm:gap-1.5">
         {Array.from({ length: month.leading_blanks }, (_, i) => (
-          <div key={`blank-${i}`} aria-hidden className="rounded-md border border-dashed border-bg-border/50" />
+          <div key={`blank-${i}`} aria-hidden className="rounded-md border border-dashed border-bg-border opacity-50" />
         ))}
         {month.days.map((day) => (
           <CalendarDayCell key={day.date} day={day} selected={day.date === selectedDate} onSelect={onSelect} />
