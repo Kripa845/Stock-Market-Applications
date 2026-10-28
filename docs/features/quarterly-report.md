@@ -10,7 +10,7 @@ Only the figures as filed are stored (`reports.QuarterlyReport`, `reports.Yearly
 * **BV:** as filed, else net worth ÷ share count. **DPPS:** as filed, else distributable profit ÷ share count (can be negative).
 * **PE** = LTP ÷ EPS, **PB** = LTP ÷ BV; n/m when EPS or BV ≤ 0.
 * **DPPS yield** = DPPS ÷ LTP × 100.
-* **3Y avg** = mean of the yearly DPPS for the 3 fiscal years ending at the company's newest year on file, divided by the years present (at least 2, otherwise n/m). Negative years are kept. "(2y)" marks a shorter history. **3Y avg yield** = 3Y avg ÷ LTP × 100.
+* **3Y avg** = mean of the yearly DPPS for the 3 fiscal years ending at the company's newest year on file, divided by the years present (at least 2, otherwise n/m). Negative years are kept. "(2y)" marks a shorter history. **3Y avg yield** = 3Y avg ÷ LTP × 100. nepsetrading's own `dpps_avg5` is stored but covers 5 years, so it is used only if the window is set to 5 (`SOURCE_AVG_WINDOW_YEARS`).
 * **YoY** = (EPS − EPS of the same quarter last year) ÷ |last year| × 100; n/m when last year is missing, zero or negative.
 * The window (3) and the minimum (2) are `AVG_WINDOW_YEARS` / `AVG_MIN_YEARS` in `quarterly_metrics.py`. The API sends them and the column labels follow.
 

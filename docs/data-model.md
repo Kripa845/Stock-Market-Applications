@@ -18,11 +18,11 @@ The tables that matter, which app owns them, their natural keys, and the rules t
 | **Book closure** | Date after which a new buyer no longer qualifies for a dividend or right share. Prices gap on that day. |
 | **WACC** | A user's weighted average cost per share in a watchlist holding. |
 | **Sub-index / sector code** | NEPSE's 13 sector indices: `BANKING DEVBANK FINANCE HOTELS HYDROPOWER INVESTMENT LIFEINSU MANUFACTURE MICROFINANCE MUTUAL NONLIFEINSU OTHERS TRADING`. Free-text sector labels map to them through `SECTOR_MAP` in `apps/market_indices/sectors.py`. |
-| **BS dates** | Bikram Sambat dates. Some news sites publish them, and `crawlers/crawlers/utils/dates.py` converts them. `repair_news_dates` fixes BS dates that were parsed as Gregorian. |
+| **BS dates** | Bikram Sambat dates. Some news sites publish them, and `crawlers/crawlers/utils/dates.py` converts them. `repair_news_dates` fixes BS dates that were parsed as Gregorian. All BS conversion (month lengths, Nepali month names and numerals) goes through the `nepali_datetime` library, valid for BS 1975–2100; never hand-write month tables. The market calendar (`market_calendar`) converts on the backend, so the frontend has no BS library. Dates are always stored in AD. |
 
 ## Tracked companies vs. whole market
 
-Most tables hang off `Company` (tracked scope). Since the `market_indices` app was added, a few tables hold **every listed stock** keyed by `symbol` instead: `MarketStockDaily`, `CompanyDaily`, `StockSector`, `DividendAnnouncement`. Use these for market-wide pages (indices, Acc/Dist float %, dividends). Everything labelled "tracked companies" must still come from the `Company`-scoped tables.
+Most tables hang off `Company` (tracked scope). Since the `market_indices` app was added, a few tables hold **every listed stock** keyed by `symbol` instead: `MarketStockDaily`, `CompanyDaily`, `StockSector`, `DividendAnnouncement`, `IpoIssue`. Use these for market-wide pages (indices, Acc/Dist float %, dividends). Everything labelled "tracked companies" must still come from the `Company`-scoped tables.
 
 ## companies
 | Model | Key | Notes |
@@ -52,6 +52,7 @@ Most tables hang off `Company` (tracked scope). Since the `market_indices` app w
 | `CompanyEarnings` | (`symbol`, `fiscal_year`, `quarter`) | EPS per quarter (Merolagani). |
 | `QuarterlyReport` | (`company`, `fiscal_year`, `quarter`) | Figures as filed. All ratios are computed per request, see [quarterly-report](features/quarterly-report.md). |
 | `YearlyDPPS` | (`company`, `fiscal_year`) | Filled from Q4 rows. Feeds the 3-year DPPS average. |
+| `IpoIssue` | (`source`, `source_id`) | **Whole market.** IPO / FPO / right share / mutual fund / debenture issues from ShareSansar "Existing Issues" (spider `ipo_issues`). ShareSansar has no issue id: `source_id` = `<type>-<ShareSansar company id>-<units>`, and a second issue under the same key gets `-<open date>` (or `-pending`) appended (`reports/services/ipo_issues.py`). `close_date` is the earliest closing date, `final_date` the latest. `company` is linked only when the symbol is ours. |
 
 ## market_indices (whole market)
 | Model | Key | Notes |

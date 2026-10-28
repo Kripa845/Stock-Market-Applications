@@ -24,7 +24,8 @@ import {
   Gift,
   List,
   FileSpreadsheet,
-  ChartColumnStacked
+  ChartColumnStacked,
+  CalendarDays
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -77,6 +78,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Proposed Dividend',
     icon: Gift,
     to: '/market/dividends',
+  },
+  {
+    label: 'Market Calendar',
+    icon: CalendarDays,
+    to: '/market/calendar',
   },
   {
     label: 'Latest Report',
@@ -134,7 +140,6 @@ const NAV_ITEMS: NavItem[] = [
   },
 
   // { type: 'divider', label: 'News' },
-
   {
     label: 'News Feed',
     icon: Newspaper,

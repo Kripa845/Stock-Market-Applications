@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from apps.reports.models import CompanyEarnings, DividendAnnouncement, QuarterlyReport, YearlyDPPS
+from apps.reports.models import CompanyEarnings, DividendAnnouncement, IpoIssue, QuarterlyReport, YearlyDPPS
+
+
+@admin.register(IpoIssue)
+class IpoIssueAdmin(admin.ModelAdmin):
+    list_display = ("symbol", "company_name", "issue_type", "units", "price", "open_date", "close_date", "final_date", "source")
+    list_filter = ("issue_type", "source")
+    search_fields = ("symbol", "company_name")
+    readonly_fields = ("source_id", "source_status", "scraped_at")
 
 
 @admin.register(DividendAnnouncement)

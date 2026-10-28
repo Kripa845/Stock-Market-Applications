@@ -38,8 +38,9 @@ def _market_closed_today(task_name: str):
 
 
 
-def _has_active_crawl(crawl_type: str) -> bool:
-    
+def _has_active_crawl(crawl_type: str, source: str | None = None) -> bool:
+    # ``source`` separates crawls that share a type (e.g. ipo_issues runs as "dividends").
+    filters = {"source": source} if source else {}
     with transaction.atomic():
         return (
             CrawlRun.objects
@@ -50,6 +51,7 @@ def _has_active_crawl(crawl_type: str) -> bool:
                     CrawlRun.Status.PENDING,
                     CrawlRun.Status.RUNNING,
                 ],
+                **filters,
             )
             .exists()
         )
@@ -383,6 +385,35 @@ def crawl_dividends():
     crawl_run.save(update_fields=["task_id", "status", "started_at"])
     logger.info("crawl_dividends: started CrawlRun #%s.", crawl_run.id)
     return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "dividends"}
+
+
+@shared_task(name="apps.crawler_runs.tasks.crawl_ipo_issues")
+def crawl_ipo_issues():
+    """Daily: open / upcoming public issues of every company (ShareSansar Existing Issues)."""
+    # Shares the DIVIDENDS crawl type (corporate actions); ``source`` tells them apart.
+    if _has_active_crawl(CrawlRun.CrawlType.DIVIDENDS, source="ipo_issues"):
+        logger.info("crawl_ipo_issues: skipping because an IPO crawl is active.")
+        return {"skipped": True, "reason": "ipo crawl already active"}
+
+    with transaction.atomic():
+        crawl_run = CrawlRun.objects.create(
+            crawl_type=CrawlRun.CrawlType.DIVIDENDS,
+            source="ipo_issues",
+            target="Public issues (all companies)",
+            status=CrawlRun.Status.PENDING,
+            sources=["ipo_issues"],
+        )
+
+    task = run_crawl.apply_async(
+        args=[crawl_run.id],
+        kwargs={"spider_name": "ipo_issues"},
+    )
+    crawl_run.task_id = task.id
+    crawl_run.status = CrawlRun.Status.RUNNING
+    crawl_run.started_at = timezone.now()
+    crawl_run.save(update_fields=["task_id", "status", "started_at"])
+    logger.info("crawl_ipo_issues: started CrawlRun #%s.", crawl_run.id)
+    return {"crawl_run_id": crawl_run.id, "task_id": task.id, "type": "ipo_issues"}
 
 
 # ---------------------------------------------------------------------------

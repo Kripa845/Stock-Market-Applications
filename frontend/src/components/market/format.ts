@@ -63,6 +63,13 @@ export function changeTone(value: number | string | null | undefined): 'up' | 'd
   return n > 0 ? 'up' : 'down';
 }
 
+const NEPALI_DIGITS = '०१२३४५६७८९';
+
+/** 2083 -> २०८३ (digits only; BS dates themselves come from the backend). */
+export function toNepaliDigits(value: number | string): string {
+  return String(value).replace(/[0-9]/g, (digit) => NEPALI_DIGITS[Number(digit)]);
+}
+
 export function formatTradeDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   return new Date(`${iso}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });

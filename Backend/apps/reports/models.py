@@ -176,3 +176,58 @@ class YearlyDPPS(models.Model):
 
     def __str__(self):
         return f"{self.company.symbol} {self.fiscal_year}: DPPS {self.dpps}"
+
+
+class IpoIssue(models.Model):
+    """
+    A public issue (IPO, FPO, right share, mutual fund, debenture) of any company, crawled
+    from ShareSansar's "Existing Issues" tables (spider ``ipo_issues``).  Whole market: most
+    issuers are not in the Company table, so ``company`` is linked only when the symbol is ours.
+
+    ShareSansar has no issue id, so ``source_id`` is "<issue type>-<ShareSansar company id>-<units>",
+    which stays the same while the dates of an upcoming issue are filled in.
+    """
+
+    class IssueType(models.TextChoices):
+        IPO = "ipo", "IPO"
+        IPO_LOCAL = "ipo_local", "IPO (project-affected locals)"
+        IPO_MIGRANT = "ipo_migrant", "IPO (migrant workers)"
+        IPO_QII = "ipo_qii", "IPO (qualified institutional investors)"
+        FPO = "fpo", "FPO"
+        RIGHT = "right", "Right share"
+        MUTUAL_FUND = "mutual_fund", "Mutual fund"
+        DEBENTURE = "debenture", "Bond / debenture"
+
+    issue_type = models.CharField(max_length=20, choices=IssueType.choices, db_index=True)
+    symbol = models.CharField(max_length=20, blank=True, db_index=True)
+    company = models.ForeignKey(
+        "companies.Company", on_delete=models.SET_NULL, null=True, blank=True, related_name="ipo_issues",
+    )
+    company_name = models.CharField(max_length=300, blank=True)
+    units = models.BigIntegerField(null=True, blank=True)
+    price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # Right shares only, e.g. "1:1".
+    ratio = models.CharField(max_length=20, blank=True)
+    issue_manager = models.CharField(max_length=200, blank=True)
+    open_date = models.DateField(null=True, blank=True, db_index=True)
+    # Earliest closing date; the issue can stay open until ``final_date`` if undersubscribed.
+    close_date = models.DateField(null=True, blank=True, db_index=True)
+    final_date = models.DateField(null=True, blank=True)
+    listing_date = models.DateField(null=True, blank=True)
+    # ShareSansar's own status code as published (-2, -1, 0, 1); kept for auditing only.
+    source_status = models.SmallIntegerField(null=True, blank=True)
+    announcement_url = models.CharField(max_length=1000, blank=True)
+    source = models.CharField(max_length=32, default="ShareSansar")
+    source_id = models.CharField(max_length=64)
+    scraped_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-open_date", "symbol"]
+        constraints = [
+            models.UniqueConstraint(fields=["source", "source_id"], name="unique_ipo_issue_source_id"),
+        ]
+
+    def __str__(self):
+        return f"{self.get_issue_type_display()} {self.symbol or self.company_name} ({self.open_date or 'no dates'})"

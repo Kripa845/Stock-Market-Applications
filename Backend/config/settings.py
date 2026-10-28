@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "apps.market_indices",
     "apps.floorsheet",
     "apps.reports",
+    "apps.market_calendar",
     
 ]
 
@@ -280,6 +281,11 @@ CELERY_BEAT_SCHEDULE = {
     "crawl-dividends-daily": {
         "task": "apps.crawler_runs.tasks.crawl_dividends",
         "schedule": crontab(minute=30, hour=19),
+    },
+    # Every day, before issues open at 10:00: new offer letters and extended closing dates.
+    "crawl-ipo-issues-daily": {
+        "task": "apps.crawler_runs.tasks.crawl_ipo_issues",
+        "schedule": crontab(minute=30, hour=8),
     },
     # Every day: companies file through the reporting season, revisions come any day.
     "crawl-quarterly-reports-daily": {

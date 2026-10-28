@@ -40,6 +40,7 @@ import CrawlerStatusPage from './pages/CrawlerStatus';
 import MarketPage from './pages/Market';
 import TopMoversPage from './pages/TopMoversPage';
 import DividendsPage from './pages/DividendsPage';
+import MarketCalendarPage from './pages/MarketCalendarPage';
 import QuarterlyReportPage from './pages/QuarterlyReportPage';
 import IndicesPage from './pages/IndicesPage';
 import TopActivityPage from './pages/TopActivityPage';
@@ -280,6 +281,17 @@ function AppRoutes() {
                 rule={ROUTE_RULES['/market/dividends']}
               >
                 <DividendsPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/calendar"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/calendar']}
+              >
+                <MarketCalendarPage />
               </PermissionRoute>
             }
           />

@@ -5,6 +5,7 @@ from decimal import Decimal
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from django.core.cache import cache
 from django.core.management import CommandError, call_command
@@ -52,8 +53,8 @@ class RatioTests(SimpleTestCase):
 class AverageTests(SimpleTestCase):
 
     def test_window_limits_to_newest_years(self):
-        result = m.n_year_average([10, 20, 30, 40, 50, 1000])
-        self.assertEqual((result.average, result.years_used), (D("30.00"), 5))
+        result = m.n_year_average([10, 20, 30, 1000])
+        self.assertEqual((result.average, result.years_used), (D("20.00"), 3))
 
     def test_fewer_years_than_window_divides_by_years_present(self):
         result = m.n_year_average([10, None, 20])
@@ -73,7 +74,8 @@ class AverageTests(SimpleTestCase):
     def test_dpps_window_anchors_on_newest_year_on_file(self):
         by_year = {"2081/2082": 9, "2080/2081": 8, "2078/2079": 6, "2083/2084": 99}
         # Viewing 2082/83 Q2: 2082/83 has no full-year DPPS yet, 2083/84 is in the future.
-        self.assertEqual(m.dpps_window(by_year, "2082/2083"), [9, 8, None, 6, None])
+        self.assertEqual(m.dpps_window(by_year, "2082/2083"), [9, 8, None])
+        self.assertEqual(m.dpps_window(by_year, "2082/2083", window=5), [9, 8, None, 6, None])
         self.assertEqual(m.dpps_window({}, "2082/2083"), [])
 
 
@@ -110,12 +112,22 @@ class RowTests(SimpleTestCase):
         self.assertEqual((row["previous_dpps"], row["yoy"]), (D("7.84"), D("12.50")))
         self.assertIsNone(m.build_report_row(report(), None, {})["pe"])
 
-    def test_source_average_and_previous_dpps_win_over_derived_ones(self):
-        filed = report(dpps_avg=D("14.414"), dpps_avg_years=4, previous_dpps=D("15.58"))
-        row = m.build_report_row(filed, D("332.10"), {"2082/2083": D("1")}, report(dpps=D("99")))
-        self.assertEqual((row["avg_dpps"], row["avg_years_used"], row["avg_yield"]), (D("14.41"), 4, D("4.34")))
+    def test_source_previous_dpps_wins_over_last_years_report(self):
+        filed = report(previous_dpps=D("15.58"))
+        row = m.build_report_row(filed, D("332.10"), {}, report(dpps=D("99")))
         self.assertEqual(row["yoy"], D("-43.39"))
-        self.assertIsNone(m.build_report_row(report(dpps_avg=D("3"), dpps_avg_years=1), D("100"), {})["avg_dpps"])
+
+    def test_source_five_year_average_is_ignored_for_a_shorter_window(self):
+        filed = report(dpps_avg=D("14.414"), dpps_avg_years=5)
+        row = m.build_report_row(filed, D("100"), {"2082/2083": D("8"), "2081/2082": D("4"), "2078/2079": D("50")})
+        self.assertEqual((row["avg_dpps"], row["avg_years_used"]), (D("6.00"), 2))
+
+    def test_source_average_wins_when_the_windows_match(self):
+        with patch.object(m, "AVG_WINDOW_YEARS", m.SOURCE_AVG_WINDOW_YEARS):
+            filed = report(dpps_avg=D("14.414"), dpps_avg_years=4)
+            row = m.build_report_row(filed, D("332.10"), {"2082/2083": D("1")})
+            self.assertEqual((row["avg_dpps"], row["avg_years_used"], row["avg_yield"]), (D("14.41"), 4, D("4.34")))
+            self.assertIsNone(m.build_report_row(report(dpps_avg=D("3"), dpps_avg_years=1), D("100"), {})["avg_dpps"])
 
 
 class QuarterlyReportApiTests(TestCase):
@@ -175,7 +187,7 @@ class QuarterlyReportApiTests(TestCase):
         self.assertEqual({k: meta[k] for k in ("sector", "fiscal_year", "quarter", "reported_count",
                                                 "total_companies", "avg_window")},
                          {"sector": "BANKING", "fiscal_year": "2082/2083", "quarter": 4, "reported_count": 3,
-                          "total_companies": 4, "avg_window": 5})
+                          "total_companies": 4, "avg_window": 3})
         nabil = self.rows(response)["NABIL"]
         self.assertEqual((nabil["ltp"], nabil["pe"], nabil["pb"], nabil["dpps_yield"]), (339.3, 11.31, 1.7, 2.6))
         self.assertEqual((nabil["avg_dpps"], nabil["avg_years_used"], nabil["avg_yield"]), (4.27, 3, 1.26))

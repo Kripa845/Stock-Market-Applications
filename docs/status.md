@@ -18,11 +18,15 @@ Known problems and unfinished work. Last checked against the code on **2026-10-2
 * **Floorsheet history.** ShareSansar serves only the current session. Past days come only from ShareHub (`backfill_sharehub_floorsheet`), back to Oct 2023. Broker Explorer / Acc-Dist totals cover only the sessions loaded.
 * **Trade times.** `FloorsheetTransaction.trade_time` and intraday candles exist only for ShareHub-loaded days.
 * **Index feed mid-session.** Today's NEPSE index row reads close 0 / −100% until the close. Never store it.
+* **`TradingHoliday` is empty** (2026-10-28). Holidays are not crawled; enter them in the admin. Until then the market calendar shows closed weekdays (e.g. Dashain/Tihar, 2026-10-19 → 10-23) as "No session".
+* **NEPSE index history** starts 2025-10-12, so earlier calendar months show no index figures. `sync_market_indices --since …` can backfill.
+* **Public issues without units** (e.g. NRB Citizens Savings Bonds) can't be keyed and are skipped by `ipo_issues` (logged).
 
 ## Known quirks
 
 * Standalone `scrapy crawl …` runs create a `CrawlRun` with the default `crawl_type="news"` whatever the spider is (`crawlers/crawlers/pipelines.py`, `CrawlRunPipeline`). Filter by `source` when auditing crawl history.
 * `seed_admin` creates a user with hardcoded credentials and the invalid email `admin@.com`. Change them after first login, or make the command read them from env.
+* `requirements.txt` pins `Scrapy==2.12.0`, but the local venv has 2.18.0 (2026-10-28). On ≥ 2.13 a spider must define `async def start()` (spiders without it send no requests), and pipelines log deprecation warnings for `open_spider(spider)` / returned Deferreds. Align the pin with what is installed.
 * `BROKER_*` and `NEPSE_CLIENT_REUSE_SECONDS` settings are read from the environment but are missing from `.env.example`.
 * `Backend/crawlers/floorsheet.json` and `trading_data.json` are tracked in git and change whenever a crawl writes a feed file. They should probably be gitignored.
 

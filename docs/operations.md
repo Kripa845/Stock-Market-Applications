@@ -42,6 +42,7 @@ Source of truth: `CELERY_BEAT_SCHEDULE` in `config/settings.py`. Times are Asia/
 
 | When | Task | What |
 |---|---|---|
+| 08:30 daily | `crawler_runs.tasks.crawl_ipo_issues` | `ipo_issues` spider → `IpoIssue` (IPO, FPO, right share, mutual fund, debenture; whole market). Recorded as `crawl_type="dividends"`, `source="ipo_issues"`. |
 | Every 2 min, 11:00–14:58, plus 15:00/05/10 (trading days) | `market_data.tasks.update_live_prices` | NEPSE live feed → `Company.ltp` etc. |
 | Every 5 min, 11:00–14:55, plus 15:00/05 (trading days) | `floorsheet.tasks.build_intraday_candles_live` | ShareHub floorsheet with times → `IntradayCandle` |
 | Every 5 min, 11:00–14:55, plus 15:00–15:15 (trading days) | `market_indices.tasks.snapshot_live_index` | `IndexIntradayPoint` ticks |
@@ -85,6 +86,8 @@ All pipelines upsert, so re-running is always safe.
 | Index replication | `replicate_index <snapshot / calibrate / verify / compute> --date D` | Index = market cap × K. Run `calibrate` when `IndexCheck.needs_recalibration` is set. |
 | News dates | `repair_news_dates` | BS dates stored as Gregorian |
 | Quarterly reports | `crawl_quarterly_reports`, `import_quarterly_reports --file …` | See [quarterly-report](features/quarterly-report.md) |
+| Public issues (IPO …) | `scrapy crawl ipo_issues -a pages=all` | The daily run reads the latest 2 pages (100 issues) per type; `pages=all` reads ShareSansar's full history (~1,000 rows). |
+| Trading holidays | Django admin → Trading holidays | Not crawled. Without entries the market calendar shows closed weekdays as "No session". |
 
 ## Data rules for operators
 
