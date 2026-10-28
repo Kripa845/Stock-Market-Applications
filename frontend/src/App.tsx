@@ -26,7 +26,6 @@ import TopBrokerStocksPage from './pages/TopBrokerStocksPage';
 import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage';
 import TopBrokerPage from './pages/TopBrokerPage';
 import BrokerListPage from './pages/BrokerListPage';
-import BrokerDistributionPage from './pages/BrokerDistributionPage';
 import AccDistPage from './pages/AccDistPage';
 
 import CompaniesPage from './pages/admin/CompaniesPage';
@@ -435,9 +434,10 @@ function AppRoutes() {
             path="/brokers"
             element={<PermissionRoute rule={ROUTE_RULES['/brokers']}><BrokerListPage /></PermissionRoute>}
           />
+          {/* Per-stock Broker Accumulation page was removed; keep old links working. */}
           <Route
             path="/brokers-distribution"
-            element={<PermissionRoute rule={ROUTE_RULES['/brokers-distribution']}><BrokerDistributionPage /></PermissionRoute>}
+            element={<Navigate to="/broker-acc-dist" replace />}
           />
 
           <Route
