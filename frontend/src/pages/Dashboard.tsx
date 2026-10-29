@@ -7,6 +7,8 @@ import BrokerBadge from '../components/brokers/BrokerBadge';
 import { formatCount, formatTradeDate } from '../components/market/format';
 import RoleDashboard from '../components/dashboard/RoleDashboard';
 import Section from '../components/common/Section';
+import PermissionGate from '../components/common/PermissionGate';
+import WeekToDateCard from '../components/dashboard/WeekToDateCard';
 
 /**
  * Single unified dashboard for all roles.
@@ -112,6 +114,9 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <WelcomeBanner />
+      <PermissionGate permission="view_market_data">
+        <WeekToDateCard />
+      </PermissionGate>
       <RoleDashboard />
       {hasPermission('view_analysis') && <BrokerSection />}
     </div>

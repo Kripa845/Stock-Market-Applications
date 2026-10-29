@@ -8,11 +8,14 @@ candles (``intraday_candles.minute_rows``); the checks recompute everything
 from the raw trades in Python, so the two paths verify each other.
 """
 
+import hashlib
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.conf import settings
+from django.core.cache import cache
+from django.db.models import Max
 from django.utils import timezone
 
 from apps.floorsheet.models import FloorsheetTransaction
@@ -24,7 +27,7 @@ from apps.market_data.services.trading_days import is_market_open
 
 BUCKET_MINUTES = (1, 5, 10, 15, 30, 45)
 DEFAULT_BUCKET_MINUTES = 1
-RECENT_DATES = 60
+DATES_CACHE_SECONDS = 60 * 60
 
 # NEPSE's official close ignores odd-lot trades (fewer than 10 shares): on
 # 2026-10-28 NICA closed at 320.00 although its last trade was 2 shares at 320.60.
@@ -91,9 +94,19 @@ def add_derived(cells, prev_close):
 
 
 def available_dates(company_ids=None):
-    """Newest-first dates that have timestamped trades for the companies."""
-    trades = FloorsheetTransaction.objects.filter(trade_time__isnull=False, company__in=tracked_companies(company_ids))
-    return list(trades.order_by("-date").values_list("date", flat=True).distinct()[:RECENT_DATES])
+    """
+    Every date with timestamped trades for the companies, newest first.  The DISTINCT
+    scans every trade (~1.6 s at 2M rows), so it is cached until a new trade arrives.
+    """
+    stamp = FloorsheetTransaction.objects.aggregate(latest=Max("id"))["latest"]
+    scope = "all" if company_ids is None else ",".join(map(str, sorted(company_ids)))
+    key = "floorsheet-grid-dates:" + hashlib.md5(f"{scope}:{stamp}".encode()).hexdigest()
+
+    def compute():
+        trades = FloorsheetTransaction.objects.filter(trade_time__isnull=False, company__in=tracked_companies(company_ids))
+        return list(trades.order_by("-date").values_list("date", flat=True).distinct())
+
+    return cache.get_or_set(key, compute, DATES_CACHE_SECONDS)
 
 
 def daily_reference(day, company_ids):
@@ -351,7 +364,7 @@ def run_checks(day, minutes, companies, rows, trades):
         if _differs(official, company["session_close"], money=True):
             mismatches.append(miss(company, None, "close", official, company["session_close"], "crawled daily price"))
         if company["last_trade_close"] != company["session_close"]:
-            odd_lot.append(f"{company['symbol']} (last trade {company['last_trade_close']})")
+            odd_lot.append(f"{company['symbol']} (last trade {_text(company['last_trade_close'])})")
     rule = ("VWAP of round-lot trades from 14:45" if closing_rule(day) == "closing_vwap"
             else "last round-lot (10+ share) trade")
     note = f"Session close = {rule}."
@@ -385,6 +398,19 @@ def _num(value, places=4):
     return None if value is None else round(float(value), places)
 
 
+def _text(value):
+    """Mismatch values for display: Decimals without padding zeros (320.6000 -> 320.60), at least 2 places."""
+    if value is None:
+        return None
+    if not isinstance(value, Decimal):
+        return str(value)
+    text = f"{value:f}"
+    if "." in text:
+        whole, fraction = text.split(".")
+        text = f"{whole}.{fraction.rstrip('0').ljust(2, '0')}"
+    return text
+
+
 def serialize_grid(payload):
     """JSON-ready grid: numbers as floats (one session can be 279 x 240 cells), cells as sorted lists."""
     companies = []
@@ -409,8 +435,7 @@ def serialize_grid(payload):
         })
     checks = [
         {**check, "mismatches": [
-            {**m, "expected": None if m["expected"] is None else str(m["expected"]),
-             "actual": None if m["actual"] is None else str(m["actual"])}
+            {**m, "expected": _text(m["expected"]), "actual": _text(m["actual"])}
             for m in check["mismatches"]
         ]}
         for check in payload.get("checks", [])

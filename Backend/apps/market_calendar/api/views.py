@@ -10,7 +10,7 @@ from datetime import date
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.market_calendar.services import calendar
+from apps.market_calendar.services import calendar, weekday_summary
 from apps.market_calendar.services.market_day import market_day
 from apps.users.company_access import get_accessible_company_ids
 from apps.users.permissions import HasAppPermission
@@ -61,3 +61,23 @@ class CalendarDayAPIView(_CalendarView):
                 include_brokers=request.user.has_app_permission("view_analysis"),
             )
         return data
+
+
+class WeekdaySummaryAPIView(APIView):
+    """?weeks=6 -- the NEPSE index's average move by weekday over the last N trading weeks."""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        try:
+            weeks = int(request.query_params.get("weeks") or weekday_summary.DEFAULT_WEEKS)
+        except ValueError:
+            weeks = None
+        if weeks not in weekday_summary.WEEK_CHOICES:
+            choices = ", ".join(map(str, weekday_summary.WEEK_CHOICES))
+            return Response({"detail": f"weeks must be one of {choices}."}, status=400)
+        try:
+            return Response(weekday_summary.to_json(weekday_summary.weekday_summary(weeks)))
+        except weekday_summary.IndexNotFound as exc:
+            return Response({"detail": str(exc)}, status=404)

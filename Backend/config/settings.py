@@ -243,7 +243,8 @@ NEPSE_TRADING_WEEKS = (
 #   closing_vwap: VWAP of the trades from 14:45 to the close
 #   last_trade:   rate of the last trade
 NEPSE_CLOSING_PRICE_RULES = (
-    ("1900-01-01", "closing_vwap"),
+    ("1900-01-01", "last_trade"),
+    ("2025-03-20", "closing_vwap"),
     ("2025-09-22", "last_trade"),
 )
 

@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { marketCalendarApi, type BsMonthRef } from '../api/marketCalendar';
+import { marketCalendarApi, type BsMonthRef, type WeekdayWeeks } from '../api/marketCalendar';
 
 // Market calendar month grid and the selected day's detail.  The previous month stays on
 // screen while the next one loads.
@@ -18,6 +18,14 @@ export function useCalendarDay(date: string | null) {
     queryFn: () => marketCalendarApi.day(date as string),
     enabled: date !== null,
     // Stepping through days keeps the last one (and the open tab) on screen while the next loads.
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useWeekdaySummary(weeks: WeekdayWeeks) {
+  return useQuery({
+    queryKey: ['market-calendar', 'weekdays', weeks],
+    queryFn: () => marketCalendarApi.weekdays(weeks),
     placeholderData: keepPreviousData,
   });
 }
