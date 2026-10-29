@@ -52,6 +52,7 @@ Routes are in `frontend/src/App.tsx`, their permission rules in `config/routePer
 | `/companies` → `admin/CompaniesPage.tsx` (`/tracked` redirects here) | `/api/companies/` | `companies/api/views.py` |
 | `/companies/:symbol` → `StockDetail.tsx` | `/api/companies/<id>/…`, `/api/stocks/<symbol>/intraday/`, `/api/analysis/broker-*` | `companies/`, `floorsheet/`, `analysis/services/broker_accumulation.py` |
 | `/floorsheet` → `FloorsheetPage.tsx` | `/api/floorsheet/`, `summary/` | `floorsheet/api/views.py` |
+| `/floorsheet/summary` → `FloorsheetSummaryPage.tsx` | `/api/analysis/floorsheet-grid/` | `analysis/services/floorsheet_grid.py` |
 | `/technical-charts` → `TechnicalCharts.tsx` | `/api/market-intelligence/…`, `/api/market-indices/…` | `market_intelligence/indicators/`, `services/technicals.py` |
 | `/company-analysis` → `CompanyAnalysisDashboard.tsx` | `/api/analysis/…`, `/api/market-intelligence/…` | `analysis/`, `market_intelligence/` |
 | `/broker-analysis[/:brokerId]` → `BrokerAnalysisPage.tsx` | `/api/analysis/brokers/…` | `analysis/services/brokers.py` |

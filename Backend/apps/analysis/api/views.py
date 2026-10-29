@@ -1544,3 +1544,42 @@ class AccDistAPIView(APIView):
             payload = result
             cache.set(key, payload, settings.BROKER_ACCUMULATION_CACHE_SECONDS)
         return Response(payload)
+
+
+class FloorsheetGridAPIView(APIView):
+    """
+    GET /api/analysis/floorsheet-grid/?date=YYYY-MM-DD&minutes=1|5|10|15|30|45
+
+    Floor Sheet Summary: each accessible tracked company's trades for one
+    session in N-minute buckets (default: latest session with trade times, 1M),
+    with the validation checks.  ``dates`` lists the sessions that can be loaded.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_trading_volume"
+
+    def get(self, request):
+        from apps.analysis.services.floorsheet_grid import (
+            BUCKET_MINUTES, DEFAULT_BUCKET_MINUTES, available_dates, build_grid, serialize_grid,
+        )
+
+        try:
+            minutes = int(request.query_params.get("minutes") or DEFAULT_BUCKET_MINUTES)
+        except ValueError:
+            minutes = None
+        if minutes not in BUCKET_MINUTES:
+            return Response({"detail": f"minutes must be one of {', '.join(map(str, BUCKET_MINUTES))}."}, status=400)
+        raw_date = request.query_params.get("date")
+        try:
+            day = datetime.strptime(raw_date, "%Y-%m-%d").date() if raw_date else None
+        except ValueError:
+            return Response({"detail": "date must be YYYY-MM-DD."}, status=400)
+
+        company_ids = get_accessible_company_ids(request.user)
+        dates = available_dates(company_ids)
+        day = day or (dates[0] if dates else None)
+        if day is None:
+            return Response({"date": None, "minutes": minutes, "status": "stored", "buckets": [],
+                             "pre_open_trades": 0, "companies": [], "checks": [], "dates": []})
+        payload = serialize_grid(build_grid(day, minutes, company_ids))
+        return Response({**payload, "dates": [d.isoformat() for d in dates]})
