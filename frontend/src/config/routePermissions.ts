@@ -15,6 +15,7 @@ export const ROUTE_RULES: Record<string, RouteRule> = {
   '/companies/:symbol': { permissions: ['view_companies', 'view_price_history', 'view_market_data', 'view_news'], mode: 'all' },
   '/company-analysis':  { permissions: ['view_analysis', 'view_companies', 'view_price_history', 'view_market_data'], mode: 'all' },
   '/floorsheet':        { permissions: ['view_trading_volume'], mode: 'all' },
+  '/floorsheet/summary': { permissions: ['view_trading_volume'], mode: 'all' },
   '/technical-charts':  { permissions: ['view_analysis', 'view_companies', 'view_price_history', 'view_market_data'], mode: 'all' },
   '/broker-analysis':   { permissions: ['view_analysis'], mode: 'all' },
   '/top-brokers':       { permissions: ['view_analysis'], mode: 'all' },

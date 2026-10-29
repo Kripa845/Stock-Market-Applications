@@ -25,7 +25,8 @@ import {
   List,
   FileSpreadsheet,
   ChartColumnStacked,
-  CalendarDays
+  CalendarDays,
+  Grid3x3
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -108,6 +109,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Floorsheet',
     icon: ScrollText,
     to: '/floorsheet',
+    end: true,
+  },
+  {
+    label: 'Floor Sheet Summary',
+    icon: Grid3x3,
+    to: '/floorsheet/summary',
   },
   {
     label: 'Broker Analysis',

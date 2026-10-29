@@ -22,6 +22,7 @@ import Dashboard from './pages/Dashboard';
 import CompanyAnalysisDashboard from './pages/CompanyAnalysisDashboard';
 import TechnicalCharts from './pages/TechnicalCharts';
 import FloorsheetPage from './pages/FloorsheetPage';
+import FloorsheetSummaryPage from './pages/FloorsheetSummaryPage';
 import TopBrokerStocksPage from './pages/TopBrokerStocksPage';
 import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage';
 import TopBrokerPage from './pages/TopBrokerPage';
@@ -407,6 +408,17 @@ function AppRoutes() {
                 rule={ROUTE_RULES['/floorsheet']}
               >
                 <FloorsheetPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/floorsheet/summary"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/floorsheet/summary']}
+              >
+                <FloorsheetSummaryPage />
               </PermissionRoute>
             }
           />

@@ -15,6 +15,7 @@ from apps.analysis.api.views import (
     CrossCompanyAnalysisAPIView,
     DailyAnalysisListAPIView,
     DashboardSummaryAPIView,
+    FloorsheetGridAPIView,
 )
 
 urlpatterns = [
@@ -29,6 +30,8 @@ urlpatterns = [
     path("broker-flow/", BrokerFlowAPIView.as_view(), name="broker-flow"),
     # Market-wide (stock, broker) net buying / selling (?period=1D..3Y).
     path("acc-dist/", AccDistAPIView.as_view(), name="acc-dist"),
+    # Floor Sheet Summary: one session's trades in N-minute buckets (?date=&minutes=).
+    path("floorsheet-grid/", FloorsheetGridAPIView.as_view(), name="floorsheet-grid"),
     path("companies/<int:pk>/categorized-news/", CompanyCategorizedNewsAPIView.as_view(), name="company-categorized-news"),
     path(
         "daily/",

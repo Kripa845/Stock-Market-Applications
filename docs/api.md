@@ -64,7 +64,7 @@ Every tracked response carries `"scope": "tracked_companies"`.
 | `stocks/<symbol>/intraday/?interval=5m&date=` | `view_price_history` |
 
 ### `analysis/`
-All `view_analysis` except `dashboard-summary/` (`view_market_data`).
+All `view_analysis` except `dashboard-summary/` (`view_market_data`) and `floorsheet-grid/` (`view_trading_volume` + company access; `?date=&minutes=1|5|10|15|30|45`, Floor Sheet Summary grid with its validation checks).
 
 `daily/`, `cross-company/`, `dashboard-summary/`, `brokers/`, `brokers/top/`, `brokers/list/`, `brokers/<broker_id>/`, `broker-summary/`, `broker-signal/`, `broker-flow/`, `acc-dist/`, `companies/<id>/behaviorsummary/`, `companies/<id>/brokers/`, `companies/<id>/news-pricecorrelation/`, `companies/<id>/categorized-news/`
 
