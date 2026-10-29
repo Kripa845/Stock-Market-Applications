@@ -11,7 +11,7 @@ The tables that matter, which app owns them, their natural keys, and the rules t
 | **Floorsheet** | NEPSE's list of every trade in a session: transaction id, buyer broker, seller broker, quantity, rate, amount. |
 | **Broker** | A NEPSE trading member, identified by number (e.g. `58`). Net buying by a broker can be many clients. |
 | **LTP** | Last traded price (live, intraday). Not the same as the crawled close. |
-| **Close / previous close** | From crawled `DailyPrice`. Previous close is derived from the previous crawled session, never stored. NEPSE's official close is **not** always the last trade: odd lots (<10 shares) never count, and until 2025-09-21 it was the VWAP of trades from 14:45 (`settings.NEPSE_CLOSING_PRICE_RULES`; checked by `manage.py validate_floorsheet_grid`). |
+| **Close / previous close** | From crawled `DailyPrice`. Previous close is derived from the previous crawled session, never stored. NEPSE's official close is **not** always the last trade: odd lots (<10 shares) never count, and from 2025-03-20 to 2025-09-21 it was the VWAP of trades from 14:45 (the last trade before and after) (`settings.NEPSE_CLOSING_PRICE_RULES`; checked by `manage.py validate_floorsheet_grid`). |
 | **Adjusted change** | ShareSansar's published % change, which uses NEPSE's previous close adjusted for bonus / right shares. Differs from close-to-close on book-closure days. |
 | **Fiscal year** | Nepali (Bikram Sambat) year, stored as `2082/2083`. Starts mid-July. Quarters 1–4 are cumulative for the year. |
 | **EPS / BV / DPPS** | Earnings per share (annualized), book value per share, distributable profit per share. |

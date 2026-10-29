@@ -42,6 +42,7 @@ import MarketPage from './pages/Market';
 import TopMoversPage from './pages/TopMoversPage';
 import DividendsPage from './pages/DividendsPage';
 import MarketCalendarPage from './pages/MarketCalendarPage';
+import WeekdaySummaryPage from './pages/WeekdaySummaryPage';
 import QuarterlyReportPage from './pages/QuarterlyReportPage';
 import IndicesPage from './pages/IndicesPage';
 import TopActivityPage from './pages/TopActivityPage';
@@ -293,6 +294,17 @@ function AppRoutes() {
                 rule={ROUTE_RULES['/market/calendar']}
               >
                 <MarketCalendarPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/weekdays"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/weekdays']}
+              >
+                <WeekdaySummaryPage />
               </PermissionRoute>
             }
           />

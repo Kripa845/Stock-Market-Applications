@@ -146,7 +146,78 @@ export interface CalendarDay extends CalendarDayBase {
   market?: MarketDay;
 }
 
+export const WEEKDAY_WEEK_CHOICES = [4, 6, 13, 26] as const;
+export type WeekdayWeeks = (typeof WEEKDAY_WEEK_CHOICES)[number];
+export const WEEKDAY_WEEK_LABELS: Record<WeekdayWeeks, string> = { 4: '4W', 6: '6W', 13: '3M', 26: '6M' };
+
+/** up / down / flat = a stored session; the rest have no session (pending = today or later). */
+export type WeekdayDayStatus = 'up' | 'down' | 'flat' | 'holiday' | 'no_session' | 'pending';
+
+export interface WeekdayDay {
+  date: string;
+  weekday: string;
+  status: WeekdayDayStatus;
+  /** NEPSE's own % change; numbers on this endpoint, null without a session. */
+  change_pct: number | null;
+  close: number | null;
+  holiday?: string;
+}
+
+export interface WeekdayWeek {
+  week_start: string;
+  /** BS date of the week's first trading weekday, e.g. "9 Kartik". */
+  label: string;
+  days: WeekdayDay[];
+  /** Last close vs the previous week's last close. */
+  change_pct: number | null;
+  sessions: number;
+  up_days: number;
+  partial: boolean;
+  best: boolean;
+  worst: boolean;
+}
+
+export interface WeekdayColumn {
+  weekday: string;
+  average_pct: number | null;
+  sessions: number;
+  up: number;
+  down: number;
+  /** One per week, oldest first. */
+  dots: WeekdayDayStatus[];
+}
+
+export type WeekdayInsight =
+  | { kind: 'best'; weekdays: string[]; average_pct: number; up: number; sessions: number }
+  | { kind: 'always_up'; weekdays: string[]; sessions: number }
+  | { kind: 'most_up'; weekdays: string[]; up: number; sessions: number }
+  | { kind: 'negative'; weekdays: string[]; averages: number[] }
+  /** Consecutive up closes back from the newest week. */
+  | { kind: 'streak'; weekdays: string[]; sessions: number };
+
+export interface WeekdaySummary {
+  index: string;
+  weeks: number;
+  /** Server's today (Asia/Kathmandu), for the TODAY column. */
+  today: string;
+  sessions_total: number;
+  sessions_up: number;
+  requested_weeks: number;
+  from: string;
+  to: string;
+  trading_week: string[];
+  columns: WeekdayColumn[];
+  /** Newest week first. */
+  week_rows: WeekdayWeek[];
+  closed_weeks: { week_start: string; label: string }[];
+  insights: WeekdayInsight[];
+  notes: string[];
+}
+
 export const marketCalendarApi = {
+  /** NEPSE index move by weekday over the last `weeks` trading weeks (services/weekday_summary.py). */
+  weekdays: (weeks: WeekdayWeeks) =>
+    apiClient.get<WeekdaySummary>('/market-calendar/weekdays/', { params: { weeks } }).then((r) => r.data),
   /** No argument: today's BS month. */
   month: (ref?: BsMonthRef | null) =>
     apiClient.get<CalendarMonth>('/market-calendar/month/', { params: ref ?? {} }).then((r) => r.data),

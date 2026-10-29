@@ -26,6 +26,7 @@ import {
   FileSpreadsheet,
   ChartColumnStacked,
   CalendarDays,
+  CalendarRange,
   Grid3x3
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -84,6 +85,11 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Market Calendar',
     icon: CalendarDays,
     to: '/market/calendar',
+  },
+  {
+    label: 'Weekday Summary',
+    icon: CalendarRange,
+    to: '/market/weekdays',
   },
   {
     label: 'Latest Report',
