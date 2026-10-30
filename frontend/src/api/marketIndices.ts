@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { SupportResistance } from './marketIntelligence';
+import type { IndicatorParams, IndicatorSeriesResponse, SupportResistance } from './marketIntelligence';
 
 export interface IndexRow {
   code: string; name: string; sector: string; date: string; previous_date: string | null;
@@ -119,4 +119,16 @@ export const getIndexIntraday = (code: string, days: number) =>
 export const getIndexSupportResistance = (code: string) =>
   apiClient
     .get<Omit<SupportResistance, 'company_id'> & { index_code: string }>('/market-indices/support-resistance/', { params: { code } })
+    .then(r => r.data);
+
+// The company indicator library on an index's stored daily bars (benchmark / floorsheet indicators come back as errors).
+export const getIndexIndicatorSeries = (
+  code: string,
+  specs: { id: string; params: IndicatorParams }[],
+  options: { start_date?: string } = {},
+) =>
+  apiClient
+    .get<Omit<IndicatorSeriesResponse, 'company_id'> & { index_code: string }>('/market-indices/indicators/', {
+      params: { code, specs: JSON.stringify(specs), ...options },
+    })
     .then(r => r.data);

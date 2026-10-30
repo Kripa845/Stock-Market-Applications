@@ -290,6 +290,7 @@ export default function TechnicalCharts() {
       <KlinePriceChart
         prices={indexHistory.prices}
         symbol={indexHistory.name}
+        indexCode={selected.code}
         fetchMinuteBars={fetchMinuteBars}
         priceLines={srOn ? [...indexPriceLines, ...srLines] : indexPriceLines}
         lastPriceNote={changeNote(num(latest?.change), num(latest?.change_pct))}

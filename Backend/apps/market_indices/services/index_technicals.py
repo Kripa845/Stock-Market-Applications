@@ -11,6 +11,10 @@ Support / resistance: the same algorithm as companies (market_intelligence.servi
 .compute_levels) on the stored daily IndexDaily bars.  NEPSE's own percentage change is passed as
 source_change_pct, so a re-based index is back-adjusted rather than read as a price gap.  Indices
 have no corporate actions to flag.  Computed on request (a few hundred bars) and cached by the view.
+
+Indicators: the company indicator library (market_intelligence.indicators) on the same IndexDaily
+bars.  Index volume is published only for recent sessions, so volume indicators start there.
+Benchmark and floorsheet indicators need a stock and are reported as unavailable.
 """
 
 from dataclasses import asdict
@@ -19,7 +23,15 @@ from datetime import timedelta
 from django.utils import timezone
 
 from apps.market_indices.models import IndexDaily, IndexIntradayPoint
+from apps.market_intelligence.services import indicator_series as series
 from apps.market_intelligence.services.support_resistance import Bar, Params, compute_levels
+
+# Same rule as the company endpoint: only crawled company prices feed the market-wide indicators.
+UNIVERSE_SOURCES = ("crawled",)
+UNAVAILABLE = {
+    "benchmark": "Needs a stock to compare with the benchmark; not available for an index.",
+    "floorsheet": "Built from a stock's floorsheet trades; not available for an index.",
+}
 
 MAX_INTRADAY_DAYS = 60
 
@@ -39,6 +51,24 @@ def intraday_bars(index, days):
          "close": value, "volume": 0}
         for at, value in points
     ]
+
+
+def indicator_series(index, specs, start=None, end=None):
+    """Registry indicators for ``index`` -> (dates from ``start``, one result per spec)."""
+    rows = IndexDaily.objects.filter(index=index).order_by("date")
+    if end:
+        rows = rows.filter(date__lte=end)
+    rows = list(rows.values_list("date", "open", "high", "low", "close", "volume"))
+    optional = lambda v: None if v is None else float(v)  # noqa: E731
+    data = {
+        "date": [r[0] for r in rows],
+        "open": [optional(r[1]) for r in rows], "high": [optional(r[2]) for r in rows],
+        "low": [optional(r[3]) for r in rows], "close": [float(r[4]) for r in rows],
+        "volume": [r[5] for r in rows],
+    }
+    if "market" in series.scopes(specs):
+        data["universe"] = series.market_universe(UNIVERSE_SOURCES, end)
+    return series.run(specs, data, start, unavailable=UNAVAILABLE)
 
 
 def support_resistance(index, params: Params = Params()):

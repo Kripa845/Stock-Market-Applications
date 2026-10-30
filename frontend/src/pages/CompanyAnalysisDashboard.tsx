@@ -331,6 +331,7 @@ export default function CompanyAnalysisDashboard() {
                 <KlinePriceChart
                   prices={indexHistory.prices}
                   symbol={indexHistory.name}
+                  indexCode={selectedIndex}
                   priceLines={indexPriceLines}
                   lastPriceNote={indexChangeNote}
                 />

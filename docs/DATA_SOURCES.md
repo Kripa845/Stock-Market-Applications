@@ -70,6 +70,8 @@ Commands from `Backend/` (`venv\Scripts\python manage.py …`) unless noted. All
 | Floorsheet history | `backfill_sharehub_floorsheet --from YYYY-MM-DD [--to …] [--symbols …]` | Back to Oct 2023, with trade times. Skips company-days that already have trades. About 1 GB total, so do it in chunks. |
 | Floorsheet, missed day | same command for that date | ShareSansar serves only the current session. `backfill_floorsheet` re-crawls ShareSansar and probably can't fill past days. |
 | Trade times | `fix_sharehub_trade_times [--dry-run]`, then `rebuild_intraday_candles` | Writes a JSON backup first; `--undo` restores it. |
+| Missing trade times | `fill_floorsheet_trade_times [--from … --to …] [--apply]`, then `rebuild_intraday_candles` | Dry run unless `--apply`. Fills only NULL `trade_time` from ShareHub, matching contract number, quantity and rate; never inserts. Backup in `Backend/backups/`; `--undo FILE --apply` restores. |
+| Floorsheet check | `floorsheet_quality_report [--from … --to …] [--symbols …] [--candles]` | Read-only: volume and high/low vs DailyPrice (odd lots excluded), untimed and pre-open trades, missing days. |
 | `DailyPrice.transactions` | `backfill_price_fields` | Counts from floorsheet. |
 | Analysis / intelligence | `backfill_market_analysis`, `backfill_market_intelligence [--dry-run]` | |
 | Indices | `sync_market_indices --since YYYY-MM-DD [--source sharesansar]` | `sharesansar` fills only sessions NEPSE lacks and pages through the whole range, so `--since 1997-07-01` backfills NEPSE's full history (from 1997-07-20; sub-indices start later). |

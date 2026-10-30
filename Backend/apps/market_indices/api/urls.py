@@ -2,6 +2,7 @@ from django.urls import path
 
 from apps.market_indices.api.views import (
     IndexHistoryAPIView,
+    IndexIndicatorSeriesAPIView,
     IndexIntradayAPIView,
     IndexSupportResistanceAPIView,
     IndexVerificationAPIView,
@@ -23,4 +24,5 @@ urlpatterns = [
     path("verify/", IndexVerificationAPIView.as_view(), name="market-index-verify"),
     path("intraday/", IndexIntradayAPIView.as_view(), name="market-index-intraday"),
     path("support-resistance/", IndexSupportResistanceAPIView.as_view(), name="market-index-support-resistance"),
+    path("indicators/", IndexIndicatorSeriesAPIView.as_view(), name="market-index-indicators"),
 ]

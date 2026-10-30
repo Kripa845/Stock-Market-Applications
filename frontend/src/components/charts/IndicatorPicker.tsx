@@ -23,7 +23,8 @@ interface Props {
   active: ActiveIndicator[];
   errors: Record<string, string>;
   builtins: Builtin[];
-  dailyOnly: boolean;
+  // Why the library indicators are not drawn right now ('' when they are).
+  notice: string;
   onAdd: (def: IndicatorDef) => void;
   onRemove: (uid: string) => void;
   onParams: (uid: string, params: IndicatorParams) => void;
@@ -204,9 +205,9 @@ export default function IndicatorPicker(props: Props) {
         </button>
       </div>
 
-      {props.dailyOnly && (
+      {props.notice && (
         <div className="flex items-center gap-2 border-b border-border bg-amber-500/10 px-4 py-2 text-[11px] text-amber-500">
-          <Info size={13} /> Library indicators use daily bars — switch the chart to 1D to see them.
+          <Info size={13} /> {props.notice}
         </div>
       )}
 
