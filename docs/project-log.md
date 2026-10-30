@@ -22,6 +22,15 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 
 ## Log
 
+### 2026-10-30: NEPSE Month-by-Month  `uncommitted`
+
+**What:** Sibling of Day-by-Day: one row per BS year, one tile per BS month coloured by that month's index return (±12% scale), each year's compounded return as a bar, a pinned AVG row, and best / worst year, strongest month and months-closed-up cards. A Day / Month switch keeps the selected index (`?index=`).
+**Backend:** `apps/market_calendar/services/monthly_returns.py` (no new table; derived from `IndexDaily`, cached); ShareSansar index fetch now pages through long ranges (`market_indices/services/sharesansar_indices.py`).
+**API:** `GET /api/market-calendar/monthly/?index=` (`view_market_data`).
+**Frontend:** route `/market/month-by-month` (`pages/MonthByMonthPage.tsx`), sidebar entry; shared grid pieces moved to `components/market/heatGrid.tsx`; `heatClass` takes a scale.
+**Data:** needs long index history: `sync_market_indices --since 1997-07-01 --source sharesansar`.
+**Tests:** `market_calendar/tests/test_monthly_returns.py`, `market_indices/tests/test_sharesansar_indices.py`.
+
 ### 2026-10-30: Broker Position, NEPSE Day-by-Day, Weekday summary rework  `uncommitted`
 
 **What:** Broker Position shows one broker's running net (bought − sold) in one stock over 1D–1Y, plus a multi-stock view of one broker's activity. Day-by-Day shows one row per month (BS or AD) with one tile per session, coloured by the NEPSE index change.

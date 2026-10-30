@@ -1,8 +1,8 @@
 # Status
 
-Known problems and unfinished work. Last checked against the code on **2026-10-28**. Remove an entry when it is fixed, and add new ones with the date.
+Known problems and unfinished work. Last checked against the code on **2026-10-30**. Remove an entry when it is fixed, and add new ones with the date.
 
-## Failing tests (5 of 888, `pytest -q` on 2026-10-28)
+## Failing tests (5 of 1017, `pytest -q` on 2026-10-30; same 5 as on 2026-10-28)
 
 | Test | Failure | Likely cause |
 |---|---|---|
@@ -25,14 +25,20 @@ Known problems and unfinished work. Last checked against the code on **2026-10-2
 ## Known quirks
 
 * Standalone `scrapy crawl …` runs create a `CrawlRun` with the default `crawl_type="news"` whatever the spider is (`crawlers/crawlers/pipelines.py`, `CrawlRunPipeline`). Filter by `source` when auditing crawl history.
-* `seed_admin` creates a user with hardcoded credentials and the invalid email `admin@.com`. Change them after first login, or make the command read them from env.
+* `seed_admin` creates `admin1` / `Admin@123` with the invalid email `admin@.com`, prints the password, and **resets the password every time it runs**. Change it after first login, or make the command read credentials from env. See [SECURITY.md](SECURITY.md#known-issues).
+* `Backend/data/backups/data.json` (2026-10-30) holds an old `auth.user` superuser row with its password hash and an expired session, committed in `7ca19b5`. Remove it from the repo.
+* API number format is mixed: dict-built responses send `Decimal` as JSON numbers, serializer `DecimalField`s as strings (see [API.md](API.md#conventions)). Behind the two `test_broker_api.py` failures.
+* No `CACHES` setting (2026-10-30): each process has its own in-memory cache, so gunicorn workers don't share cached responses.
+* Export headers in `apps/reports/exports/{news,report,trading}.py` use naive `datetime.now()`: UTC inside Docker, not NPT.
+* `Backend/crawlers/crawl_log.txt` is an old Scrapy log tracked in git.
 * `requirements.txt` pins `Scrapy==2.12.0`, but the local venv has 2.18.0 (2026-10-28). On ≥ 2.13 a spider must define `async def start()` (spiders without it send no requests), and pipelines log deprecation warnings for `open_spider(spider)` / returned Deferreds. Align the pin with what is installed.
 * `BROKER_*` and `NEPSE_CLIENT_REUSE_SECONDS` settings are read from the environment but are missing from `.env.example`.
 * `Backend/crawlers/floorsheet.json` and `trading_data.json` are tracked in git and change whenever a crawl writes a feed file. They should probably be gitignored.
 
 ## Unfinished / unused code
 
-* `merolagani` and `nepalipaisa` spiders exist but are not in `runner.py` → `NEWS_SPIDERS`, so they never run on schedule (probably intentional, after commit `2ab998e` "Removing some sources").
+* `nepalipaisa` (news) and `moneymitra_brokers` spiders exist but are in no `runner.py` list, so they never run on schedule (probably intentional, after commit `2ab998e` "Removing some sources").
+* Spider file names (2026-10-30): `spiders/merolagani.py` actually contains the `market_stocks` spider (whole-market table from ShareSansar), and `spiders/market_stocks.py` is an empty file. There is no `merolagani` spider. Works (Scrapy finds spiders by `name`) but misleads; rename the file.
 * `apps/news/services/embedding_classifier.py`, `llm_classifier.py`, `ner_classifier.py`: empty placeholders.
 * `Backend/crawlers/utils/` and `Backend/crawlers/base/client.py`: older copies. Spiders import `crawlers.utils` (the inner `crawlers/crawlers/utils/`), and nothing imports these. Likely safe to delete.
 * `backfill_floorsheet` re-crawls ShareSansar for a date range, but ShareSansar serves only the current session, so it probably can't fill past days. Use `backfill_sharehub_floorsheet`. Not verified against the live site.

@@ -2,12 +2,15 @@
 // sub-index), in Nepali (BS) or English months, newest month on top.  Every tile is a stored
 // session; holidays, weekends and missing days stay as dashed gaps.  Click or drag across tiles
 // for the cumulative return over the selection.  Tiles share the Weekday Summary page's look.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle, CalendarDays, ChevronUp, CircleCheck, RefreshCw, SlidersHorizontal, TrendingDown, TrendingUp, X,
 } from 'lucide-react';
 
 import { formatPct, formatPrice, formatTradeDate, toNepaliDigits } from '../components/market/format';
+import {
+  HeatLegend, HeatViewTabs, IndexChips, MiniStat, Segmented, useDragSelect, useIndexParam,
+} from '../components/market/heatGrid';
 import { WEEKDAY_NAMES, heatClass, toneText } from '../components/market/weekday';
 import {
   DAY_BY_DAY_MONTH_CHOICES, type DayByDayCalendar, type DayByDayDay, type DayByDayMonth, type DayByDayMonths,
@@ -24,47 +27,11 @@ const STATUS_TEXT: Record<string, string> = {
   holiday: 'Holiday', weekend: 'Not a trading day', pending: 'Awaiting the close', no_data: 'Before the stored index history',
   no_session: 'No session stored', future: 'Upcoming', traded: 'Traded',
 };
-// heatClass steps (|move| < 0.25, < 0.5, < 1, >= 1%), strongest fall first.
-const LEGEND_STEPS = [-1, -0.6, -0.3, -0.1, 0, 0.1, 0.3, 0.6, 1];
-
-type Selection = { anchor: string; end: string } | null;
 type Hover = { day: DayByDayDay; x: number; y: number } | null;
 
 // ---------------------------------------------------------------------------
 // Sidebar
 // ---------------------------------------------------------------------------
-
-function Segmented<T extends string | number>({ label, value, options, onChange }: {
-  label: string; value: T; options: { value: T; label: string; className?: string }[]; onChange: (v: T) => void;
-}) {
-  return (
-    <div role="group" aria-label={label} className="flex gap-1 rounded-xl border border-bg-border bg-bg-card p-1">
-      {options.map((o) => (
-        <button key={o.value} type="button" aria-pressed={o.value === value} onClick={() => onChange(o.value)}
-          className={`flex-1 rounded-lg px-2 py-1.5 text-xs transition ${o.className ?? ''} ${
-            o.value === value ? 'bg-accent/20 font-semibold text-accent' : 'text-text-secondary hover:text-text-primary'
-          }`}>
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function MiniStat({ label, icon, iconClass, value, valueClass = 'text-text-primary', sub }: {
-  label: string; icon: React.ReactNode; iconClass: string; value: string; valueClass?: string; sub: React.ReactNode;
-}) {
-  return (
-    <div className="card !rounded-2xl !p-4">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-secondary">{label}</p>
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${iconClass}`}>{icon}</span>
-      </div>
-      <p className={`mt-1 font-mono text-2xl font-semibold ${valueClass}`}>{value}</p>
-      <div className="mt-1 truncate text-xs text-text-secondary">{sub}</div>
-    </div>
-  );
-}
 
 function monthName(ref: { label: string; label_np: string }, calendar: DayByDayCalendar) {
   return calendar === 'bs' && ref.label_np ? <span className="font-devanagari">{ref.label_np}</span> : ref.label;
@@ -100,19 +67,6 @@ function Stats({ data }: { data: DayByDaySummary }) {
   );
 }
 
-function Legend() {
-  return (
-    <div>
-      <div className="flex gap-1">
-        {LEGEND_STEPS.map((p) => <span key={p} className={`h-3 flex-1 rounded ${heatClass(p)}`} />)}
-      </div>
-      <div className="mt-1.5 flex justify-between font-mono text-[10px] text-text-muted">
-        <span>−1%</span><span>0</span><span>+1%</span>
-      </div>
-    </div>
-  );
-}
-
 function SidebarBody({ data, index, onIndex, calendar, onCalendar, months, onMonths }: {
   data: DayByDaySummary | undefined; index: string; onIndex: (code: string) => void;
   calendar: DayByDayCalendar; onCalendar: (c: DayByDayCalendar) => void;
@@ -131,23 +85,9 @@ function SidebarBody({ data, index, onIndex, calendar, onCalendar, months, onMon
 
       {data && <Stats data={data} />}
 
-      <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-text-muted">Indices</p>
-        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-2">
-          {(data?.indices ?? [{ code: 'NEPSE', label: 'NEPSE' }]).map((i) => (
-            <button key={i.code} type="button" onClick={() => onIndex(i.code)} title={i.label} aria-pressed={i.code === index}
-              className={`truncate rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${
-                i.code === index
-                  ? 'border-accent/50 bg-accent/20 font-semibold text-accent'
-                  : 'border-bg-border bg-bg-card text-text-secondary hover:text-text-primary'
-              }`}>
-              {i.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <IndexChips indices={data?.indices} index={index} onIndex={onIndex} />
 
-      <Legend />
+      <HeatLegend />
     </div>
   );
 }
@@ -192,7 +132,7 @@ function Tile({ day, isToday, selected, onHover, onDown }: {
   // Gaps reuse heatClass's dashed box; weekends, future days and pre-history days fade out.
   const faded = day.status === 'weekend' || day.status === 'future' || day.status === 'no_data';
   return (
-    <button type="button" data-date={day.date}
+    <button type="button" data-sel={day.date}
       onPointerDown={(e) => onDown(e, day.date)}
       onPointerEnter={(e) => onHover({ day, x: e.clientX, y: e.clientY })}
       onPointerMove={(e) => onHover({ day, x: e.clientX, y: e.clientY })}
@@ -368,20 +308,17 @@ function SelectionCard({ data, from, to, onClose }: {
 // ---------------------------------------------------------------------------
 
 export default function DayByDayPage() {
-  const [index, setIndex] = useState('NEPSE');
+  const [index, setIndex] = useIndexParam();
   const [calendar, setCalendar] = useState<DayByDayCalendar>('bs');
   const [months, setMonths] = useState<DayByDayMonths>(12);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [hover, setHover] = useState<Hover>(null);
-  const [selection, setSelection] = useState<Selection>(null);
-  const dragging = useRef(false);
+  const { range, onDown, onGridMove, dragging, clear } = useDragSelect();
 
   const { data, isLoading, isFetching, error, refetch } = useDayByDay(index, calendar, months);
   const detail = (error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail;
 
-  const [from, to] = selection
-    ? [selection.anchor, selection.end].sort() as [string, string]
-    : [null, null];
+  const [from, to] = range ?? [null, null];
   const selected = useMemo(() => {
     const set = new Set<string>();
     if (!data || !from || !to) return set;
@@ -389,32 +326,11 @@ export default function DayByDayPage() {
     return set;
   }, [data, from, to]);
 
-  const onDown = useCallback((e: React.PointerEvent, date: string) => {
-    if (e.button !== 0) return;
-    setSelection((current) => (e.shiftKey && current ? { ...current, end: date } : { anchor: date, end: date }));
-    // Touch keeps its swipe for scrolling the grid; drag-select is for mouse and pen.
-    dragging.current = e.pointerType !== 'touch';
-  }, []);
-
-  const onGridMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    const date = (document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null)
-      ?.closest<HTMLElement>('[data-date]')?.dataset.date;
-    if (date) setSelection((current) => (current && current.end !== date ? { ...current, end: date } : current));
-  }, []);
-
-  useEffect(() => {
-    const stop = () => { dragging.current = false; };
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelection(null); };
-    window.addEventListener('pointerup', stop);
-    window.addEventListener('keydown', esc);
-    return () => { window.removeEventListener('pointerup', stop); window.removeEventListener('keydown', esc); };
-  }, []);
-
   return (
     <div className="flex flex-col gap-6 lg:flex-row">
       <aside className="shrink-0 lg:w-[220px]">
-        <div className="flex items-start justify-between gap-3">
+        <HeatViewTabs index={index} />
+        <div className="mt-5 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">{data?.index.code ?? index} · whole market</p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight text-text-primary">NEPSE day by day</h1>
@@ -462,7 +378,7 @@ export default function DayByDayPage() {
       </main>
 
       <Tooltip hover={dragging.current ? null : hover} indexName={data?.index.code ?? index} />
-      {data && from && to && <SelectionCard data={data} from={from} to={to} onClose={() => setSelection(null)} />}
+      {data && from && to && <SelectionCard data={data} from={from} to={to} onClose={clear} />}
     </div>
   );
 }

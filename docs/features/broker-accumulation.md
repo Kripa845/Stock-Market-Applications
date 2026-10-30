@@ -42,7 +42,7 @@ Responses are cached for `BROKER_ACCUMULATION_CACHE_SECONDS` (1 hour). The cache
 
 ## Data collection
 No separate fetcher: it reads `floorsheet.FloorsheetTransaction`, which the existing crawls fill.
-* **Daily:** Celery beat runs `crawl_floorsheet` at 18:15 Asia/Kathmandu on trading days and skips `TradingHoliday` dates. Run it by hand from the admin crawler page if a day was missed. ShareSansar serves only the current session, so a missed day has to come from ShareHub (see [operations](../operations.md#backfills)).
+* **Daily:** Celery beat runs `crawl_floorsheet` at 18:15 Asia/Kathmandu on trading days and skips `TradingHoliday` dates. Run it by hand from the admin crawler page if a day was missed. ShareSansar serves only the current session, so a missed day has to come from ShareHub (see [backfills](../DATA_SOURCES.md#backfills)).
 * **Backfill:** ShareHub's floorsheet history goes back to October 2023. Backfill it in chunks (roughly 1 GB in total) with `backfill_sharehub_floorsheet`.
 * Re-running a crawl never duplicates trades: `(company, date, transaction_id)` is unique and inserts ignore conflicts.
 

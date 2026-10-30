@@ -9,4 +9,4 @@ Company list and which companies are tracked.
 | `services/selection.py` | tracked_active_companies(), crawl selection |
 | `management/commands/` | seed_companies, sync_listed_shares, import_company_logos, seed_admin |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).

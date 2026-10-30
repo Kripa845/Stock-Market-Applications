@@ -9,8 +9,8 @@ no table of its own.
 * A year's return is its last close against the last close before it began: compounded from
   closes, never the sum of its months.  The first year of history has no earlier close.
 * ``partial``: the running month / year, and the month / year the history starts in.
-* AVG row, "strongest month" and "months that closed up" skip blanks (never counted as 0)
-  and the running month (it has not closed yet).
+* AVG row, "strongest month" and "months that closed up" skip blanks (never counted as 0);
+  the running month counts with its return so far (it is flagged partial).
 
 Whole market: no per-company data.
 """
@@ -99,11 +99,11 @@ def _build(index, today):
             "partial": year == current.year or year == first.year,
         })
 
-    # Closed months only: blanks and the running month say nothing about a month's habit.
-    closed = [c for y in years for c in y["months"] if c and c["return_pct"] is not None and not c["is_current"]]
+    # Blanks say nothing about a month's habit; they are skipped, never counted as 0.
+    valued = [c for y in years for c in y["months"] if c and c["return_pct"] is not None]
     avg_row = []
     for number in range(1, 13):
-        moves = [c["return_pct"] for c in closed if c["month"] == number]
+        moves = [c["return_pct"] for c in valued if c["month"] == number]
         avg_row.append({"average_pct": sum(moves) / len(moves), "years": len(moves)} if moves else None)
 
     ranked = [y for y in years if y["year_return"] is not None]
@@ -126,8 +126,8 @@ def _build(index, today):
             "strongest_month": {"month": strongest + 1, "label": BS_MONTHS_EN[strongest],
                                 "label_np": BS_MONTHS_NP[strongest], **avg_row[strongest]}
             if strongest is not None else None,
-            "months_up": sum(1 for c in closed if c["return_pct"] > 0),
-            "months_counted": len(closed),
+            "months_up": sum(1 for c in valued if c["return_pct"] > 0),
+            "months_counted": len(valued),
         },
         "indices": index_catalogue(),
         "notes": [f"Index history starts {history_from:%d %b %Y}."],

@@ -12,4 +12,4 @@ Daily prices, the live NEPSE feed, the market overview pages and watchlists.
 | `tasks.py` | update_live_prices, derive_price_fields_task |
 | `management/commands/` | update_live_prices, update_prices, backfill_price_fields |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).

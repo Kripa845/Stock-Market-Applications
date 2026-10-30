@@ -7,6 +7,7 @@ export const ROUTE_RULES: Record<string, RouteRule> = {
   '/market/calendar':   { permissions: ['view_market_data'], mode: 'all' },
   '/market/weekdays':   { permissions: ['view_market_data'], mode: 'all' },
   '/market/day-by-day': { permissions: ['view_market_data'], mode: 'all' },
+  '/market/month-by-month': { permissions: ['view_market_data'], mode: 'all' },
   '/market/quarterly-report': { permissions: ['view_market_data'], mode: 'all' },
   '/market/gainers':    { permissions: ['view_market_data'], mode: 'all' },
   '/market/losers':     { permissions: ['view_market_data'], mode: 'all' },

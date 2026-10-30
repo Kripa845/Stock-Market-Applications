@@ -107,14 +107,14 @@ class MonthlyReturnsTests(TestCase):
         self.assertFalse(self.year(data, 2082)["partial"])
         self.assertIsNone(self.year(data, 2081)["year_return"])         # no close before it
 
-    def test_avg_row_and_months_up_skip_blanks_and_the_running_month(self):
+    def test_avg_row_and_months_up_skip_blanks(self):
         data = self.data()
         avg = data["avg_row"]
         self.assertEqual((round(avg[0]["average_pct"], 4), avg[0]["years"]), (D("-2.5"), 2))   # Baishakh 5, -10
         self.assertIsNone(avg[1])                                        # Jestha: only a blank
-        self.assertIsNone(avg[6])                                        # Kartik: only the running month
+        self.assertEqual(round(avg[6]["average_pct"], 4), D("2"))       # Kartik: the running month so far
         stats = data["stats"]
-        self.assertEqual((stats["months_up"], stats["months_counted"]), (3, 5))
+        self.assertEqual((stats["months_up"], stats["months_counted"]), (4, 6))
 
     def test_sidebar_stats(self):
         stats = self.data()["stats"]
