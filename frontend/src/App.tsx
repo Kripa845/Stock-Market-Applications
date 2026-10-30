@@ -28,6 +28,7 @@ import BrokerAnalysisPage, { BrokerDetailPage } from './pages/BrokerAnalysisPage
 import TopBrokerPage from './pages/TopBrokerPage';
 import BrokerListPage from './pages/BrokerListPage';
 import AccDistPage from './pages/AccDistPage';
+import BrokerPositionPage from './pages/BrokerPositionPage';
 
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
@@ -43,6 +44,7 @@ import TopMoversPage from './pages/TopMoversPage';
 import DividendsPage from './pages/DividendsPage';
 import MarketCalendarPage from './pages/MarketCalendarPage';
 import WeekdaySummaryPage from './pages/WeekdaySummaryPage';
+import DayByDayPage from './pages/DayByDayPage';
 import QuarterlyReportPage from './pages/QuarterlyReportPage';
 import IndicesPage from './pages/IndicesPage';
 import TopActivityPage from './pages/TopActivityPage';
@@ -310,6 +312,17 @@ function AppRoutes() {
           />
 
           <Route
+            path="/market/day-by-day"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/day-by-day']}
+              >
+                <DayByDayPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
             path="/market/quarterly-report/:sector?"
             element={
               <PermissionRoute
@@ -479,6 +492,11 @@ function AppRoutes() {
           <Route
             path="/broker-acc-dist"
             element={<PermissionRoute rule={ROUTE_RULES['/broker-acc-dist']}><AccDistPage /></PermissionRoute>}
+          />
+
+          <Route
+            path="/broker-position"
+            element={<PermissionRoute rule={ROUTE_RULES['/broker-position']}><BrokerPositionPage /></PermissionRoute>}
           />
 
 

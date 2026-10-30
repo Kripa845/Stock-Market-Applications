@@ -17,8 +17,9 @@ export function heatClass(pct: number | null) {
   if (pct === 0) return 'bg-bg-elevated text-text-secondary';
   const size = Math.abs(pct);
   const step = size < 0.25 ? 0 : size < 0.5 ? 1 : size < 1 ? 2 : 3;
-  if (pct > 0) return ['bg-up/15 text-up', 'bg-up/30 text-up', 'bg-up/50 text-up', 'bg-up/80 text-bg-primary'][step];
-  return ['bg-down/15 text-down', 'bg-down/30 text-down', 'bg-down/50 text-down', 'bg-down/80 text-bg-primary'][step];
+  // Light fills keep the tone colour; heavier fills switch to plain text so it stays readable.
+  if (pct > 0) return ['bg-up/15 text-up', 'bg-up/30 text-up', 'bg-up/50 text-text-primary', 'bg-up/80 text-bg-primary'][step];
+  return ['bg-down/15 text-down', 'bg-down/30 text-down', 'bg-down/50 text-text-primary', 'bg-down/80 text-bg-primary'][step];
 }
 
 /** Text for a day without a session. */

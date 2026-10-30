@@ -13,6 +13,16 @@
   --trading-up: #26a69a;
   --trading-down: #ef5350;
   --trading-accent: #7c3aed;
+  /* Categorical chart series, light steps (dark steps in the dark-theme block).  Fixed order,
+     validated for colour-blind separation; at most 8 series on one chart. */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
 }
 
 @layer base {
@@ -704,6 +714,14 @@ html:not([data-theme="light"]) {
   --trading-up: #10B981;
   --trading-down: #EF4444;
   --trading-accent: #22D3EE;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
 }
 
 /* App background: soft purple and cyan light behind the glass panels. */

@@ -86,7 +86,10 @@ export default function AccDistTable({ side, rows, loading, emptyMessage, rankOr
                   <Link to={`/companies/${row.symbol}`} className="hover:text-accent-light" title={row.sector}>{row.symbol}</Link>
                 </td>
                 <td className={`px-3 text-right font-mono tabular-nums ${tone}`}>{formatNepaliUnits(row.net_qty)}</td>
-                <td className="px-3 text-center font-semibold text-text-primary">{row.broker}</td>
+                <td className="px-3 text-center font-semibold text-text-primary">
+                  <Link to={`/broker-position?symbol=${row.symbol}&broker=${row.broker}`} className="hover:text-accent-light"
+                    title={`Broker ${row.broker}'s running net in ${row.symbol}`}>{row.broker}</Link>
+                </td>
                 <td className="px-3 text-center">
                   <FloatPill row={row} tone={tone} />
                 </td>

@@ -1,9 +1,10 @@
-// Dashboard strip: the NEPSE index's current week day by day, next to the 6-week weekday averages.
-// Same data as the Weekday Summary page (/market/weekdays), which the Heatmap link opens.
+// Dashboard strip: the tracked companies' current week day by day (average daily % change, each
+// stock counted equally), next to the 6-week weekday averages.  Same data as the Weekday Summary
+// page (/market/weekdays), which the Heatmap link opens.  Hidden when the user can see no tracked company.
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 
-import { formatPct, formatPrice, formatTradeDate } from '../market/format';
+import { formatPct, formatTradeDate } from '../market/format';
 import { WEEKDAY_NAMES, gapLabel, heatClass, toneText } from '../market/weekday';
 import { useWeekdaySummary } from '../../hooks/useMarketCalendar';
 
@@ -23,12 +24,13 @@ export default function WeekToDateCard() {
     <section className="card flex flex-col gap-6 !rounded-2xl !p-6 lg:flex-row lg:items-center lg:gap-8 lg:!p-8">
       <div className="shrink-0 lg:w-[230px]">
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">
-          NEPSE · {week.partial ? 'Week to date' : 'Last week'}
+          Tracked companies · {week.partial ? 'Week to date' : 'Last week'}
         </p>
         <p className={`mt-2 font-mono text-4xl font-semibold ${toneText(week.change_pct)}`}>{formatPct(week.change_pct)}</p>
         <p className="mt-2 text-sm text-text-secondary">
           {week.up_days} of {week.sessions} sessions up · week of {week.label}
         </p>
+        <p className="mt-1 text-xs text-text-muted">Average of your {data.companies} stocks, each counted equally</p>
       </div>
 
       <div className="grid flex-1 grid-cols-5 gap-2 sm:gap-3">
@@ -37,11 +39,12 @@ export default function WeekToDateCard() {
           const pct = day.change_pct;
           return (
             <div key={day.date}
-              title={`${WEEKDAY_NAMES[day.weekday]}, ${formatTradeDate(day.date)}${pct != null ? ` · close ${formatPrice(day.close)}` : ''}`}
+              title={`${WEEKDAY_NAMES[day.weekday]}, ${formatTradeDate(day.date)}${pct != null ? ` · ${day.companies_up} of ${day.companies} up` : ''}`}
               className={`flex h-24 flex-col items-center justify-center gap-1 rounded-xl px-1 ${heatClass(pct)} ${
                 isToday && pct != null ? 'ring-2 ring-accent' : ''
               }`}>
-              <span className={`text-[11px] font-semibold uppercase tracking-wider ${isToday ? 'text-accent' : ''}`}>
+              {/* On a filled tile the label keeps the tile's text colour; the ring marks today. */}
+              <span className={`text-[11px] font-semibold uppercase tracking-wider ${isToday && pct == null ? 'text-accent' : ''}`}>
                 {isToday ? 'Today' : day.weekday}
               </span>
               <span className={`text-center ${pct == null ? 'text-xs sm:text-sm' : 'font-mono text-sm font-semibold sm:text-lg'}`}>

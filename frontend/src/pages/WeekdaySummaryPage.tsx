@@ -1,17 +1,17 @@
-// Weekday by weekday: the NEPSE index's daily moves as a week x weekday heat table, with
-// best / worst week, strongest weekday, the share of up days and each weekday's average.
-// Every figure is a stored NEPSE session; days without one show as dashed gaps.
+// Weekday by weekday: the tracked companies' average daily move (all of them, or one sector) as a
+// week x weekday heat table, with best / worst week, strongest weekday, the share of up days and
+// each weekday's average.  Every figure comes from crawled prices; days without one show as dashed gaps.
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import {
-  AlertTriangle, ArrowRight, CalendarDays, CircleCheck, Lightbulb, RefreshCw, TrendingDown, TrendingUp,
+  AlertTriangle, ArrowRight, CalendarDays, CircleCheck, Info, Lightbulb, RefreshCw, TrendingDown, TrendingUp,
 } from 'lucide-react';
 
-import { formatPct, formatPrice, formatTradeDate } from '../components/market/format';
+import { formatPct, formatTradeDate } from '../components/market/format';
 import { WEEKDAY_NAMES, gapLabel, heatClass, toneText } from '../components/market/weekday';
 import {
-  WEEKDAY_WEEK_CHOICES, WEEKDAY_WEEK_LABELS, type WeekdayDay, type WeekdayInsight, type WeekdaySummary,
-  type WeekdayWeek, type WeekdayWeeks,
+  DEFAULT_WEEKDAY_SCOPE, WEEKDAY_WEEK_CHOICES, WEEKDAY_WEEK_LABELS, type WeekdayDay, type WeekdayInsight, type WeekdayScopeOption,
+  type WeekdayScopes, type WeekdaySummary, type WeekdayWeek, type WeekdayWeeks,
 } from '../api/marketCalendar';
 import { useWeekdaySummary } from '../hooks/useMarketCalendar';
 
@@ -73,20 +73,28 @@ function Stats({ data }: { data: WeekdaySummary }) {
 function DayCell({ day, today, isToday }: { day: WeekdayDay; today: string; isToday: boolean }) {
   const pct = day.change_pct;
   const when = `${WEEKDAY_NAMES[day.weekday] ?? day.weekday}, ${formatTradeDate(day.date)}`;
-  const title = pct != null
-    ? `${when}\n${formatPct(pct)} · close ${formatPrice(day.close)}`
-    : `${when}\n${gapLabel(day, today)}${day.holiday ? `: ${day.holiday}` : ''}`;
+  const title = pct == null
+    ? `${when}\n${gapLabel(day, today)}${day.holiday ? `: ${day.holiday}` : ''}`
+    : [
+      when,
+      `Average ${formatPct(pct)} of ${day.companies} companies · ${day.companies_up} up`,
+      day.best && `Best ${day.best.symbol} ${formatPct(day.best.change_pct)} · worst ${day.worst?.symbol} ${formatPct(day.worst?.change_pct)}`,
+      day.excluded ? `${day.excluded} left out (no trade, no price or a corporate action)` : '',
+    ].filter(Boolean).join('\n');
   return (
     <div title={title}
-      className={`flex h-16 items-center justify-center gap-2 rounded-xl font-mono text-[15px] font-semibold ${heatClass(pct)} ${
+      className={`flex h-16 flex-col items-center justify-center rounded-xl ${heatClass(pct)} ${
         isToday ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg-card' : ''
       }`}>
       {pct == null ? (
-        <span className="font-sans text-sm font-normal">{gapLabel(day, today)}</span>
+        <span className="text-sm">{gapLabel(day, today)}</span>
       ) : (
         <>
-          <span className="text-[11px]">{pct > 0 ? '▲' : pct < 0 ? '▼' : '■'}</span>
-          {formatPct(pct)}
+          <span className="flex items-center gap-2 font-mono text-[15px] font-semibold">
+            <span className="text-[11px]">{pct > 0 ? '▲' : pct < 0 ? '▼' : '■'}</span>
+            {formatPct(pct)}
+          </span>
+          <span className="text-[11px] opacity-80">{day.companies_up} of {day.companies} up</span>
         </>
       )}
     </div>
@@ -201,22 +209,70 @@ function HeatTable({ data }: { data: WeekdaySummary }) {
   );
 }
 
+function ScopePicker({ scopes, value, onChange }: { scopes?: WeekdayScopes; value: string; onChange: (scope: string) => void }) {
+  const option = (o: WeekdayScopeOption) => (
+    <option key={o.scope} value={o.scope}>
+      {o.label} ({o.companies} {o.companies === 1 ? 'company' : 'companies'})
+    </option>
+  );
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="What to show"
+      className="rounded-xl border border-bg-border bg-bg-card px-3 py-2.5 text-sm font-medium text-text-primary outline-none focus:border-accent">
+      {!scopes && <option value={value}>All tracked companies</option>}
+      {scopes?.tracked.map(option)}
+      {scopes && scopes.tracked_sectors.length > 0 && (
+        <optgroup label="By sector">{scopes.tracked_sectors.map(option)}</optgroup>
+      )}
+    </select>
+  );
+}
+
+// What the numbers mean, in plain words.
+function HowToRead({ data }: { data: WeekdaySummary }) {
+  const group = data.scope_label === 'Tracked companies' ? 'tracked companies' : `${data.scope_label.replace('Tracked ', '')} companies`;
+  const example = Math.ceil(data.companies / 2);
+  return (
+    <div className="card flex items-start gap-3 !rounded-2xl !p-5">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent"><Info size={17} /></span>
+      <div className="space-y-1.5 text-sm text-text-secondary">
+        <p className="font-semibold text-text-primary">How to read this</p>
+        <p>
+          Each box is the <strong className="text-text-primary">average daily % change of your {data.companies} {group}</strong>,
+          {' '}each stock counted equally (a Rs 300 stock and a Rs 5,000 stock weigh the same).
+          {' '}"{example} of {data.companies} up" under a box means {example} of them rose that day.
+        </p>
+        <p>
+          A stock's daily % is the same one the Top Gainers / Losers pages use (adjusted for bonus and right shares).
+          Stocks that didn't trade, have no price yet, or show a suspected corporate action that day are left out of that day's average.
+          A week's change compounds the daily averages. Today's box fills in after the evening price crawl.
+        </p>
+        <p className="font-mono text-xs text-text-muted">{data.symbols.join(' · ')}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function WeekdaySummaryPage() {
   const [weeks, setWeeks] = useState<WeekdayWeeks>(6);
-  const { data, isLoading, isFetching, error, refetch } = useWeekdaySummary(weeks);
+  const [scope, setScope] = useState(DEFAULT_WEEKDAY_SCOPE);
+  const { data, isLoading, isFetching, error, refetch } = useWeekdaySummary(weeks, scope);
   const detail = (error as { response?: { data?: { detail?: string } } } | null)?.response?.data?.detail;
+  const subtitle = data
+    ? `Each cell is the average daily % change of the ${data.companies} companies, each counted equally.`
+    : 'Each cell is the average daily % change of your tracked companies.';
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-text-muted">
-            NEPSE index · last {data ? `${data.weeks} weeks` : WEEKDAY_WEEK_LABELS[weeks]}
+            {data?.scope_label ?? 'Tracked companies'} · last {data ? `${data.weeks} weeks` : WEEKDAY_WEEK_LABELS[weeks]}
           </p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">Weekday by weekday</h1>
-          <p className="mt-2 text-sm text-text-secondary">Each cell is that day's close against the previous trading day's close.</p>
+          <p className="mt-2 text-sm text-text-secondary">{subtitle}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <ScopePicker scopes={data?.scopes} value={scope} onChange={setScope} />
           <div role="group" aria-label="Period" className="flex gap-1 rounded-xl border border-bg-border bg-bg-card p-1">
             {WEEKDAY_WEEK_CHOICES.map((w) => (
               <button key={w} type="button" aria-pressed={w === weeks} onClick={() => setWeeks(w)}
@@ -247,6 +303,7 @@ export default function WeekdaySummaryPage() {
         </div>
       ) : (
         <div className={`space-y-6 transition-opacity ${isFetching ? 'opacity-70' : ''}`}>
+          <HowToRead data={data} />
           <Stats data={data} />
           <HeatTable data={data} />
 
@@ -260,8 +317,7 @@ export default function WeekdaySummaryPage() {
             <span>Arrows repeat the colour · * partial week, still updating</span>
           </div>
           <p className="text-xs text-text-muted">
-            NEPSE index sessions {formatTradeDate(data.from)} – {formatTradeDate(data.to)}. A day's move is NEPSE's published % change;
-            a week's change is its last close against the previous week's.{data.notes.map((note) => ` ${note}`)}{' '}
+            {data.scope_label} sessions {formatTradeDate(data.from)} – {formatTradeDate(data.to)}.{data.notes.map((note) => ` ${note}`)}{' '}
             <Link to="/market/calendar" className="inline-flex items-center gap-1 text-accent hover:underline">
               Market calendar <ArrowRight size={12} />
             </Link>

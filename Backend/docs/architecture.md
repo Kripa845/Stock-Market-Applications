@@ -47,6 +47,7 @@ Routes are in `frontend/src/App.tsx`, their permission rules in `config/routePer
 | `/market/gainers`, `/market/losers` → `TopMoversPage.tsx` | `/api/market/movers/`, `top-gainers/` | `market_data/services/movers.py`, `top_movers.py` |
 | `/market/turnover`, `volume`, `transactions` → `TopActivityPage.tsx` | `/api/market/top-activity/`, `top-*` | `market_data/api/market_views.py` |
 | `/market/indices` → `IndicesPage.tsx` | `/api/market-indices/…` | `market_indices/api/views.py` |
+| `/market/day-by-day` → `DayByDayPage.tsx` | `/api/market-calendar/months/` | `market_calendar/services/month_summary.py` |
 | `/market/dividends` → `DividendsPage.tsx` | `/api/market/dividends/` | `reports/api/views.py`, `reports/services/dividends.py` |
 | `/market/quarterly-report/:sector` → `QuarterlyReportPage.tsx` | `/api/market/quarterly-report/` | `reports/services/quarterly_reports.py`, `quarterly_metrics.py` |
 | `/companies` → `admin/CompaniesPage.tsx` (`/tracked` redirects here) | `/api/companies/` | `companies/api/views.py` |
@@ -59,6 +60,7 @@ Routes are in `frontend/src/App.tsx`, their permission rules in `config/routePer
 | `/top-brokers[/:broker]` → `TopBrokerPage.tsx`, `TopBrokerStocksPage.tsx` | `/api/analysis/brokers/top/`, `brokers/<id>/` | `analysis/services/brokers.py` |
 | `/brokers` → `BrokerListPage.tsx` | `/api/analysis/brokers/list/` | `analysis/api/views.py` |
 | `/broker-acc-dist` → `AccDistPage.tsx` (`/brokers-distribution` redirects here) | `/api/analysis/acc-dist/` | `analysis/services/broker_accumulation.py` |
+| `/broker-position` → `BrokerPositionPage.tsx` (Broker Acc / Dist Chart) | `/api/analysis/broker-activity/`, `broker-position/` | `analysis/services/broker_position.py` |
 | `/watchlist` → `MyWatchlistPage.tsx` | `/api/market/watchlists/…` | `market_data/api/watchlists.py`, `services/watchlist.py` |
 | `/live-trading` → `WatchlistPage.tsx` (admin: `admin/WatchlistPage.tsx`), `/watchlist-comparison` → `WatchlistComparison.tsx` | `/api/market/…`, `/api/floorsheet/` | `market_data/`, `floorsheet/` |
 | `/news[/:id]` → `News.tsx`, `NewsDetail.tsx` | `/api/news/…` | `news/api/views.py` |

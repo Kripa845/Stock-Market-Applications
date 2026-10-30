@@ -10,7 +10,7 @@ from datetime import date
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.market_calendar.services import calendar, weekday_summary
+from apps.market_calendar.services import calendar, month_summary, monthly_returns, weekday_summary
 from apps.market_calendar.services.market_day import market_day
 from apps.users.company_access import get_accessible_company_ids
 from apps.users.permissions import HasAppPermission
@@ -64,7 +64,11 @@ class CalendarDayAPIView(_CalendarView):
 
 
 class WeekdaySummaryAPIView(APIView):
-    """?weeks=6 -- the NEPSE index's average move by weekday over the last N trading weeks."""
+    """
+    ?weeks=6&scope=tracked -- the tracked companies' average move by weekday over the last
+    N trading weeks.  scope: tracked or tracked:<sector>, narrowed to the companies the user
+    may access.  ``scopes`` lists what the picker can offer this user.
+    """
 
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
@@ -77,7 +81,63 @@ class WeekdaySummaryAPIView(APIView):
         if weeks not in weekday_summary.WEEK_CHOICES:
             choices = ", ".join(map(str, weekday_summary.WEEK_CHOICES))
             return Response({"detail": f"weeks must be one of {choices}."}, status=400)
+        scope = request.query_params.get("scope", "").strip() or weekday_summary.DEFAULT_SCOPE
+        company_ids = get_accessible_company_ids(request.user)
         try:
-            return Response(weekday_summary.to_json(weekday_summary.weekday_summary(weeks)))
-        except weekday_summary.IndexNotFound as exc:
+            data = weekday_summary.weekday_summary(weeks, scope=scope, company_ids=company_ids)
+        except weekday_summary.ScopeError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        except weekday_summary.NoSessions as exc:
             return Response({"detail": str(exc)}, status=404)
+        data["scopes"] = weekday_summary.scope_catalogue(company_ids)
+        return Response(weekday_summary.to_json(data))
+
+
+class MonthSummaryAPIView(APIView):
+    """
+    ?index=NEPSE&calendar=bs&months=12 -- NEPSE day by day: one row per BS (bs) or AD (ad) month,
+    newest first, one tile per day with the index change.  Whole market, so no company scope.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        params = request.query_params
+        try:
+            months = int(params.get("months") or month_summary.DEFAULT_MONTHS)
+        except ValueError:
+            months = None
+        try:
+            data = month_summary.month_summary(
+                index_code=params.get("index", "").strip().upper() or month_summary.DEFAULT_INDEX,
+                mode=params.get("calendar", "").strip() or month_summary.BS,
+                months=months,
+            )
+        except month_summary.SummaryError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        except month_summary.NoIndexData as exc:
+            return Response({"detail": str(exc)}, status=404)
+        return Response(weekday_summary.to_json(data))
+
+
+class MonthlyReturnsAPIView(APIView):
+    """
+    ?index=NEPSE -- NEPSE month by month: one row per BS year (newest first), one tile per BS
+    month with that month's index return, the year's return, an AVG row and sidebar stats.
+    Whole market, so no company scope.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request):
+        try:
+            data = monthly_returns.monthly_returns(
+                index_code=request.query_params.get("index", "").strip().upper() or month_summary.DEFAULT_INDEX,
+            )
+        except month_summary.SummaryError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        except month_summary.NoIndexData as exc:
+            return Response({"detail": str(exc)}, status=404)
+        return Response(weekday_summary.to_json(data))
