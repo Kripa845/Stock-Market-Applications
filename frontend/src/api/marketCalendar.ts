@@ -157,18 +157,37 @@ export interface WeekdayDay {
   date: string;
   weekday: string;
   status: WeekdayDayStatus;
-  /** NEPSE's own % change; numbers on this endpoint, null without a session. */
+  /** Average of the companies' daily % changes, each counted equally; null without a session. */
   change_pct: number | null;
-  close: number | null;
   holiday?: string;
+  /** With a session: companies in the day's average, how many rose, and how many were left out. */
+  companies?: number;
+  companies_up?: number;
+  excluded?: number;
+  best?: { symbol: string; change_pct: number };
+  worst?: { symbol: string; change_pct: number };
 }
+
+export interface WeekdayScopeOption {
+  /** tracked or tracked:<sector>. */
+  scope: string;
+  label: string;
+  companies: number;
+}
+
+export interface WeekdayScopes {
+  tracked: WeekdayScopeOption[];
+  tracked_sectors: WeekdayScopeOption[];
+}
+
+export const DEFAULT_WEEKDAY_SCOPE = 'tracked';
 
 export interface WeekdayWeek {
   week_start: string;
   /** BS date of the week's first trading weekday, e.g. "9 Kartik". */
   label: string;
   days: WeekdayDay[];
-  /** Last close vs the previous week's last close. */
+  /** The week's daily averages compounded. */
   change_pct: number | null;
   sessions: number;
   up_days: number;
@@ -196,7 +215,12 @@ export type WeekdayInsight =
   | { kind: 'streak'; weekdays: string[]; sessions: number };
 
 export interface WeekdaySummary {
-  index: string;
+  scope: string;
+  /** "Tracked companies" or "Tracked <sector>". */
+  scope_label: string;
+  companies: number;
+  symbols: string[];
+  scopes: WeekdayScopes;
   weeks: number;
   /** Server's today (Asia/Kathmandu), for the TODAY column. */
   today: string;
@@ -214,10 +238,81 @@ export interface WeekdaySummary {
   notes: string[];
 }
 
+export const DAY_BY_DAY_MONTH_CHOICES = [6, 12, 24] as const;
+export type DayByDayMonths = (typeof DAY_BY_DAY_MONTH_CHOICES)[number];
+/** bs = Bikram Sambat months (नेपाली महिना), ad = English months. */
+export type DayByDayCalendar = 'bs' | 'ad';
+
+export interface DayByDayDay {
+  /** Day of the month, 1-based, in the chosen calendar. */
+  day: number;
+  date: string;
+  bs_label_np: string;
+  bs_label: string;
+  weekday: string;
+  status: CalendarDayStatus;
+  holiday: string | null;
+  close: number | null;
+  previous_close: number | null;
+  previous_date: string | null;
+  /** NEPSE's own change against the previous trading day's close. */
+  change_pct: number | null;
+}
+
+export interface DayByDayMonth {
+  year: number;
+  month: number;
+  label: string;
+  /** Empty for English months. */
+  label_np: string;
+  ad_start: string;
+  ad_end: string;
+  is_current: boolean;
+  /** Still running, or the index history starts inside it. */
+  partial: boolean;
+  /** Last close against the last close before the month began. */
+  change_pct: number | null;
+  sessions: number;
+  up_days: number;
+  days: DayByDayDay[];
+}
+
+export interface DayByDayMonthRef {
+  label: string; label_np: string; change_pct: number; partial: boolean; sessions: number; up_days: number;
+}
+
+export interface DayByDaySummary {
+  scope: 'whole_market';
+  index: { code: string; name: string };
+  calendar: DayByDayCalendar;
+  today: string;
+  /** Today's day of the month, for the TODAY column. */
+  today_day: number;
+  max_days: number;
+  history_from: string;
+  requested_months: number;
+  /** Newest month first. */
+  months: DayByDayMonth[];
+  stats: {
+    year: number;
+    best_month: DayByDayMonthRef | null;
+    worst_month: DayByDayMonthRef | null;
+    strongest_weekday: { weekday: string; average_pct: number; sessions: number } | null;
+    sessions: number;
+    up_days: number;
+  };
+  /** NEPSE, then the sub-indices. */
+  indices: { code: string; label: string }[];
+  notes: string[];
+}
+
 export const marketCalendarApi = {
-  /** NEPSE index move by weekday over the last `weeks` trading weeks (services/weekday_summary.py). */
-  weekdays: (weeks: WeekdayWeeks) =>
-    apiClient.get<WeekdaySummary>('/market-calendar/weekdays/', { params: { weeks } }).then((r) => r.data),
+  /** One row per month, one tile per day (services/month_summary.py).  Whole market. */
+  months: (index: string, calendar: DayByDayCalendar, months: DayByDayMonths) =>
+    apiClient.get<DayByDaySummary>('/market-calendar/months/', { params: { index, calendar, months } }).then((r) => r.data),
+  /** Tracked companies' move by weekday over the last `weeks` trading weeks (services/weekday_summary.py). */
+  weekdays: (weeks: WeekdayWeeks, scope: string = DEFAULT_WEEKDAY_SCOPE) =>
+    apiClient.get<WeekdaySummary>('/market-calendar/weekdays/', { params: { weeks, scope } }).then((r) => r.data),
   /** No argument: today's BS month. */
   month: (ref?: BsMonthRef | null) =>
     apiClient.get<CalendarMonth>('/market-calendar/month/', { params: ref ?? {} }).then((r) => r.data),

@@ -1583,3 +1583,101 @@ class FloorsheetGridAPIView(APIView):
                              "pre_open_trades": 0, "companies": [], "checks": [], "dates": []})
         payload = serialize_grid(build_grid(day, minutes, company_ids))
         return Response({**payload, "dates": [d.isoformat() for d in dates]})
+
+
+class BrokerPositionAPIView(APIView):
+    """
+    GET /api/analysis/broker-position/?symbol=NABIL&broker=58&range=1M[&exclude_self=1]
+
+    One broker's running net (bought - sold) in one stock: per minute / 5 minutes for
+    1D / 2D, per session for 1W ... 1Y, with the stock's price for the overlay.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        from django.conf import settings
+        from django.core.cache import cache
+
+        from apps.analysis.services.broker_position import DEFAULT_RANGE, RANGE_SESSIONS, build_broker_position, to_json
+        from apps.floorsheet.api.serializers import broker_metadata
+
+        symbol = request.query_params.get("symbol", "").strip().upper()
+        broker = request.query_params.get("broker", "").strip()
+        if not symbol:
+            return Response({"detail": "symbol is required."}, status=400)
+        range_key = (request.query_params.get("range") or DEFAULT_RANGE).strip().upper()
+        if range_key not in RANGE_SESSIONS:
+            return Response({"detail": f"range must be one of {', '.join(RANGE_SESSIONS)}."}, status=400)
+        raw_exclude = request.query_params.get("exclude_self", "").strip().lower()
+        if raw_exclude and raw_exclude not in {"1", "0", "true", "false"}:
+            return Response({"detail": "exclude_self must be 1 or 0."}, status=400)
+        exclude_self = None if not raw_exclude else raw_exclude in {"1", "true"}
+
+        company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
+        require_company_access(request.user, company.pk)
+
+        stamp = FloorsheetTransaction.objects.filter(company=company).aggregate(latest=Max("id"))["latest"]
+        key = f"broker-position:{company.pk}:{broker}:{range_key}:{exclude_self}:{stamp}"
+        payload = cache.get(key)
+        if payload is None:
+            result = build_broker_position(company, broker, range_key, exclude_self)
+            codes = [result["broker"]] + [row["broker"] for row in result["top_brokers"]]
+            payload = {**to_json(result), "broker_metadata": broker_metadata(codes)}
+            cache.set(key, payload, settings.BROKER_ACCUMULATION_CACHE_SECONDS)
+        return Response(payload)
+
+
+class BrokerActivityAPIView(APIView):
+    """
+    GET /api/analysis/broker-activity/?symbols=NABIL,ADBL&broker=58&range=1M[&exclude_self=1]
+
+    One broker's buy / sell quantity in up to 8 stocks on a shared time axis (the Acc / Dist
+    chart).  Without ``broker``, the most active broker across the stocks.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        from django.conf import settings
+        from django.core.cache import cache
+
+        from apps.analysis.services.broker_position import (
+            DEFAULT_RANGE, MAX_STOCKS, RANGE_SESSIONS, build_broker_activity, to_json,
+        )
+        from apps.floorsheet.api.serializers import broker_metadata
+
+        raw_symbols = request.query_params.get("symbols", "").split(",")
+        symbols = list(dict.fromkeys(s.strip().upper() for s in raw_symbols if s.strip()))
+        if not symbols:
+            return Response({"detail": "symbols is required."}, status=400)
+        if len(symbols) > MAX_STOCKS:
+            return Response({"detail": f"At most {MAX_STOCKS} stocks at a time."}, status=400)
+        broker = request.query_params.get("broker", "").strip()
+        range_key = (request.query_params.get("range") or DEFAULT_RANGE).strip().upper()
+        if range_key not in RANGE_SESSIONS:
+            return Response({"detail": f"range must be one of {', '.join(RANGE_SESSIONS)}."}, status=400)
+        raw_exclude = request.query_params.get("exclude_self", "").strip().lower()
+        if raw_exclude and raw_exclude not in {"1", "0", "true", "false"}:
+            return Response({"detail": "exclude_self must be 1 or 0."}, status=400)
+        exclude_self = None if not raw_exclude else raw_exclude in {"1", "true"}
+
+        found = {c.symbol.upper(): c for c in Company.objects.filter(symbol__in=symbols, is_active=True)}
+        missing = [s for s in symbols if s not in found]
+        if missing:
+            return Response({"detail": f"Unknown stock(s): {', '.join(missing)}."}, status=404)
+        companies = [found[s] for s in symbols]
+        for company in companies:
+            require_company_access(request.user, company.pk)
+
+        stamp = FloorsheetTransaction.objects.filter(company__in=companies).aggregate(latest=Max("id"))["latest"]
+        key = f"broker-activity:{','.join(symbols)}:{broker}:{range_key}:{exclude_self}:{stamp}"
+        payload = cache.get(key)
+        if payload is None:
+            result = build_broker_activity(broker, companies, range_key, exclude_self)
+            codes = [result["broker"]] + [row["broker"] for row in result["top_brokers"]]
+            payload = {**to_json(result), "broker_metadata": broker_metadata(codes)}
+            cache.set(key, payload, settings.BROKER_ACCUMULATION_CACHE_SECONDS)
+        return Response(payload)

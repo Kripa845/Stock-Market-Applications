@@ -27,6 +27,7 @@ import {
   ChartColumnStacked,
   CalendarDays,
   CalendarRange,
+  LayoutGrid,
   Grid3x3
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -92,6 +93,11 @@ const NAV_ITEMS: NavItem[] = [
     to: '/market/weekdays',
   },
   {
+    label: 'NEPSE Day by Day',
+    icon: LayoutGrid,
+    to: '/market/day-by-day',
+  },
+  {
     label: 'Latest Report',
     icon: FileSpreadsheet,
     to: '/market/quarterly-report',
@@ -131,6 +137,7 @@ const NAV_ITEMS: NavItem[] = [
       { label: 'Broker Explorer', icon: Search, to: '/broker-analysis' },
       { label: 'Broker List', icon: List, to: '/brokers' },
       { label: 'Broker Accumulation & Distribution', icon: ChartColumnStacked, to: '/broker-acc-dist' },
+      { label: 'Broker Acc / Dist Chart', icon: Activity, to: '/broker-position' },
     ],
   },
   {

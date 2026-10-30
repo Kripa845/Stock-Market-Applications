@@ -93,22 +93,29 @@ def fetch_index_history(since, until=None, session=None, sleep=time.sleep):
 
     history = {}
     for index_id, code in SHARESANSAR_INDEX_IDS.items():
-        params = {
-            "draw": "1", "start": "0", "length": str(PAGE_SIZE),
-            "order[0][column]": str(COLUMNS.index("published_date")), "order[0][dir]": "desc",
-            "index_id": str(index_id), "from": since.isoformat(), "to": until.isoformat(),
-            **{f"columns[{position}][data]": name for position, name in enumerate(COLUMNS)},
-        }
-        try:
-            response = session.get(PAGE_URL, params=params, headers=AJAX_HEADERS, timeout=TIMEOUT_SECONDS)
-            response.raise_for_status()
-            rows = response.json().get("data")
-        except (requests.RequestException, ValueError, AttributeError) as exc:
-            logger.warning("ShareSansar index %s (%s) failed: %s", code, index_id, exc)
-            rows = None
-        if isinstance(rows, list):
-            history[code] = rows
-        sleep(REQUEST_DELAY_SECONDS)
+        # Pages of PAGE_SIZE, newest first, until a short page: a long backfill spans thousands of rows.
+        start = 0
+        while True:
+            params = {
+                "draw": "1", "start": str(start), "length": str(PAGE_SIZE),
+                "order[0][column]": str(COLUMNS.index("published_date")), "order[0][dir]": "desc",
+                "index_id": str(index_id), "from": since.isoformat(), "to": until.isoformat(),
+                **{f"columns[{position}][data]": name for position, name in enumerate(COLUMNS)},
+            }
+            try:
+                response = session.get(PAGE_URL, params=params, headers=AJAX_HEADERS, timeout=TIMEOUT_SECONDS)
+                response.raise_for_status()
+                rows = response.json().get("data")
+            except (requests.RequestException, ValueError, AttributeError) as exc:
+                logger.warning("ShareSansar index %s (%s) failed at row %s: %s", code, index_id, start, exc)
+                rows = None
+            sleep(REQUEST_DELAY_SECONDS)
+            if not isinstance(rows, list):
+                break
+            history.setdefault(code, []).extend(rows)
+            if len(rows) < PAGE_SIZE:
+                break
+            start += PAGE_SIZE
     if not any(history.values()):
         raise ShareSansarIndexError("ShareSansar returned no index rows")
     return history

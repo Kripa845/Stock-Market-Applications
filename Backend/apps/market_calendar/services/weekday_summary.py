@@ -1,24 +1,36 @@
 """
-Which weekday pays: the NEPSE index's daily move by weekday over the last N trading weeks.
+Which weekday pays: the tracked companies' daily moves by weekday over the last N trading weeks.
 
-Days are the stored index sessions only (today's row is not stored until the close).  A
-day's move is NEPSE's own ``source_change_pct``; a week's move is its last close against
-the previous week's last close.  The window never crosses a change of trading week
-(Sunday-Thursday until 2026-04-05), so every week has the same weekday columns.
+Scopes: ``tracked`` (every tracked company the user may access) or ``tracked:<sector>``.
+Each is an equal-weighted basket: a day's move is the plain average of each company's session
+change from ``movers`` (adjusted for bonus / right shares like the movers pages), and a week's
+move compounds those daily averages.  Companies with no price, no trade, no previous session
+or a suspected corporate action that day are left out of that day's average (``excluded``).
+
+Days are stored sessions only (today's figures appear once prices are crawled after the close).
+The window never crosses a change of trading week (Sunday-Thursday until 2026-04-05), so
+every week has the same weekday columns.
 """
 
+import hashlib
+from collections import Counter
 from datetime import date, timedelta
 from decimal import Decimal
 
 import nepali_datetime
 from django.conf import settings
+from django.core.cache import cache
 from django.utils import timezone
 
-from apps.market_data.models import TradingHoliday
+from apps.companies.models import Company
+from apps.market_data.models import DailyPrice, TradingHoliday
+from apps.market_data.services.market_stats import PRICE_SOURCE, tracked_companies
+from apps.market_data.services.movers import RANKED, annotated_companies, resolve_sessions
 from apps.market_data.services.trading_days import trading_weekdays
-from apps.market_indices.models import IndexDaily
 
-INDEX_CODE = "NEPSE"
+TRACKED_SCOPE = "tracked"
+DEFAULT_SCOPE = TRACKED_SCOPE
+BASKET_CACHE_SECONDS = 60 * 60
 DEFAULT_WEEKS = 6
 # 4W, 6W, 3M, 6M.
 WEEK_CHOICES = (4, 6, 13, 26)
@@ -28,8 +40,12 @@ UP, DOWN, FLAT = "up", "down", "flat"
 HOLIDAY, NO_SESSION, PENDING = "holiday", "no_session", "pending"
 
 
-class IndexNotFound(LookupError):
-    """No NEPSE index rows are stored (run sync_market_indices)."""
+class NoSessions(LookupError):
+    """No crawled prices for the scope's companies yet."""
+
+
+class ScopeError(ValueError):
+    """Unknown scope, or no accessible tracked companies in it (the view answers 400)."""
 
 
 def ordered_weekdays(on_day):
@@ -64,34 +80,125 @@ def tone(pct):
     return UP if pct > 0 else DOWN
 
 
-def _pct(value, base):
-    return (value - base) * HUNDRED / base if value is not None and base else None
+class Basket:
+    """An equal-weighted basket of tracked companies."""
+
+    def __init__(self, company_ids, label):
+        self.company_ids = sorted(company_ids)
+        self.label = label
+        self.symbols = list(
+            Company.objects.filter(id__in=self.company_ids).order_by("symbol").values_list("symbol", flat=True)
+        )
+        self.cache_prefix = "weekday-basket:" + hashlib.md5(",".join(map(str, self.company_ids)).encode()).hexdigest()
+
+    def dates(self):
+        """Newest-first dates with crawled prices for any of the companies."""
+        return list(
+            DailyPrice.objects.filter(source=PRICE_SOURCE, company_id__in=self.company_ids)
+            .order_by("-date").values_list("date", flat=True).distinct()
+        )
+
+    def sessions(self, dates):
+        # ~25 ms of SQL per day, so finished days are cached (6M = ~125 days); the newest day
+        # is always recomputed because its prices can still be re-crawled.
+        newest = max(dates)
+        keys = {day: f"{self.cache_prefix}:{day.isoformat()}" for day in dates if day != newest}
+        cached = cache.get_many(list(keys.values()))
+        result = {day: cached[key] for day, key in keys.items() if cached.get(key)}
+        fresh = self._compute([day for day in dates if day not in result])
+        cache.set_many({keys[day]: value for day, value in fresh.items() if day in keys}, BASKET_CACHE_SECONDS)
+        return {**result, **fresh}
+
+    def _compute(self, dates):
+        result = {}
+        for day in dates:
+            as_of, base_date, window = resolve_sessions(day)
+            if as_of != day:
+                continue
+            rows = list(
+                annotated_companies(day, base_date, window, self.company_ids)
+                .values("symbol", "change_pct", "bucket")
+            )
+            moved = [r for r in rows if r["bucket"] in RANKED and r["change_pct"] is not None]
+            if not moved:
+                continue
+            best = max(moved, key=lambda r: r["change_pct"])
+            worst = min(moved, key=lambda r: r["change_pct"])
+            result[day] = {
+                "change_pct": sum(r["change_pct"] for r in moved) / len(moved),
+                "companies": len(moved),
+                "companies_up": sum(1 for r in moved if r["change_pct"] > 0),
+                "excluded": len(self.company_ids) - len(moved),
+                "best": {"symbol": best["symbol"], "change_pct": best["change_pct"]},
+                "worst": {"symbol": worst["symbol"], "change_pct": worst["change_pct"]},
+            }
+        return result
 
 
-def weekday_summary(weeks=DEFAULT_WEEKS, today=None):
+def scope_catalogue(company_ids=None):
+    """What the scope picker offers: all tracked companies, then each tracked sector."""
+    tracked = tracked_companies(company_ids)
+    sectors = Counter(tracked.values_list("sector", flat=True))
+    return {
+        "tracked": [{"scope": TRACKED_SCOPE, "label": "All tracked companies", "companies": tracked.count()}] if tracked.exists() else [],
+        "tracked_sectors": [
+            {"scope": f"{TRACKED_SCOPE}:{sector}", "label": sector or "No sector", "companies": count}
+            for sector, count in sorted(sectors.items(), key=lambda item: (-item[1], item[0] or ""))
+        ],
+    }
+
+
+def resolve_scope(scope, company_ids=None):
+    """``tracked`` or ``tracked:<sector>`` -> Basket; ScopeError when unknown or empty."""
+    if scope != TRACKED_SCOPE and not scope.startswith(f"{TRACKED_SCOPE}:"):
+        raise ScopeError(f"Unknown scope {scope!r}.")
+    companies = tracked_companies(company_ids)
+    label = "Tracked companies"
+    if ":" in scope:
+        sector = scope.split(":", 1)[1]
+        companies = companies.filter(sector=sector)
+        label = f"Tracked {sector}"
+    ids = list(companies.values_list("id", flat=True))
+    if not ids:
+        raise ScopeError(f"No tracked companies you can access in scope {scope!r}.")
+    return Basket(ids, label)
+
+
+def week_change(sessions):
+    """The week's daily averages compounded."""
+    growth = Decimal(1)
+    for day in sorted(sessions):
+        growth *= 1 + sessions[day]["change_pct"] / HUNDRED
+    return (growth - 1) * HUNDRED
+
+
+def weekday_summary(weeks=DEFAULT_WEEKS, today=None, scope=DEFAULT_SCOPE, company_ids=None):
     today = today or timezone.localdate()
-    rows = IndexDaily.objects.filter(index__code=INDEX_CODE).order_by("-date")
-    latest = rows.values_list("date", flat=True).first()
-    if latest is None:
-        raise IndexNotFound(f"No {INDEX_CODE} index rows are stored.")
+    basket = resolve_scope(scope, company_ids)
+    all_dates = basket.dates()
+    if not all_dates:
+        raise NoSessions(f"No crawled prices for {basket.label} yet.")
+    latest = all_dates[0]
 
     weekdays = ordered_weekdays(latest)
     config_start = week_config_start(latest)
     names = {d: date(2024, 1, 1 + d).strftime("%a") for d in range(7)}  # 2024-01-01 was a Monday
 
     # Walk back over the stored sessions, keeping the newest `weeks` weeks that traded.
-    sessions = {}
-    for row in rows.filter(date__gte=config_start).iterator():
-        start = week_start(row.date, weekdays)
-        if start not in sessions and len(sessions) == weeks:
+    by_week = {}
+    for day in all_dates:
+        if day < config_start:
             break
-        sessions.setdefault(start, []).append(row)
+        start = week_start(day, weekdays)
+        if start not in by_week and len(by_week) == weeks:
+            break
+        by_week.setdefault(start, []).append(day)
 
-    starts = sorted(sessions)
+    starts = sorted(by_week)
     if not starts:
-        raise IndexNotFound(f"No {INDEX_CODE} sessions since the current trading week began.")
+        raise NoSessions(f"No {basket.label} sessions since the current trading week began.")
     first_day = starts[0]
-    before = rows.filter(date__lt=first_day).values_list("close", flat=True).first()
+    values = basket.sessions([day for days in by_week.values() for day in days])
     holidays = dict(TradingHoliday.objects.filter(
         date__gte=first_day, date__lte=starts[-1] + timedelta(days=6),
     ).values_list("date", "name"))
@@ -100,40 +207,32 @@ def weekday_summary(weeks=DEFAULT_WEEKS, today=None):
     closed_weeks = []
     cursor = first_day
     while cursor < starts[-1]:
-        if cursor not in sessions:
+        if cursor not in by_week:
             closed_weeks.append({"week_start": cursor, "label": bs_label(cursor)})
         cursor += timedelta(days=7)
 
     week_rows = []
-    previous_close = before       # last close before the week
-    session_close = before        # last close before the day
     for start in starts:
-        by_day = {row.date: row for row in sessions[start]}
+        by_day = {day: values[day] for day in by_week[start] if day in values}
         days = []
         for weekday in weekdays:
             day = start + timedelta(days=(weekday - weekdays[0]) % 7)
-            row = by_day.get(day)
-            if row is not None:
-                # NEPSE's own % when published, else close-to-close (fallback feed rows).
-                pct = row.source_change_pct if row.source_change_pct is not None else _pct(row.close, session_close)
-                session_close = row.close
-                days.append({"date": day, "weekday": names[weekday], "status": tone(pct),
-                             "change_pct": pct, "close": row.close})
+            value = by_day.get(day)
+            if value is not None:
+                days.append({"date": day, "weekday": names[weekday], "status": tone(value["change_pct"]), **value})
             else:
                 status = HOLIDAY if day in holidays else PENDING if day >= today else NO_SESSION
                 days.append({"date": day, "weekday": names[weekday], "status": status,
-                             "change_pct": None, "close": None, "holiday": holidays.get(day, "")})
-        last_close = max(by_day.values(), key=lambda r: r.date).close
+                             "change_pct": None, "holiday": holidays.get(day, "")})
         week_rows.append({
             "week_start": start,
             "label": bs_label(start),
             "days": days,
-            "change_pct": _pct(last_close, previous_close),
+            "change_pct": week_change(by_day) if by_day else None,
             "sessions": len(by_day),
             "up_days": sum(1 for d in days if d["status"] == UP),
             "partial": any(d["status"] == PENDING for d in days),
         })
-        previous_close = last_close
 
     columns = []
     for position, weekday in enumerate(weekdays):
@@ -157,7 +256,10 @@ def weekday_summary(weeks=DEFAULT_WEEKS, today=None):
         week["worst"] = week is worst and worst is not best
 
     return {
-        "index": INDEX_CODE,
+        "scope": scope,
+        "scope_label": basket.label,
+        "companies": len(basket.company_ids),
+        "symbols": basket.symbols,
         "weeks": len(week_rows),
         "today": today,
         "sessions_total": sum(w["sessions"] for w in week_rows),
@@ -176,7 +278,7 @@ def weekday_summary(weeks=DEFAULT_WEEKS, today=None):
 
 
 def insights(columns, week_count):
-    """Up to three plain statements; each only when the data supports it."""
+    """Plain statements, each only when the data supports it."""
     found = []
     ranked = [c for c in columns if c["average_pct"] is not None]
     # One session says nothing about a weekday; claims need at least two.

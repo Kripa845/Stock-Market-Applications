@@ -1,6 +1,8 @@
 from django.urls import path
 from apps.analysis.api.views import (
     AccDistAPIView,
+    BrokerActivityAPIView,
+    BrokerPositionAPIView,
     CompanyBehaviorSummaryAPIView,
     CompanyBrokerActivityAPIView,
     BrokerAnalysisAPIView,
@@ -30,6 +32,10 @@ urlpatterns = [
     path("broker-flow/", BrokerFlowAPIView.as_view(), name="broker-flow"),
     # Market-wide (stock, broker) net buying / selling (?period=1D..3Y).
     path("acc-dist/", AccDistAPIView.as_view(), name="acc-dist"),
+    # One broker's running net in one stock (?symbol=&broker=&range=1D..1Y).
+    path("broker-position/", BrokerPositionAPIView.as_view(), name="broker-position"),
+    # One broker's buy / sell in up to 8 stocks on a shared time axis (?symbols=&broker=&range=).
+    path("broker-activity/", BrokerActivityAPIView.as_view(), name="broker-activity"),
     # Floor Sheet Summary: one session's trades in N-minute buckets (?date=&minutes=).
     path("floorsheet-grid/", FloorsheetGridAPIView.as_view(), name="floorsheet-grid"),
     path("companies/<int:pk>/categorized-news/", CompanyCategorizedNewsAPIView.as_view(), name="company-categorized-news"),

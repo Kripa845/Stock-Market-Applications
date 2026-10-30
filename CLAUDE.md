@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 StockScope: a personal research app for the Nepal Stock Exchange (NEPSE). Scrapy spiders crawl prices, floorsheets (every trade with buyer/seller broker), dividends, indices and news from Nepali sites; Django/DRF analyses and serves them; a React + TypeScript dashboard shows them with role-based access. It covers only the **tracked companies** (`TrackedCompany`), never the whole market.
 
 Deeper references:
+- `docs/project-log.md`: step-by-step history of features, newest first. **Add an entry (template at the top of the file) whenever you add or change a feature**, in the same change as the code.
 - `docs/status.md`: known issues and WIP. **Read it before touching movers, crawls or routing.**
 - `docs/data-model.md`: tables, unique keys, data rules, NEPSE glossary.
 - `docs/api.md`: endpoints, permission keys, company-access scope.
@@ -47,7 +48,7 @@ Everything at once: `docker compose up --build` (Postgres, Redis, backend, worke
 
 Local environment quirks: Windows Smart App Control blocks some native binaries, so `npm run lint` (oxlint) can't run locally, and tests must stub the sentence-transformers model (see `FakeEmbeddingModel` in `apps/news/tests/test_news_api.py`) rather than load it.
 
-There is no CI: run pytest and the `tsc` check yourself before committing.
+There is no CI: run pytest and the `tsc` check yourself before committing. When a feature is done, add its entry to `docs/project-log.md`; add anything left unfinished to `docs/status.md`.
 
 ## Architecture
 

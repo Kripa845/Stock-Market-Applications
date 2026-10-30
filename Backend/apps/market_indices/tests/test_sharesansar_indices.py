@@ -71,6 +71,16 @@ class FetchTests(TestCase):
         params = session.get.call_args_list[1].kwargs["params"]
         self.assertEqual((params["from"], params["to"], params["columns[4][data]"]), ("2026-10-06", "2026-10-16", "current"))
 
+    def test_pages_until_a_short_page(self):
+        full = [ss_row("2026-10-15", "2625.93")] * sharesansar_indices.PAGE_SIZE
+        session = mock.Mock()
+        session.get.return_value.json.side_effect = [{"data": full}, {"data": full[:3]}] + [{"data": []}] * 16
+        history = sharesansar_indices.fetch_index_history(date(2000, 1, 1), date(2026, 10, 16),
+                                                          session=session, sleep=lambda _: None)
+        self.assertEqual(len(history["NEPSE"]), sharesansar_indices.PAGE_SIZE + 3)
+        starts = [call.kwargs["params"]["start"] for call in session.get.call_args_list[1:3]]
+        self.assertEqual(starts, ["0", "50"])
+
     def test_no_rows_at_all_raises(self):
         session = mock.Mock()
         session.get.return_value.json.return_value = {"data": []}

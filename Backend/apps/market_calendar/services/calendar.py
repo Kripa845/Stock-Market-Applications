@@ -104,7 +104,7 @@ def _np_day(bs_date):
     return bs_date.strftime("%D").lstrip("०")
 
 
-def _status(day, today, row, holiday, history_from):
+def day_status(day, today, row, holiday, history_from):
     # A stored session wins over a holiday entry: NEPSE did trade (the name is still shown).
     if day > today:
         return FUTURE
@@ -209,7 +209,7 @@ def _day(bs, today, row, holiday, history_from, events):
         "bs_day": bs.day,
         "bs_day_np": _np_day(bs),
         "weekday": (ad.weekday() + 1) % 7,          # 0 = Sunday
-        "status": _status(ad, today, row, holiday, history_from),
+        "status": day_status(ad, today, row, holiday, history_from),
         "is_today": ad == today,
         "holiday": holiday,
         "index": row,
