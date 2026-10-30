@@ -19,6 +19,7 @@ import { ensureRegistered, toSeries, type RegistrySeries } from './registryIndic
 import {
   marketIntelligenceApi, type IndicatorDef, type IndicatorParams, type IndicatorRegistry,
 } from '../../api/marketIntelligence';
+import { getIndexIndicatorSeries } from '../../api/marketIndices';
 
 // Same shape as KlinePriceChart, so <TradingChart prices={...} symbol={...} /> is a drop-in swap.
 interface ChartPrice {
@@ -52,8 +53,9 @@ interface Props {
   // Optional. Returns 1-minute bars for the last `days` days. Every intraday interval is built from
   // these, so the backend only needs one endpoint. Without it, intraday intervals are disabled.
   fetchMinuteBars?: (days: number) => Promise<MinuteBar[]>;
-  // Enables the indicator library (server-calculated, daily bars only).
+  // Enables the indicator library (server-calculated, daily bars only) for a company, or for an index by code.
   companyId?: number;
+  indexCode?: string;
   // Optional reference lines, computed by the caller (the chart only draws them).
   priceLines?: PriceLine[];
   // Optional text under the latest-close label on the price axis, e.g. "+21.33 (+0.82%)".
@@ -265,7 +267,7 @@ function buildStyles(dark: boolean, chartType: ChartType) {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars, companyId, priceLines, lastPriceNote, toolbarExtra }: Props) {
+export default function TradingChart({ prices, symbol, anomalyDates, fetchMinuteBars, companyId, indexCode, priceLines, lastPriceNote, toolbarExtra }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
@@ -343,7 +345,9 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
   // What is currently drawn: library uid -> chart indicator id + the series key it shows.
   const mounted = useRef(new Map<string, { chartId: string; key: string }>());
   const defs = useMemo(() => new Map((registry?.indicators ?? []).map((d) => [d.id, d])), [registry]);
-  const libraryActive = interval === '1D';
+  // What the library indicators are calculated for; '' -> nothing to calculate them on.
+  const subject = companyId ? `company:${companyId}` : indexCode ? `index:${indexCode}` : '';
+  const libraryActive = interval === '1D' && subject !== '';
   const rangeStart = interval === '1D' && bars.length ? isoDay(bars[0].timestamp) : '';
 
   useEffect(() => {
@@ -363,12 +367,12 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
 
   const keyFor = (a: ActiveIndicator) => {
     const def = defs.get(a.id);
-    return [companyId, def?.scope === 'range' ? rangeStart : '', a.id, JSON.stringify(a.params)].join('|');
+    return [subject, def?.scope === 'range' ? rangeStart : '', a.id, JSON.stringify(a.params)].join('|');
   };
 
   // Fetch whatever the active indicators need that is not cached yet.
   useEffect(() => {
-    if (!companyId || !registry || !libraryActive) return;
+    if (!registry || !libraryActive) return;
     const missing = library.filter((a) => {
       if (a.hidden) return false;
       const key = keyFor(a);
@@ -386,8 +390,10 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       (_, i) => ({ start, items: items.slice(i * MAX_PER_REQUEST, (i + 1) * MAX_PER_REQUEST) }),
     ));
     setLoadingSeries(true);
-    Promise.all(groups.map(({ start, items }) => marketIntelligenceApi
-      .getIndicatorSeries(companyId, items.map((a) => ({ id: a.id, params: a.params })), { start_date: start })
+    const fetchSeries = (specs: { id: string; params: IndicatorParams }[], start?: string) => (companyId
+      ? marketIntelligenceApi.getIndicatorSeries(companyId, specs, { start_date: start })
+      : getIndexIndicatorSeries(indexCode!, specs, { start_date: start }));
+    Promise.all(groups.map(({ start, items }) => fetchSeries(items.map((a) => ({ id: a.id, params: a.params })), start)
       .then((response) => {
         response.results.forEach((result, i) => {
           const key = keyFor(items[i]);
@@ -406,9 +412,9 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
         setSeriesVersion((v) => v + 1);
       });
     return () => { cancelled = true; };
-    // keyFor reads defs/rangeStart/companyId, which are all listed.
+    // keyFor reads defs/rangeStart/subject, which are all listed (subject covers companyId / indexCode).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, registry, library, rangeStart, libraryActive, defs]);
+  }, [subject, registry, library, rangeStart, libraryActive, defs]);
 
   // Draw / replace / remove library indicators to match the active list.
   useEffect(() => {
@@ -441,7 +447,7 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
       mounted.current.set(a.uid, { chartId, key });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seriesVersion, library, libraryActive, defs, chartGeneration, rangeStart, companyId]);
+  }, [seriesVersion, library, libraryActive, defs, chartGeneration, rangeStart, subject]);
 
   const indicatorErrors = Object.fromEntries(
     library.map((a) => [a.uid, errorCache.current.get(keyFor(a)) ?? '']).filter(([, e]) => e),
@@ -735,7 +741,8 @@ export default function TradingChart({ prices, symbol, anomalyDates, fetchMinute
             active={library}
             errors={indicatorErrors}
             builtins={INDICATORS.map((ind) => ({ name: ind.name, label: ind.label, on: active.includes(ind.name) }))}
-            dailyOnly={!libraryActive}
+            notice={!subject ? 'Library indicators need a company or an index; this chart has neither.'
+              : interval !== '1D' ? 'Library indicators use daily bars — switch the chart to 1D to see them.' : ''}
             onAdd={(def) => setLibrary((l) => [...l, { uid: newUid(), id: def.id, params: defaultParams(def) }])}
             onRemove={(uid) => setLibrary((l) => l.filter((x) => x.uid !== uid))}
             onParams={(uid, params) => setLibrary((l) => l.map((x) => (x.uid === uid ? { ...x, params } : x)))}

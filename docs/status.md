@@ -2,7 +2,7 @@
 
 Known problems and unfinished work. Last checked against the code on **2026-10-30**. Remove an entry when it is fixed, and add new ones with the date.
 
-## Failing tests (5 of 1017, `pytest -q` on 2026-10-30; same 5 as on 2026-10-28)
+## Failing tests (5 of 1032, `pytest -q` on 2026-10-30; same 5 as on 2026-10-28)
 
 | Test | Failure | Likely cause |
 |---|---|---|
@@ -16,7 +16,9 @@ Known problems and unfinished work. Last checked against the code on **2026-10-3
 
 * **Partial-symbol price crawls.** `scrapy crawl trading_data -a symbols=…` can leave a date with only some companies. The movers API warns and buckets the rest as `missing_price`. Fix by re-crawling the missing symbols.
 * **Floorsheet history.** ShareSansar serves only the current session. Past days come only from ShareHub (`backfill_sharehub_floorsheet`), back to Oct 2023. Broker Explorer / Acc-Dist totals cover only the sessions loaded.
-* **Trade times.** `FloorsheetTransaction.trade_time` and intraday candles exist only for ShareHub-loaded days.
+* **Trade times.** `FloorsheetTransaction.trade_time` and intraday candles exist only for ShareHub-loaded days. Date-only ShareSansar rows (`trade_time` NULL) fill a day when ShareHub's run for it stops part-way; `fill_floorsheet_trade_times` repairs them (2026-10-08/09 filled on 2026-10-30, 7,916 rows; `floorsheet_quality_report` shows any left).
+* **Candles include odd lots and pre-open fills** (2026-10-30). `intraday_candles.py` is unchanged: odd lots (< 10 shares) widen high/low on 12,964 of 262,773 stored 1m candles (4,138 of 11,640 1h), and the 10:46 opening-auction fills are folded into 696 11:00 candles per interval. The footprint (`services/footprint.py`) leaves both out via `services/trade_filters.py`. Switching the candle builder to the same filters is pending a decision.
+* **Candles for 2026-10-08/09** were not rebuilt after their trade times were filled: run `rebuild_intraday_candles --from 2026-10-08 --to 2026-10-09`.
 * **Index feed mid-session.** Today's NEPSE index row reads close 0 / −100% until the close. Never store it.
 * **`TradingHoliday` is empty** (2026-10-28). Holidays are not crawled; enter them in the admin. Until then the market calendar shows closed weekdays (e.g. Dashain/Tihar, 2026-10-19 → 10-23) as "No session".
 * **NEPSE index history** starts 2025-10-12, so earlier calendar months show no index figures. `sync_market_indices --since …` can backfill.

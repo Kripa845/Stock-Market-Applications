@@ -36,3 +36,5 @@ staticfiles/
 media/
 .idea/
 .DS_Store
+# Data backups written by floorsheet fix commands (contain exported rows)
+Backend/backups/

@@ -160,7 +160,7 @@ All `view_analysis` except `dashboard-summary/` (`view_market_data`) and `floors
 | Endpoint | Permission |
 |---|---|
 | `indices/`, `sub-indices/`, `analysis/`, `top/`, `tracked-sectors/`, `history/`, `verify/`, `intraday/` | `view_market_data` |
-| `support-resistance/` | `view_analysis` |
+| `support-resistance/`, `indicators/?code=&specs=` (same query and response as `companies/<id>/indicators/`; benchmark and floorsheet indicators return a per-indicator error) | `view_analysis` |
 
 ### `market-calendar/`
 Bikram Sambat month calendar (`market_calendar/services/calendar.py`). The NEPSE index figures are whole-market; dividend events (book closure, bonus listing, cash distribution, announcement) cover **tracked companies only, narrowed by company access**. Public-issue events (`ipo_open` / `ipo_close`: IPO, FPO, right share, mutual fund, debenture, from `IpoIssue`) are whole-market and not narrowed, since the issuer is usually not listed or tracked yet. `data_notes` contains `ipo_not_crawled` until `IpoIssue` has rows.

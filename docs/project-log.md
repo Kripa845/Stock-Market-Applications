@@ -22,6 +22,22 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 
 ## Log
 
+### 2026-10-30: Indicator library on index charts  `uncommitted`
+
+**What:** Technical Charts (and the Company Analysis index chart) now draw the indicator library on indices such as NEPSE, the page's default view. Before, the picker listed EMA / Bollinger / RSI / MACD as "on the chart" but nothing was fetched or drawn for an index. 103 of 110 indicators work on indices; the 6 benchmark indicators and tick-rule volume need a stock and show why in the picker.
+**Backend:** spec parsing and the compute loop moved from the company view into `apps/market_intelligence/services/indicator_series.py` (shared); `market_indices/services/index_technicals.py::indicator_series` feeds it `IndexDaily` bars. Index volume exists only for recent sessions (NEPSE from 2025-10), so volume indicators start at the first published volume instead of counting missing volume as 0.
+**API:** `GET /api/market-indices/indicators/?code=NEPSE&specs=[...]` (`view_analysis`).
+**Frontend:** `KlinePriceChart` takes `indexCode`; `IndicatorPicker`'s `dailyOnly` became a `notice` text (also explains a chart with no company or index).
+**Tests:** `market_indices/tests/test_index_technicals.py`. All 110 indicators were also driven through the picker in a headless browser on a company and an index chart.
+
+### 2026-10-30: Floorsheet prepared for order-flow (footprint) charts  `uncommitted`
+
+**What:** Read-side filters and a footprint aggregation over the floorsheet, plus repairs of missing trade times and one missing day.
+**Backend:** `apps/floorsheet/services/trade_filters.py` (odd lots < 10 shares, pre-open auction, untimed days), `footprint.py` (per bar and price row, buy / sell by the tick rule; bar close = last continuous trade), `floorsheet_quality.py`, `trade_time_backfill.py`; commands `fill_floorsheet_trade_times`, `floorsheet_quality_report`. `intraday_candles.py` unchanged.
+**Data:** 2025-07-16 floorsheet loaded for NICA, NLG, NLIC, NTC, SANIMA, SCB, SHIVM, STC, TRH, UPPER (6,678 trades); 7,916 trade times filled on 2026-10-08/09 (backup in `Backend/backups/`). Volume equals DailyPrice on all 8,318 company-days; board-lot high/low on 99.72%.
+**Tests:** `floorsheet/tests/test_footprint.py`.
+**Open:** whether candles should use the same filters; candles for 2026-10-08/09 not yet rebuilt; no footprint API / UI yet (see `docs/status.md`).
+
 ### 2026-10-30: NEPSE Month-by-Month  `uncommitted`
 
 **What:** Sibling of Day-by-Day: one row per BS year, one tile per BS month coloured by that month's index return (±12% scale), each year's compounded return as a bar, a pinned AVG row, and best / worst year, strongest month and months-closed-up cards. A Day / Month switch keeps the selected index (`?index=`).

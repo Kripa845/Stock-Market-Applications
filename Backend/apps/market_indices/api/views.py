@@ -17,6 +17,7 @@ from apps.market_data.services.trading_days import is_market_open
 from apps.market_indices.models import MarketIndex
 from apps.market_indices.services import aggregates, index_technicals, index_verification, sharesansar_indices
 from apps.market_indices.services.nepse_indices import IndexFeedError
+from apps.market_intelligence.services import indicator_series
 from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
 CACHE_SECONDS = 60
@@ -230,3 +231,26 @@ class IndexSupportResistanceAPIView(_MarketIndicesView):
         latest = index.daily.order_by("-date").values_list("date", flat=True).first()
         data = _cached(f"mi:sr:{index.code}:{latest}", lambda: index_technicals.support_resistance(index))
         return Response(data)
+
+
+class IndexIndicatorSeriesAPIView(_MarketIndicesView):
+    """GET /api/market-indices/indicators/?code=NEPSE&specs=[...] -- the company indicator library on IndexDaily.
+
+    Same query and response as /api/market-intelligence/companies/<id>/indicators/, with
+    ``index_code`` in place of ``company_id``.
+    """
+    permission_key = "view_analysis"
+
+    def get(self, request):
+        index, error = _index_or_404(request)
+        if error:
+            return error
+        try:
+            specs, start, end = indicator_series.parse_query(request.query_params)
+        except indicator_series.SpecError as exc:
+            return Response({"detail": str(exc)}, status=400)
+        dates, results = index_technicals.indicator_series(index, specs, start, end)
+        return Response({
+            "index_code": index.code, "symbol": index.name, "benchmark": None, "dates": dates, "results": results,
+            "disclaimer": "Technical indicators are computed from historical index values and are not investment advice.",
+        })
