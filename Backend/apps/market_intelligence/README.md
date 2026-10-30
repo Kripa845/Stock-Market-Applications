@@ -10,4 +10,4 @@ Technical indicators, market breadth, sector rotation and support / resistance.
 | `services/` | technicals, technical_summary, snapshots, sector_rotation, support_resistance |
 | `management/commands/` | backfill_market_intelligence, compute_support_resistance |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).

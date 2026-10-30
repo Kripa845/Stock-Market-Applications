@@ -11,4 +11,4 @@ npx tsc --noEmit -p tsconfig.app.json    # type-check; `-p .` checks nothing (ro
 
 `npm run lint` (oxlint) may be blocked locally by Windows Smart App Control.
 
-Layout and conventions (api modules, hooks, permission routing, styling tokens): see the root [CLAUDE.md](../CLAUDE.md). Route → page → backend map: [Backend/docs/architecture.md](../Backend/docs/architecture.md).
+Layout and conventions (api modules, hooks, permission routing, styling tokens): see the root [CLAUDE.md](../CLAUDE.md). Route → page → backend map: [ARCHITECTURE.md](../ARCHITECTURE.md).

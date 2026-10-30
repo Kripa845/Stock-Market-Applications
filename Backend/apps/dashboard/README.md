@@ -6,4 +6,4 @@ Dashboard summaries for the admin, analyst and viewer roles. No models of its ow
 |---|---|
 | `api/` | /api/dashboard/summary/, admin/, analyst/, viewer/ |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).

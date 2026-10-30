@@ -45,6 +45,7 @@ import DividendsPage from './pages/DividendsPage';
 import MarketCalendarPage from './pages/MarketCalendarPage';
 import WeekdaySummaryPage from './pages/WeekdaySummaryPage';
 import DayByDayPage from './pages/DayByDayPage';
+import MonthByMonthPage from './pages/MonthByMonthPage';
 import QuarterlyReportPage from './pages/QuarterlyReportPage';
 import IndicesPage from './pages/IndicesPage';
 import TopActivityPage from './pages/TopActivityPage';
@@ -318,6 +319,17 @@ function AppRoutes() {
                 rule={ROUTE_RULES['/market/day-by-day']}
               >
                 <DayByDayPage />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/market/month-by-month"
+            element={
+              <PermissionRoute
+                rule={ROUTE_RULES['/market/month-by-month']}
+              >
+                <MonthByMonthPage />
               </PermissionRoute>
             }
           />

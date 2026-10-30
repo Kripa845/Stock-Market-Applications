@@ -40,3 +40,11 @@ export function useDayByDay(index: string, calendar: DayByDayCalendar, months: D
     placeholderData: keepPreviousData,
   });
 }
+
+export function useMonthlyReturns(index: string) {
+  return useQuery({
+    queryKey: ['market-calendar', 'monthly', index],
+    queryFn: () => marketCalendarApi.monthly(index),
+    placeholderData: keepPreviousData,
+  });
+}

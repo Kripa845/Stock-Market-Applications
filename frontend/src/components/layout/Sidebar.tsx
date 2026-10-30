@@ -98,6 +98,11 @@ const NAV_ITEMS: NavItem[] = [
     to: '/market/day-by-day',
   },
   {
+    label: 'NEPSE Month by Month',
+    icon: LayoutGrid,
+    to: '/market/month-by-month',
+  },
+  {
     label: 'Latest Report',
     icon: FileSpreadsheet,
     to: '/market/quarterly-report',

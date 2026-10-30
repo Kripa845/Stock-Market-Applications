@@ -8,4 +8,4 @@ Users, roles, permissions and per-company access.
 | `api/` | /api/users/ and /api/admin/users/ |
 | `permissions.py` | HasAppPermission and friends; company_access.py narrows querysets to the user's companies |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).

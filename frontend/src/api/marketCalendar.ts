@@ -306,7 +306,57 @@ export interface DayByDaySummary {
   notes: string[];
 }
 
+/** One BS month's tile on the month-by-month page; null = no data (future or pre-history). */
+export interface MonthlyCell {
+  month: number;
+  /** Last close in the month (to today for the running month) and its date. */
+  close: number | null;
+  close_date: string | null;
+  /** Last close before the month began. */
+  previous_close: number | null;
+  /** null when the month had no session or no earlier close (history starts inside it). */
+  return_pct: number | null;
+  is_current: boolean;
+  partial: boolean;
+}
+
+export interface MonthlyYear {
+  year: number;
+  months: (MonthlyCell | null)[];
+  close: number | null;
+  /** Last close of the year against the last close before it; compounded, never summed. */
+  year_return: number | null;
+  partial: boolean;
+}
+
+export interface MonthlyMonthRef { month: number; label: string; label_np: string }
+
+export interface MonthlyReturns {
+  scope: 'whole_market';
+  index: { code: string; name: string };
+  today: string;
+  history_from: string;
+  current: { year: number; month: number };
+  months: MonthlyMonthRef[];
+  /** Newest BS year first. */
+  years: MonthlyYear[];
+  /** Mean of each month's closed returns across years; blanks and the running month skipped. */
+  avg_row: ({ average_pct: number; years: number } | null)[];
+  stats: {
+    best_year: { year: number; year_return: number; partial: boolean } | null;
+    worst_year: { year: number; year_return: number; partial: boolean } | null;
+    strongest_month: (MonthlyMonthRef & { average_pct: number; years: number }) | null;
+    months_up: number;
+    months_counted: number;
+  };
+  indices: { code: string; label: string }[];
+  notes: string[];
+}
+
 export const marketCalendarApi = {
+  /** One row per BS year, one tile per BS month (services/monthly_returns.py).  Whole market. */
+  monthly: (index: string) =>
+    apiClient.get<MonthlyReturns>('/market-calendar/monthly/', { params: { index } }).then((r) => r.data),
   /** One row per month, one tile per day (services/month_summary.py).  Whole market. */
   months: (index: string, calendar: DayByDayCalendar, months: DayByDayMonths) =>
     apiClient.get<DayByDaySummary>('/market-calendar/months/', { params: { index, calendar, months } }).then((r) => r.data),

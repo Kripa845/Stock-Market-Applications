@@ -9,13 +9,13 @@ export const toneText = (pct: number | null | undefined) =>
   pct == null || pct === 0 ? 'text-text-secondary' : pct > 0 ? 'text-up' : 'text-down';
 
 /**
- * Cell fill for a daily move on the legend's ±1.5% scale (literal classes so Tailwind keeps
- * them).  The strongest step gets dark text for contrast.
+ * Cell fill for a move on a ±`scale`% legend (1 for daily moves, 12 for monthly), clamped at
+ * the ends (literal classes so Tailwind keeps them).  The strongest step gets dark text.
  */
-export function heatClass(pct: number | null) {
+export function heatClass(pct: number | null, scale = 1) {
   if (pct == null) return 'border border-dashed border-bg-border text-text-muted';
   if (pct === 0) return 'bg-bg-elevated text-text-secondary';
-  const size = Math.abs(pct);
+  const size = Math.abs(pct) / scale;
   const step = size < 0.25 ? 0 : size < 0.5 ? 1 : size < 1 ? 2 : 3;
   // Light fills keep the tone colour; heavier fills switch to plain text so it stays readable.
   if (pct > 0) return ['bg-up/15 text-up', 'bg-up/30 text-up', 'bg-up/50 text-text-primary', 'bg-up/80 text-bg-primary'][step];

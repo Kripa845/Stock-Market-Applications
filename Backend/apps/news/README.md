@@ -9,4 +9,4 @@ Crawled news articles, categorization and sentiment.
 | `services/` | categorizer and its classifiers, keyword_matcher, sentiment, article_images |
 | `management/commands/` | categorize_news, backfill_news_images, repair_news_dates |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).

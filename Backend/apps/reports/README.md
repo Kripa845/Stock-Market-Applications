@@ -10,4 +10,4 @@ Company fundamentals (dividends, EPS, quarterly reports) and the data exports.
 | `exports/` | /api/reports/export/ — news, trading, floorsheet, broker and combined report as CSV / XLSX / PDF |
 | `management/commands/` | crawl_quarterly_reports (nepsetrading, also daily via `tasks.py`), import_quarterly_reports (CSV), fill_yearly_dpps |
 
-Tests: `tests/`. Layout and the page map: `Backend/docs/architecture.md`.
+Tests: `tests/`. Layout and the page map: `ARCHITECTURE.md` (repo root).
