@@ -33,6 +33,7 @@ import BrokerPositionPage from './pages/BrokerPositionPage';
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import WatchlistComparison from './pages/WatchlistComparison';
+import StockComparisonPage from './pages/StockComparisonPage';
 import AdminWatchlistPage from './pages/admin/WatchlistPage';
 import WatchlistPage from './pages/WatchlistPage';
 import MyWatchlistPage from './pages/MyWatchlistPage';
@@ -523,6 +524,15 @@ function AppRoutes() {
                 rule={ROUTE_RULES['/watchlist-comparison']}
               >
                 <WatchlistComparison />
+              </PermissionRoute>
+            }
+          />
+
+          <Route
+            path="/compare"
+            element={
+              <PermissionRoute rule={ROUTE_RULES['/compare']}>
+                <StockComparisonPage />
               </PermissionRoute>
             }
           />

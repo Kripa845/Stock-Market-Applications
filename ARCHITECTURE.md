@@ -152,6 +152,7 @@ Routes are in `frontend/src/App.tsx`, rules in `config/routePermissions.ts`, pag
 | `/broker-position` → `BrokerPositionPage.tsx` | `/api/analysis/broker-position/`, `broker-activity/` | `analysis/services/broker_position.py` |
 | `/watchlist` → `MyWatchlistPage.tsx` | `/api/market/watchlists/…` | `market_data/api/watchlists.py`, `services/watchlist.py` |
 | `/live-trading` → `WatchlistPage.tsx`, `/watchlist-comparison` → `WatchlistComparison.tsx` | `/api/market/…`, `/api/floorsheet/` | `market_data/`, `floorsheet/` |
+| `/compare` → `StockComparisonPage.tsx` | `/api/compare/`, `/api/compare/companies/` | `comparison/services/compare.py` |
 | `/news[/:id]` → `News.tsx`, `NewsDetail.tsx` | `/api/news/…` | `news/api/views.py` |
 | `/crawl` → `CrawlerStatus.tsx` | `/api/crawler-runs/…` | `crawler_runs/api/views.py`, `tasks.py` |
 | `/reports` → `ExportPage.tsx` | `/api/reports/export/…` | `reports/exports/` |

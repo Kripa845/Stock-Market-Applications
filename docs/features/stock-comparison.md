@@ -2,6 +2,8 @@
 
 Side-by-side profile of 2 to 5 tracked companies, built only from stored data (`apps/comparison/`). Every tracked company goes through the same code path. A figure that can't be computed is `null` and listed in `data_quality.null_fields` with a reason code: it is never 0 and never estimated. If one company's profile raises an error, that company comes back as `{"error": "computation_failed"}` and the others are unaffected.
 
+Page: `/compare?symbols=ADBL,CHCL` (`frontend/src/pages/StockComparisonPage.tsx`, sidebar Comparison → Stock Comparison).
+
 ## Endpoints (all `view_analysis`, narrowed by company access)
 
 | Endpoint | Returns |

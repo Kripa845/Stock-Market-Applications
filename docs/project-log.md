@@ -30,14 +30,20 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 **Tests:** `news/tests/test_ingest.py`; fixtures use `news/tests/factories.py`.
 **Open:** "also reported by" in the API/UI, likes/comments API, `external_id` in spiders (see `docs/status.md`).
 
-### 2026-11-01: Stock comparison backend + RSI / MACD on snapshots  `uncommitted`
+### 2026-11-01: Stock Comparison page  `uncommitted`
 
-**What:** Compare 2–5 tracked companies side by side (price, size, valuation, dividend, technicals, top brokers). Every missing figure is `null` with a reason code, and there is a coverage report for all tracked companies. Backend only. See [features/stock-comparison.md](features/stock-comparison.md).
+**What:** Pick 2–5 tracked companies (kept in `?symbols=`) and see summary cards, a 3-month trend chart (% from the first close), a metric table with the best P/E, P/B, ROE, EPS and yield highlighted, top buy / sell brokers and data notes. A missing figure shows "—" with the backend's reason.
+**Frontend:** route `/compare` (`pages/StockComparisonPage.tsx`, rule `view_analysis`), `api/compare.ts`, `hooks/useCompare.ts`. The sidebar "Comparison" entry is now a group: Stock Comparison, Watchlist Comparison.
+**Open:** on phone widths the app's sidebar stays open and leaves little room for the page (true of every page).
+
+### 2026-11-01: Stock comparison backend + RSI / MACD on snapshots  `eb87a3a`
+
+**What:** Compare 2–5 tracked companies side by side (price, size, valuation, dividend, technicals, top brokers). Every missing figure is `null` with a reason code, and there is a coverage report for all tracked companies. See [features/stock-comparison.md](features/stock-comparison.md).
 **Backend:** new app `apps/comparison/` (`services/compare.py`, `services/coverage.py`); `market_intelligence/services/momentum.py` (Wilder RSI 14, MACD 12/26/9), filled at the end of `compute_company_technical_snapshots`; `market_data/services/price_adjustments.py` (sessions where prices are not adjusted for a bonus / right issue); migration `market_intelligence/0006_snapshot_rsi_macd`.
 **API:** `GET /api/compare/?symbols=`, `compare/companies/?sector=`, `compare/coverage/` (`view_analysis` + company access).
 **Data:** run `backfill_momentum_indicators` once (13,226 rows filled on 2026-11-01; a re-run writes 0). `comparison_coverage` prints the report.
 **Tests:** `comparison/tests/test_compare.py` (20-company universe, ADBL reference at LTP 347), `market_intelligence/tests/test_momentum.py` (Wilder reference values).
-**Open:** no frontend page yet; TTM EPS, YoY growth and PEG need quarterly history; prices are unadjusted (see `docs/status.md`).
+**Open:** TTM EPS, YoY growth and PEG need quarterly history; prices are unadjusted (see `docs/status.md`).
 
 ### 2026-11-01: News source filter  `uncommitted`
 

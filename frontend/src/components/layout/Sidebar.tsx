@@ -29,7 +29,8 @@ import {
   CalendarRange,
   LayoutGrid,
   Grid3x3,
-  ClipboardList
+  ClipboardList,
+  Scale,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -151,8 +152,11 @@ const NAV_ITEMS: NavItem[] = [
   {
     label: 'Comparison',
     icon: BarChart3,
-    to: '/watchlist-comparison',
     requiredPermissions: ['view_analysis'],
+    children: [
+      { label: 'Stock Comparison', icon: Scale, to: '/compare' },
+      { label: 'Watchlist Comparison', icon: BarChart3, to: '/watchlist-comparison' },
+    ],
   },
 
   // { type: 'divider', label: 'News' },

@@ -28,6 +28,7 @@ export const ROUTE_RULES: Record<string, RouteRule> = {
   '/watchlist':             { permissions: ['view_watchlist', 'view_companies'], mode: 'all' },
   '/live-trading':          { permissions: ['view_watchlist', 'view_companies'], mode: 'all' },
   '/watchlist-comparison':  { permissions: ['view_analysis', 'view_companies'], mode: 'all' },
+  '/compare':               { permissions: ['view_analysis'], mode: 'all' },
   '/news':              { permissions: ['view_news'], mode: 'all' },
   '/crawl':             { permissions: ['view_crawl_runs'], mode: 'all' },
   '/reports':           { permissions: ['view_reports'], mode: 'all' },
