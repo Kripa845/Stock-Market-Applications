@@ -9,6 +9,8 @@ from apps.crawler_runs.models import CrawlRun
 from apps.floorsheet.models import Broker, FloorsheetTransaction
 from apps.news.models import ArticleCompanyTag, NewsArticle, RawArticle
 from apps.users.models import CustomRole, User, UserCompanyAccess
+from django.utils import timezone
+from apps.news.tests.factories import news_source_for
 
 
 class BrokerAnalysisApiTests(TestCase):
@@ -275,7 +277,7 @@ class BrokerAnalysisApiTests(TestCase):
             raw = RawArticle.objects.create(crawl_run=run, source="test", url=url)
             return NewsArticle.objects.create(
                 raw_article=raw,
-                source="Test Source",
+                news_source=news_source_for("Test Source"), source="Test Source", published_at=timezone.now(),
                 url=url,
                 headline=headline,
                 body="Article content",

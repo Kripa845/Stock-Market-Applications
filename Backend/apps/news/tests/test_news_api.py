@@ -33,6 +33,7 @@ from apps.news.services.categorization import (
 )
 from apps.news.tasks import categorize_article_task
 from apps.users.models import UserCompanyAccess
+from apps.news.tests.factories import news_source_for
 
 User = get_user_model()
 
@@ -144,7 +145,7 @@ class NewsCategorizationTests(TestCase):
         content_hash = hashlib.sha256(f"{headline}|{body}".encode("utf-8")).hexdigest()
         return NewsArticle.objects.create(
             raw_article=raw,
-            source="sharesansar",
+            news_source=news_source_for("sharesansar"), source="sharesansar",
             url=url,
             headline=headline,
             body=body,

@@ -12,6 +12,7 @@ from apps.crawler_runs.models import CrawlRun
 from apps.market_data.models import DailyPrice
 from apps.news.models import ArticleCompanyTag, NewsArticle, RawArticle
 from apps.users.models import User
+from apps.news.tests.factories import news_source_for
 
 
 class NoSyntheticDataTests(TestCase):
@@ -29,7 +30,7 @@ class NoSyntheticDataTests(TestCase):
             url = f"https://example.test/news/{n}"
             raw = RawArticle.objects.create(crawl_run=run, source="ShareSansar", url=url, http_status=200)
             article = NewsArticle.objects.create(
-                raw_article=raw, source="ShareSansar", url=url, headline=f"{provenance} article", body="body",
+                raw_article=raw, news_source=news_source_for("ShareSansar"), source="ShareSansar", url=url, headline=f"{provenance} article", body="body",
                 published_at=timezone.now(), content_hash=f"h{n}", data_provenance=provenance, sentiment=0.5,
             )
             ArticleCompanyTag.objects.create(article=article, company=self.company, confidence=0.95, method="symbol")

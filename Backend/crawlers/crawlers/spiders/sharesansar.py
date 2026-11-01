@@ -112,8 +112,8 @@ class SharesansarSpider(scrapy.Spider):
 
         # Counters consumed by CrawlRunPipeline.
         self.news_created = 0
-        self.news_duplicate_url = 0
-        self.news_duplicate_content = 0
+        self.news_updated = 0
+        self.news_duplicate = 0
         self.news_failed = 0
 
     # ==============================================================
@@ -809,8 +809,8 @@ class SharesansarSpider(scrapy.Spider):
             "ShareSansar crawl completed | reason=%s | "
             "pages=%s/%s | articles_seen=%s | "
             "articles_scheduled=%s | articles_scraped=%s | "
-            "created=%s | duplicate_url=%s | "
-            "duplicate_content=%s | failed=%s",
+            "created=%s | updated=%s | "
+            "duplicate=%s | failed=%s",
             reason,
             self.pages_crawled,
             self.max_pages,
@@ -818,8 +818,8 @@ class SharesansarSpider(scrapy.Spider):
             self.articles_scheduled,
             self.articles_scraped,
             self.news_created,
-            self.news_duplicate_url,
-            self.news_duplicate_content,
+            self.news_updated,
+            self.news_duplicate,
             self.news_failed,
         )
 

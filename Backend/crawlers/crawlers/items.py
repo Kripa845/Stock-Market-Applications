@@ -9,6 +9,8 @@ class NewsItem(scrapy.Item):
     published_at = scrapy.Field()
     source = scrapy.Field()
     url = scrapy.Field()
+    # The portal's own article id, when the page exposes one (optional).
+    external_id = scrapy.Field()
     image_url = scrapy.Field()
 
     raw_html = scrapy.Field()

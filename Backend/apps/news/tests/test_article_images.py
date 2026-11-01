@@ -7,6 +7,7 @@ from django.utils import timezone
 from apps.crawler_runs.models import CrawlRun
 from apps.news.models import NewsArticle, RawArticle
 from apps.news.services.article_images import extract_image_url, normalize_image_url
+from apps.news.tests.factories import news_source_for
 
 
 PAGE = "https://www.sharesansar.com/newsdetail/some-article-2026-09-30"
@@ -100,7 +101,7 @@ class BackfillNewsImagesCommandTests(TestCase):
             crawl_run=self.crawl_run, source="sharesansar", url=url, http_status=200, raw_html=raw_html,
         )
         return NewsArticle.objects.create(
-            raw_article=raw, source="sharesansar", url=url, headline=url, body="body",
+            raw_article=raw, news_source=news_source_for("sharesansar"), source="sharesansar", url=url, headline=url, body="body",
             published_at=timezone.now(), content_hash=url, image_url=image_url,
         )
 

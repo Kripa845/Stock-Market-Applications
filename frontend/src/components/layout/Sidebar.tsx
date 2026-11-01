@@ -28,7 +28,8 @@ import {
   CalendarDays,
   CalendarRange,
   LayoutGrid,
-  Grid3x3
+  Grid3x3,
+  ClipboardList
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -88,19 +89,14 @@ const NAV_ITEMS: NavItem[] = [
     to: '/market/calendar',
   },
   {
-    label: 'Weekday Summary',
-    icon: CalendarRange,
-    to: '/market/weekdays',
-  },
-  {
-    label: 'NEPSE Day by Day',
-    icon: LayoutGrid,
-    to: '/market/day-by-day',
-  },
-  {
-    label: 'NEPSE Month by Month',
-    icon: LayoutGrid,
-    to: '/market/month-by-month',
+    label: 'Summary',
+    icon: ClipboardList,
+    children: [
+      { label: 'NEPSE Day by Day', icon: LayoutGrid, to: '/market/day-by-day' },
+      { label: 'NEPSE Month by Month', icon: LayoutGrid, to: '/market/month-by-month' },
+      { label: 'Weekday Summary', icon: CalendarRange, to: '/market/weekdays' },
+      { label: 'Floorsheet Summary', icon: Grid3x3, to: '/floorsheet/summary' },
+    ],
   },
   {
     label: 'Latest Report',
@@ -127,11 +123,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: ScrollText,
     to: '/floorsheet',
     end: true,
-  },
-  {
-    label: 'Floor Sheet Summary',
-    icon: Grid3x3,
-    to: '/floorsheet/summary',
   },
   {
     label: 'Broker Analysis',

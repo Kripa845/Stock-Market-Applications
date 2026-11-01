@@ -87,6 +87,11 @@ class CrawlRun(models.Model):
         default=0
     )
 
+    # Seen again unchanged, or an exact same-source copy (see news/services/ingest.py).
+    articles_duplicate = models.PositiveIntegerField(
+        default=0
+    )
+
     # -------------------------
     # TRADING DATA
     # -------------------------

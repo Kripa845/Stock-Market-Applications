@@ -11,12 +11,14 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
 import EmptyState from '../components/common/EmptyState';
 import NewsImage from '../components/common/NewsImage';
+import SourceFilter from '../components/news/SourceFilter';
+import { ALL_NEWS_ID, NEWS_SOURCES } from '../config/newsSources';
 import { newsApi } from '../api/news';
 import { getCompanies } from '../api/companies';
 import type { Company } from '../types/company';
@@ -54,6 +56,28 @@ export default function NewsPage() {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Bumped per completed load so the grid re-mounts and fades in with the new results
+  const [loadVersion, setLoadVersion] = useState(0);
+
+  // ?source=<id> keeps the selected portal shareable; unknown ids fall back to All News
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSource =
+    NEWS_SOURCES.find((s) => s.id === searchParams.get('source') && s.id !== ALL_NEWS_ID) ?? null;
+  const activeSourceId = activeSource?.id ?? ALL_NEWS_ID;
+  const sourceName = activeSource?.name;
+
+  const handleSourceChange = (id: string) => {
+    setPage(1);
+    setSearchParams(
+      (params) => {
+        const next = new URLSearchParams(params);
+        if (id === ALL_NEWS_ID) next.delete('source');
+        else next.set('source', id);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   // Fetch companies once for filter dropdown
   useEffect(() => {
@@ -70,16 +94,18 @@ export default function NewsPage() {
         page,
         search: search || undefined,
         sentiment: sentiment || undefined,
+        source: sourceName,
         company_id: selectedCompanyId ? Number(selectedCompanyId) : undefined,
         needs_review: needsReviewOnly ? true : undefined,
       })
       .then((data) => {
         setArticles(data.results);
         setCount(data.count);
+        setLoadVersion((v) => v + 1);
       })
       .catch(() => setError('Unable to load news articles.'))
       .finally(() => setLoading(false));
-  }, [search, sentiment, selectedCompanyId, needsReviewOnly, page]);
+  }, [search, sentiment, sourceName, selectedCompanyId, needsReviewOnly, page]);
 
   useEffect(() => {
     loadNews();
@@ -169,6 +195,15 @@ export default function NewsPage() {
         )}
       </div>
 
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <SourceFilter
+        sources={NEWS_SOURCES}
+        active={activeSourceId}
+        onChange={handleSourceChange}
+        className="min-w-0 lg:sticky lg:top-4 lg:order-last lg:w-1/4 lg:shrink-0"
+      />
+
+      <div className="min-w-0 space-y-6 lg:w-3/4">
       {error && (
         <div className="text-sm text-down flex items-center gap-2">
           <span>{error}</span>
@@ -181,12 +216,19 @@ export default function NewsPage() {
       {!loading && !error && articles.length === 0 && (
         <EmptyState
           title="No news articles found"
-          description="Try changing the search, company, or filter settings."
+          description={
+            activeSource
+              ? `No crawled articles from ${activeSource.name} match these filters.`
+              : 'Try changing the search, company, or filter settings.'
+          }
         />
       )}
 
       {/* Grouped Articles */}
-      <div className="space-y-8">
+      <div
+        key={loadVersion}
+        className={`space-y-8 animate-fade-in transition-opacity duration-150 ${loading ? 'opacity-50' : ''}`}
+      >
         {Object.entries(groupedArticles).map(([portal, portalArticles]) => (
           <section key={portal} className="space-y-3">
             <div className="flex items-center gap-3">
@@ -316,6 +358,8 @@ export default function NewsPage() {
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

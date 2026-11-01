@@ -156,6 +156,15 @@ All `view_analysis` except `dashboard-summary/` (`view_market_data`) and `floors
 | `breadth/`, `heatmap/`, `rankings/`, `sectors/rotation/` | `view_market_data` |
 | `relative-strength/`, `companies/<id>/technicals/`, `companies/<id>/support-resistance/`, `companies/<id>/indicators/`, `indicators/registry/` | `view_analysis` |
 
+### `compare/`
+Tracked companies only, narrowed by company access. Fields, formulas and reason codes: [features/stock-comparison.md](features/stock-comparison.md).
+
+| Endpoint | Permission |
+|---|---|
+| `?symbols=A,B[,…]` (2–5 tracked symbols; `&date=` for the broker session): one profile per symbol, missing figures `null` + reason in `data_quality.null_fields`. 400 `symbol_count` / `duplicate_symbols` / `unknown_symbols` / `invalid_date`; 403 `company_access_denied` with `denied_symbols`. | `view_analysis` + company access |
+| `companies/[?sector=]`: picker list (symbol, name, sector) and `sectors` | `view_analysis` |
+| `coverage/`: data-coverage report per company | `view_analysis` |
+
 ### `market-indices/` (whole market)
 | Endpoint | Permission |
 |---|---|

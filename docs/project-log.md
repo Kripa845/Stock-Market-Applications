@@ -22,6 +22,35 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 
 ## Log
 
+### 2026-11-01: News provenance and de-duplication  `uncommitted`
+
+**What:** Every article now records its source (`NewsSource`), exact source URL, the crawl run that inserted it and when a crawl last saw it. Re-running a collector never adds a row: articles are identified per source by `external_id` or normalised URL, edits update the row in place, and the same story on another portal is kept but linked (`duplicate_of`).
+**Backend:** `news/services/ingest.py` (`ingest_article`, the only write path, used by `crawlers/pipelines.py::NewsPipeline`), `services/normalize.py`, `services/dedupe.py` + `manage.py dedupe_news`; models `NewsSource`, `ArticleLike`, `ArticleComment`; migrations `news/0009`–`0011` (0010 creates the 6 portals, maps spelling variants such as "FiscalNepal", recomputes hashes), `crawler_runs/0013` (`articles_duplicate`). `RawArticle.crawl_run` changed CASCADE → PROTECT.
+**Data:** all 1,366 existing articles backfilled; no duplicates found. Checks in `apps/news/sql/verify_news_integrity.sql`. How to add a source: `apps/news/README.md`.
+**Tests:** `news/tests/test_ingest.py`; fixtures use `news/tests/factories.py`.
+**Open:** "also reported by" in the API/UI, likes/comments API, `external_id` in spiders (see `docs/status.md`).
+
+### 2026-11-01: Stock comparison backend + RSI / MACD on snapshots  `uncommitted`
+
+**What:** Compare 2–5 tracked companies side by side (price, size, valuation, dividend, technicals, top brokers). Every missing figure is `null` with a reason code, and there is a coverage report for all tracked companies. Backend only. See [features/stock-comparison.md](features/stock-comparison.md).
+**Backend:** new app `apps/comparison/` (`services/compare.py`, `services/coverage.py`); `market_intelligence/services/momentum.py` (Wilder RSI 14, MACD 12/26/9), filled at the end of `compute_company_technical_snapshots`; `market_data/services/price_adjustments.py` (sessions where prices are not adjusted for a bonus / right issue); migration `market_intelligence/0006_snapshot_rsi_macd`.
+**API:** `GET /api/compare/?symbols=`, `compare/companies/?sector=`, `compare/coverage/` (`view_analysis` + company access).
+**Data:** run `backfill_momentum_indicators` once (13,226 rows filled on 2026-11-01; a re-run writes 0). `comparison_coverage` prints the report.
+**Tests:** `comparison/tests/test_compare.py` (20-company universe, ADBL reference at LTP 347), `market_intelligence/tests/test_momentum.py` (Wilder reference values).
+**Open:** no frontend page yet; TTM EPS, YoY growth and PEG need quarterly history; prices are unadjusted (see `docs/status.md`).
+
+### 2026-11-01: News source filter  `uncommitted`
+
+**What:** The News Feed has a source panel (All News, ShareSansar, MeroLagani, Fiscal Nepal, Bizmandu, Arthakhabar, NepseAlpha) to the right of the cards; below 1024px it becomes a scrollable chip row above them. One source at a time, kept in `?source=<id>` so the view can be shared.
+**API:** existing `GET /api/news/?source=` (`view_news`), so the filter covers every page, not just the loaded one.
+**Frontend:** `components/news/SourceFilter.tsx`, list in `config/newsSources.ts`, wired into `pages/News.tsx`; Mulish font added (`font-mulish`).
+**Open:** logos are the sites' `/favicon.ico` (the initial letter shows if one fails to load); brand colours are approximate.
+
+### 2026-10-30: Sidebar "Summary" group  `uncommitted`
+
+**What:** NEPSE Day by Day, NEPSE Month by Month, Weekday Summary and Floorsheet Summary moved into one "Summary" dropdown in the sidebar. Routes are unchanged.
+**Frontend:** `components/layout/Sidebar.tsx`.
+
 ### 2026-10-30: Indicator library on index charts  `uncommitted`
 
 **What:** Technical Charts (and the Company Analysis index chart) now draw the indicator library on indices such as NEPSE, the page's default view. Before, the picker listed EMA / Bollinger / RSI / MACD as "on the chart" but nothing was fetched or drawn for an index. 103 of 110 indicators work on indices; the 6 benchmark indicators and tick-rule volume need a stock and show why in the picker.

@@ -61,7 +61,7 @@ Run once after `migrate` (inside the backend container with `docker compose exec
 6. `sync_listed_shares`: listed shares for market cap.
 7. Price history (from `Backend/crawlers/`): `..\venv\Scripts\python -m scrapy crawl trading_data -a window_days=300`.
 8. Floorsheet history: `backfill_sharehub_floorsheet --from YYYY-MM-DD` in chunks ([DATA_SOURCES.md](DATA_SOURCES.md#backfills)).
-9. Derived data: `backfill_price_fields`, `backfill_market_analysis`, `backfill_market_intelligence`, `sync_market_indices --since YYYY-MM-DD`.
+9. Derived data: `backfill_price_fields`, `backfill_market_analysis`, `backfill_market_intelligence`, `backfill_momentum_indicators` (RSI / MACD on existing snapshots; idempotent), `sync_market_indices --since YYYY-MM-DD`.
 10. Trading holidays: Django admin → Trading holidays (not crawled).
 
 ## Environment variables

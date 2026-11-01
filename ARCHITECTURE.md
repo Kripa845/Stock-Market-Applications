@@ -92,8 +92,9 @@ apps/<app>/
 | `crawler_runs` | Starting spiders and recording each run | `CrawlRun` |
 | `dashboard` | Role dashboards and export endpoints | none |
 | `market_calendar` | BS / AD month calendar, weekday / day-by-day / month-by-month summaries | none (derived) |
+| `comparison` | Side-by-side profile of 2–5 tracked companies, data-coverage report (`/api/compare/`, [docs/features/stock-comparison.md](docs/features/stock-comparison.md)) | none (derived) |
 
-**Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`, `market_calendar`. Lower layers never import upper ones.
+**Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`, `market_calendar` → `comparison`. Lower layers never import upper ones.
 
 Full table list: [docs/DATABASE.md](docs/DATABASE.md). Endpoints: [docs/API.md](docs/API.md).
 
@@ -114,7 +115,7 @@ Full table list: [docs/DATABASE.md](docs/DATABASE.md). Endpoints: [docs/API.md](
 
 ### News
 
-Hourly `crawl_all_news` runs the five news spiders in `NEWS_SPIDERS`; `NewsPipeline` upserts `NewsArticle` by URL. Every 10 min `news.tasks.categorize_unprocessed_news_task` tags companies (embeddings + keyword matching, `news/services/categorization.py`). Spec: [docs/features/news-categorization.md](docs/features/news-categorization.md).
+Hourly `crawl_all_news` runs the five news spiders in `NEWS_SPIDERS`; `NewsPipeline` hands each item to `news/services/ingest.py::ingest_article`, which upserts per source by external id / normalised URL and links the same story across sources (`apps/news/README.md`). Every 10 min `news.tasks.categorize_unprocessed_news_task` tags companies (embeddings + keyword matching, `news/services/categorization.py`). Spec: [docs/features/news-categorization.md](docs/features/news-categorization.md).
 
 ### A page request
 
@@ -142,8 +143,8 @@ Routes are in `frontend/src/App.tsx`, rules in `config/routePermissions.ts`, pag
 | `/companies/:symbol` → `StockDetail.tsx` | `/api/companies/<id>/…`, `/api/stocks/<symbol>/intraday/`, `/api/analysis/broker-*` | `companies/`, `floorsheet/`, `analysis/services/broker_accumulation.py` |
 | `/floorsheet` → `FloorsheetPage.tsx` | `/api/floorsheet/`, `summary/` | `floorsheet/api/views.py` |
 | `/floorsheet/summary` → `FloorsheetSummaryPage.tsx` | `/api/analysis/floorsheet-grid/` | `analysis/services/floorsheet_grid.py` |
-| `/technical-charts` → `TechnicalCharts.tsx` | `/api/market-intelligence/…`, `/api/market-indices/…` | `market_intelligence/indicators/`, `services/technicals.py` |
-| `/company-analysis` → `CompanyAnalysisDashboard.tsx` | `/api/analysis/…`, `/api/market-intelligence/…` | `analysis/`, `market_intelligence/` |
+| `/technical-charts` → `TechnicalCharts.tsx` | `/api/market-intelligence/…`, `/api/market-indices/…` (intraday: `/api/companies/<id>/intraday/`, `/api/market-indices/intraday/`) | `market_intelligence/indicators/`, `services/technicals.py`, `floorsheet/services/intraday.py` |
+| `/company-analysis` → `CompanyAnalysisDashboard.tsx` | `/api/analysis/…`, `/api/market-intelligence/…`, `/api/companies/<id>/intraday/` | `analysis/`, `market_intelligence/`, `floorsheet/services/intraday.py` |
 | `/broker-analysis[/:brokerId]` → `BrokerAnalysisPage.tsx` | `/api/analysis/brokers/…` | `analysis/services/brokers.py` |
 | `/top-brokers[/:broker]` → `TopBrokerPage.tsx`, `TopBrokerStocksPage.tsx` | `/api/analysis/brokers/top/`, `brokers/<id>/` | `analysis/services/brokers.py` |
 | `/brokers` → `BrokerListPage.tsx` | `/api/analysis/brokers/list/` | `analysis/api/views.py` |

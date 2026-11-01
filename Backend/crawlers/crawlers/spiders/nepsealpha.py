@@ -39,8 +39,8 @@ class NepsealphaSpider(BaseNewsSpider):
         self.articles_scheduled = 0
 
         self.news_created = 0
-        self.news_duplicate_url = 0
-        self.news_duplicate_content = 0
+        self.news_updated = 0
+        self.news_duplicate = 0
         self.news_failed = 0
 
     def parse(self, response):

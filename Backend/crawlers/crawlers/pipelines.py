@@ -1,4 +1,3 @@
-import hashlib
 import json
 import os
 import sys
@@ -37,8 +36,8 @@ from itemadapter import ItemAdapter
 
 
 from apps.crawler_runs.models import CrawlRun
-from apps.news.models import NewsArticle, RawArticle
 from apps.news.services.article_images import extract_image_url
+from apps.news.services.ingest import IngestRejected, ingest_article, resolve_source
 from apps.news.tasks import categorize_article_task
 from apps.companies.models import Company
 from apps.floorsheet.models import Broker, FloorsheetTransaction
@@ -323,8 +322,9 @@ def update_crawl_metrics(spider, status=None):
         if source in {"sharesansar", "merolagani", "bizmandu", "nepsealpha", "arthakhabar", "fiscalnepal"}:
             crawl_run.articles_found = getattr(spider, "articles_seen", 0)
             crawl_run.articles_created = getattr(spider, "news_created", 0)
-            crawl_run.articles_updated = getattr(spider, "news_duplicate_url", 0)
-            update_fields += ["articles_found", "articles_created", "articles_updated"]
+            crawl_run.articles_updated = getattr(spider, "news_updated", 0)
+            crawl_run.articles_duplicate = getattr(spider, "news_duplicate", 0)
+            update_fields += ["articles_found", "articles_created", "articles_updated", "articles_duplicate"]
         elif source == "trading_data":
             crawl_run.prices_found = getattr(spider, "prices_found", 0)
             crawl_run.prices_created = getattr(spider, "prices_created", 0)
@@ -451,7 +451,13 @@ class CrawlRunPipeline:
 
             crawl_run.articles_updated = getattr(
                 spider,
-                "news_duplicate_url",
+                "news_updated",
+                0,
+            )
+
+            crawl_run.articles_duplicate = getattr(
+                spider,
+                "news_duplicate",
                 0,
             )
 
@@ -468,12 +474,12 @@ class CrawlRunPipeline:
 
             spider.logger.info(
                 "CrawlRun %s completed | found=%s | created=%s | "
-                "duplicate_url=%s | duplicate_content=%s | failed=%s",
+                "updated=%s | duplicate=%s | failed=%s",
                 crawl_run.id,
                 crawl_run.articles_found,
                 crawl_run.articles_created,
-                getattr(spider, "news_duplicate_url", 0),
-                getattr(spider, "news_duplicate_content", 0),
+                crawl_run.articles_updated,
+                crawl_run.articles_duplicate,
                 getattr(spider, "news_failed", 0),
             )
 
@@ -488,26 +494,21 @@ class CrawlRunPipeline:
 
 
 class NewsPipeline:
-  
+    """Validates scraped items and hands them to apps/news/services/ingest.py,
+    which owns de-duplication and provenance."""
+
     def open_spider(self, spider):
-        self.created_count = 0
-        self.duplicate_url_count = 0
-        self.duplicate_content_count = 0
-        self.failed_count = 0
+        self.counts = {"inserted": 0, "updated": 0, "duplicate": 0, "failed": 0}
 
         spider.news_created = 0
-        spider.news_duplicate_url = 0
-        spider.news_duplicate_content = 0
+        spider.news_updated = 0
+        spider.news_duplicate = 0
         spider.news_failed = 0
 
-        spider.logger.info(
-            "News pipeline started for %s",
-            getattr(
-                spider,
-                "source",
-                getattr(spider, "SOURCE", spider.name),
-            ),
-        )
+        self.spider_label = getattr(spider, "source", getattr(spider, "SOURCE", spider.name))
+        # label -> NewsSource id; filled on the worker thread (no ORM in the asyncio loop).
+        self.source_ids = {}
+        spider.logger.info("News pipeline started for %s", self.spider_label)
 
     def process_item(self, item, spider):
         adapter = ItemAdapter(item)
@@ -515,263 +516,85 @@ class NewsPipeline:
         if adapter.get("item_type", "news") != "news":
             return item
 
-        headline = clean_text(
-            adapter.get("headline")
-        )
-        body = clean_body(
-            adapter.get("body")
-        )
-        source = clean_text(
-            adapter.get("source")
-        )
-        url = clean_text(
-            adapter.get("url")
-        )
-        published_at = normalize_datetime(
-            adapter.get("published_at")
-        )
-        http_status = adapter.get(
-            "http_status",
-            200,
-        )
-        raw_html = adapter.get(
-            "raw_html",
-            "",
-        )
-        # A spider may set image_url itself; otherwise take the lead image from the page.
-        image_url = adapter.get(
-            "image_url",
-        ) or extract_image_url(raw_html, url)
-
-        if not headline:
-            spider.logger.warning(
-                "Skipping article because headline is empty: %s",
-                url,
-            )
-            return item
-
-        if not body:
-            spider.logger.warning(
-                "Skipping article because body is empty: %s",
-                url,
-            )
-            return item
-
-        if not source:
-            spider.logger.warning(
-                "Skipping article because source is empty: %s",
-                url,
-            )
-            return item
-
-        if not url:
-            spider.logger.warning(
-                "Skipping article because URL is empty",
-            )
-            return item
-
-        if not published_at:
-            spider.logger.warning(
-                "Skipping article because published_at is invalid: %s",
-                url,
-            )
-            return item
-
-        crawl_run_id = getattr(
-            spider,
-            "crawl_run_id",
-            None,
-        )
+        url = clean_text(adapter.get("url"))
+        raw_html = adapter.get("raw_html", "")
+        crawl_run_id = getattr(spider, "crawl_run_id", None)
 
         if not crawl_run_id:
             spider.news_failed += 1
+            spider.logger.error("Cannot save article because CrawlRun was not created: %s", url)
+            return item
 
+        # A spider may emit items for another portal than its own label.
+        label = clean_text(adapter.get("source")) or self.spider_label
+        raw_item = {
+            "url": url,
+            "headline": clean_text(adapter.get("headline")),
+            "body": clean_body(adapter.get("body")),
+            "published_at": normalize_datetime(adapter.get("published_at")),
+            "external_id": adapter.get("external_id"),
+            # A spider may set image_url itself; otherwise take the lead image from the page.
+            "image_url": adapter.get("image_url") or extract_image_url(raw_html, url),
+            "raw_html": raw_html,
+            "http_status": adapter.get("http_status", 200),
+        }
+        return deferToThread(self._ingest_sync, item, spider, label, crawl_run_id, raw_item)
+
+    def _source_id(self, label):
+        if label not in self.source_ids:
+            source = resolve_source(label)
+            self.source_ids[label] = source.pk if source else None
+        return self.source_ids[label]
+
+    def _ingest_sync(self, item, spider, label, crawl_run_id, raw_item):
+        url = raw_item["url"]
+        source_id = self._source_id(label)
+        if source_id is None:
+            spider.news_failed += 1
             spider.logger.error(
-                "Cannot save article because CrawlRun was not created: %s",
-                url,
+                "No NewsSource matches %r: add one (see apps/news/README.md); skipping %s", label, url,
             )
-
             return item
-
-        content_hash = hashlib.sha256(
-            f"{headline}|{body}".encode("utf-8")
-        ).hexdigest()
-
-       
-        return deferToThread(
-            self._save_article_sync,
-            item,
-            spider,
-            crawl_run_id,
-            headline,
-            body,
-            published_at,
-            source,
-            url,
-            content_hash,
-            raw_html,
-            http_status,
-            image_url,
-        )
-
-    def _save_article_sync(
-        self,
-        item,
-        spider,
-        crawl_run_id,
-        headline,
-        body,
-        published_at,
-        source,
-        url,
-        content_hash,
-        raw_html,
-        http_status,
-        image_url,
-    ):
         try:
-            with transaction.atomic():
-
-
-                existing_article = (
-                    NewsArticle.objects
-                    .filter(url=url)
-                    .first()
-                )
-
-                if existing_article:
-                    self.duplicate_url_count += 1
-                    spider.news_duplicate_url += 1
-
-                    # Articles saved before images were scraped pick theirs up on a re-crawl.
-                    if image_url and not existing_article.image_url:
-                        existing_article.image_url = image_url
-                        existing_article.save(update_fields=["image_url", "updated_at"])
-
-                    spider.logger.info(
-                        "Duplicate article skipped by URL: %s",
-                        url,
-                    )
-
-                    return item
-
-               
-
-                existing_content = (
-                    NewsArticle.objects
-                    .filter(content_hash=content_hash)
-                    .first()
-                )
-
-                if existing_content:
-                    self.duplicate_content_count += 1
-                    spider.news_duplicate_content += 1
-
-                    spider.logger.info(
-                        "Duplicate article skipped by content: %s",
-                        url,
-                    )
-
-                    return item
-
-              
-
-                raw_article = (
-                    RawArticle.objects
-                    .filter(
-                        source=source,
-                        url=url,
-                    )
-                    .first()
-                )
-
-                if raw_article is None:
-
-                    raw_article = RawArticle.objects.create(
-                        crawl_run_id=crawl_run_id,
-                        source=source,
-                        url=url,
-                        http_status=http_status,
-                        raw_html=raw_html or "",
-                    )
-
-                else:
-                    
-                    raw_article.crawl_run_id = crawl_run_id
-                    raw_article.http_status = http_status
-                    raw_article.raw_html = raw_html or ""
-
-                    raw_article.save(
-                        update_fields=[
-                            "crawl_run",
-                            "http_status",
-                            "raw_html",
-                        ],
-                    )
-
-    
-
-                article = NewsArticle.objects.create(
-                    raw_article=raw_article,
-                    source=source,
-                    url=url,
-                    headline=headline,
-                    body=body,
-                    published_at=published_at,
-                    image_url=image_url,
-                    content_hash=content_hash,
-                    data_provenance="crawled",
-                )
-
-                self.created_count += 1
-                spider.news_created += 1
-
-                # Trigger asynchronous news categorization in Celery worker
-                article_id = article.id
-                transaction.on_commit(
-                    lambda: categorize_article_task.delay(article_id)
-                )
-
-                spider.logger.info(
-                    "News article saved successfully | id=%s | %s",
-                    article.id,
-                    headline,
-                )
-
-                return item
-
-        except IntegrityError as exc:
-            self.failed_count += 1
-            spider.news_failed += 1
-
-            spider.logger.exception(
-                "Integrity error saving article %s: %s",
-                url,
-                exc,
-            )
-
+            result = ingest_article(source_id, raw_item, ingest_run_id=crawl_run_id)
+        except IngestRejected as exc:
+            spider.logger.warning("Skipping article: %s", exc)
             return item
-
         except Exception as exc:
-            self.failed_count += 1
+            self.counts["failed"] += 1
             spider.news_failed += 1
-
-            spider.logger.exception(
-                "Failed to save article %s: %s",
-                url,
-                exc,
-            )
-
+            spider.logger.exception("Failed to save article %s: %s", url, exc)
             return item
+
+        self.counts[result.status] += 1
+        if result.status == "inserted":
+            spider.news_created += 1
+        elif result.status == "updated":
+            spider.news_updated += 1
+        else:
+            spider.news_duplicate += 1
+
+        if result.status in {"inserted", "updated"}:
+            # Re-categorise edited articles too; manual tags are never overwritten.
+            try:
+                categorize_article_task.delay(result.article_id)
+            except Exception as exc:
+                # The article is saved; `categorize_news` can tag it later.
+                spider.logger.warning("Could not queue categorisation for %s: %s", result.article_id, exc)
+
+        spider.logger.info(
+            "News article %s | id=%s | duplicate_of=%s | %s",
+            result.status, result.article_id, result.duplicate_of_id, url,
+        )
+        return item
 
     def close_spider(self, spider):
         spider.logger.info(
-            "News pipeline finished | created=%s | duplicate_url=%s | "
-            "duplicate_content=%s | failed=%s",
-            self.created_count,
-            self.duplicate_url_count,
-            self.duplicate_content_count,
-            self.failed_count,
+            "News pipeline finished | inserted=%s | updated=%s | duplicate=%s | failed=%s",
+            self.counts["inserted"],
+            self.counts["updated"],
+            self.counts["duplicate"],
+            self.counts["failed"],
         )
 
 

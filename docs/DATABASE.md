@@ -42,6 +42,11 @@ erDiagram
     User |o--o{ CrawlRun : triggered_by
     CrawlRun |o--o{ RawArticle : ""
     RawArticle ||--o| NewsArticle : ""
+    NewsSource ||--o{ NewsArticle : "PROTECT"
+    CrawlRun |o--o{ NewsArticle : ingest_run
+    NewsArticle |o--o{ NewsArticle : duplicate_of
+    NewsArticle ||--o{ ArticleLike : ""
+    NewsArticle ||--o{ ArticleComment : ""
     NewsArticle ||--o{ ArticleCompanyTag : ""
     Company ||--o{ ArticleCompanyTag : ""
     NewsArticle ||--o{ CategorizationCorrection : ""
@@ -105,7 +110,7 @@ Not linked by foreign key (joined by `symbol` or date): `Broker` (floorsheet `bu
 | Model | Key | Notes |
 |---|---|---|
 | `MarketBreadthSnapshot`, `ProxyIndexSnapshot` | `date` unique | Breadth and the "Tracked Basket" index, tracked companies only. |
-| `CompanyTechnicalSnapshot` | (`company`, `date`) | Patterns, signal, `sufficient_history`, `possible_corporate_action`. |
+| `CompanyTechnicalSnapshot` | (`company`, `date`) | Patterns, signal, `sufficient_history`, `possible_corporate_action`, `dma_50` / `dma_200`, `rsi_14` / `macd` / `macd_signal` / `macd_hist` (`services/momentum.py`, from raw closes, NULL before 35 sessions). |
 | `SectorRotationSnapshot` | (`sector`, `date`) | Sector ranks. |
 | `SupportResistanceSet` / `SupportResistanceLevel` | one-to-one `company` / FK `set` | Levels with touches and strength, recomputed after the evening price crawl. |
 
@@ -114,15 +119,18 @@ Indicators are not stored: `market_intelligence/indicators/registry.py` computes
 ## news
 | Model | Key | Notes |
 |---|---|---|
-| `RawArticle` | (`source`, `url`) | Raw HTML per fetch; FK `crawl_run`. |
-| `NewsArticle` | `url` unique, `content_hash` | Headline, body, `published_at`, sentiment, `is_processed`. `data_provenance` separates real from synthetic articles; read through `news/selectors.py` (`real_articles()`, `real_tags()`). |
+| `NewsSource` | `slug`, `name` unique | A portal: `base_url`, `logo_url`, `brand_color`, `fetch_type` (rss/scrape/api), `is_active`. Articles PROTECT it, so retire a source with `is_active=False`. |
+| `RawArticle` | (`source`, `url`) | Raw HTML of the latest fetch; FK `crawl_run` (PROTECT). |
+| `NewsArticle` | (`news_source`, `normalized_url`) unique; (`news_source`, `external_id`) unique when set; `url` unique | `news_source` and `published_at` NOT NULL, `url`/`normalized_url` non-empty (check constraint). `ingest_run` = the run that inserted it; `created_at` = first seen, `last_seen_at` = last crawl that saw it. `content_hash` (normalised title + body) detects edits and copies; `canonical_hash` (normalised title) groups a story across sources through `duplicate_of` (always the story's root). `source` repeats `news_source.name` for the API. Written only through `news/services/ingest.py`; rules in `apps/news/README.md`. `data_provenance` separates real from synthetic articles; read through `news/selectors.py` (`real_articles()`, `real_tags()`). |
+| `ArticleLike` | (`article`, `user`) | One like per user per article; counts are derived from rows. No API yet. |
+| `ArticleComment` | none | `article`, `user`, `body`. No API yet. |
 | `ArticleCompanyTag` | (`article`, `company`) | `confidence`, `method`, `evidence`, `is_manual` (manual tags are never overwritten). |
 | `CategorizationCorrection` | none | Append-only audit of manual tag changes (`corrected_by` → User). |
 
 ## crawler_runs
 | Model | Key | Notes |
 |---|---|---|
-| `CrawlRun` | none | One row per spider run: `crawl_type`, `source`, `status`, counters, `errors`, `logs`, `task_id`, `process_id`, optional `company`, `triggered_by`. A standalone `scrapy crawl` records `crawl_type="news"` whatever the spider, so filter by `source`. |
+| `CrawlRun` | none | One row per spider run: `crawl_type`, `source`, `status`, counters (news: `articles_created` / `articles_updated` / `articles_duplicate`; before 2026-11-01 `articles_updated` counted URL duplicates), `errors`, `logs`, `task_id`, `process_id`, optional `company`, `triggered_by`. A standalone `scrapy crawl` records `crawl_type="news"` whatever the spider, so filter by `source`. |
 
 ## users
 | Model | Key | Notes |

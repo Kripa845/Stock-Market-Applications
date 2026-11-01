@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from apps.crawler_runs.models import CrawlRun
 from apps.news.models import NewsArticle, RawArticle
+from apps.news.tests.factories import news_source_for
 
 
 class PublicLatestNewsTests(TestCase):
@@ -23,7 +24,7 @@ class PublicLatestNewsTests(TestCase):
         url = f"https://www.sharesansar.com/newsdetail/{n}"
         raw = RawArticle.objects.create(crawl_run=self.crawl_run, source="ShareSansar", url=url, http_status=200)
         return NewsArticle.objects.create(
-            raw_article=raw, source="ShareSansar", url=url, headline=f"Headline {n}", body=body,
+            raw_article=raw, news_source=news_source_for("ShareSansar"), source="ShareSansar", url=url, headline=f"Headline {n}", body=body,
             published_at=self.now - timedelta(hours=hours_ago), content_hash=str(n),
             data_provenance=provenance, image_url=image_url,
         )

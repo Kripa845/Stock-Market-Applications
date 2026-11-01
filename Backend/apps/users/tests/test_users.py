@@ -55,6 +55,8 @@ class RolePermissionAPITests(TestCase):
 from apps.companies.models import Company
 from apps.users.company_access import has_company_access, get_accessible_company_ids
 from apps.users.models import UserCompanyAccess
+from django.utils import timezone
+from apps.news.tests.factories import news_source_for
 
 
 def _make_company(symbol, name="Test Co"):
@@ -265,7 +267,7 @@ class NewsCategorizationCompanyAccessTests(TestCase):
             http_status=200, raw_html="<p>test</p>"
         )
         self.article = NewsArticle.objects.create(
-            raw_article=raw, source="test", url="http://test.com/1",
+            raw_article=raw, news_source=news_source_for("test"), source="test", published_at=timezone.now(), url="http://test.com/1",
             headline="Test Article", body="Test body.",
             content_hash="abc123test",
         )

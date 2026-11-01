@@ -187,4 +187,8 @@ def compute_company_technical_snapshots():
             day = row.pop("date")
             CompanyTechnicalSnapshot.objects.update_or_create(company=company, date=day, defaults=row)
         CompanyTechnicalSnapshot.objects.exclude(date__in=sessions).delete()
-    return {"sessions": len(sessions), "snapshots": len(result_rows)}
+    # update_or_create above leaves the momentum columns alone; fill them for any new rows.
+    from apps.market_intelligence.services.momentum import compute_momentum_snapshots
+
+    momentum = compute_momentum_snapshots()
+    return {"sessions": len(sessions), "snapshots": len(result_rows), "momentum": momentum}

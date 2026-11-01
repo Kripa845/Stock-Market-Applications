@@ -23,6 +23,8 @@ from apps.news.services.sentiment import (
     detect_language,
     score_to_label,
 )
+from django.utils import timezone
+from apps.news.tests.factories import news_source_for
 from apps.news.tasks import (
     analyze_article_sentiment_task,
     analyze_unscored_sentiment_task,
@@ -255,7 +257,7 @@ class FailureHandlingTests(TestCase):
             )
             articles.append(NewsArticle.objects.create(
                 raw_article=raw,
-                source="test",
+                news_source=news_source_for("test"), source="test", published_at=timezone.now(),
                 url=f"https://x/{index}",
                 headline="Profit surges on strong growth and record results",
                 body="The company reported higher profit and strong growth.",
@@ -289,7 +291,7 @@ class PersistenceTests(TestCase):
         )
         self.article = NewsArticle.objects.create(
             raw_article=raw,
-            source="test",
+            news_source=news_source_for("test"), source="test", published_at=timezone.now(),
             url="https://example.com/a",
             headline="Bank profit surges on strong growth",
             body="The bank reported record profit and a higher dividend.",
@@ -359,7 +361,7 @@ class PersistenceTests(TestCase):
         )
         short = NewsArticle.objects.create(
             raw_article=raw,
-            source="test",
+            news_source=news_source_for("test"), source="test", published_at=timezone.now(),
             url="https://example.com/short",
             headline="Up",
             body="",

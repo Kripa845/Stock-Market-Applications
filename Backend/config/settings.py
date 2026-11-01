@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "apps.floorsheet",
     "apps.reports",
     "apps.market_calendar",
+    "apps.comparison",
     
 ]
 

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 StockScope: a personal research app for the Nepal Stock Exchange (NEPSE). Scrapy spiders crawl prices, floorsheets (every trade with buyer/seller broker), dividends, indices and news from Nepali sites; Django/DRF analyses and serves them; a React + TypeScript dashboard shows them with role-based access. It covers only the **tracked companies** (`TrackedCompany`), never the whole market. Not deployed: it runs locally or with `docker compose`.
 
 Read before working:
+- `MEMORY.md`: one-line journal of every step (done, in progress, next), newest first. **Update it in the same change whenever you add, change or remove anything**; move items between its sections as they progress.
 - `docs/status.md`: known issues and WIP. **Read it before touching movers, crawls or routing.**
 - `docs/project-log.md`: feature history, newest first. **Add an entry (template at the top) whenever you add or change a feature**, in the same change as the code.
 - `ARCHITECTURE.md`: components, data flow, route → API → backend file map.
@@ -46,12 +47,12 @@ Everything at once: `docker compose up --build` (Postgres, Redis, backend, worke
 
 Local environment quirks: Windows Smart App Control blocks some native binaries, so `npm run lint` (oxlint) can't run locally, and tests must stub the sentence-transformers model (see `FakeEmbeddingModel` in `apps/news/tests/test_news_api.py`) rather than load it.
 
-There is no CI: run pytest and the `tsc` check yourself before committing. 5 tests were already failing on 2026-10-30 (listed in `docs/status.md`); don't count them as yours, and don't "fix" them without the decision noted there. When a feature is done, add its entry to `docs/project-log.md`; add anything left unfinished to `docs/status.md`.
+There is no CI: run pytest and the `tsc` check yourself before committing. 5 tests were already failing on 2026-10-30 (listed in `docs/status.md`); don't count them as yours, and don't "fix" them without the decision noted there. When a feature is done, add its entry to `docs/project-log.md` and a line to `MEMORY.md`; add anything left unfinished to `docs/status.md` and `MEMORY.md`'s "In progress" / "Next".
 
 ## Architecture
 
 - **`Backend/apps/<app>/`** share one layout (`models.py`, `api/`, `services/`, `tasks.py`, `management/commands/`, `tests/test_<feature>.py`, `README.md`). Put logic in `services/`, keep views thin.
-- **Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`, `market_calendar`. Don't import upward.
+- **Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`, `market_calendar` → `comparison`. Don't import upward.
 - **`Backend/config/`**: `settings.py` holds `CELERY_BEAT_SCHEDULE`, `CELERY_TASK_ROUTES`, `NEPSE_TRADING_WEEKS` and feature thresholds; `urls.py` wires every app's routes under `/api/`. `TIME_ZONE` = `CELERY_TIMEZONE` = Asia/Kathmandu.
 - **`Backend/crawlers/`** is a separate Scrapy project. `crawlers/pipelines.py` bootstraps Django and writes models; pipelines upsert (`update_or_create` / unique keys with ignore-conflicts), so re-running a crawl is safe. `runner.py` launches spiders as subprocesses; Celery tasks in `apps/crawler_runs` trigger them and record `CrawlRun`. A new scheduled spider must be added to a list in `runner.py` (`NEWS_SPIDERS`, …). Spiders are found by their `name`, not their file: `spiders/merolagani.py` holds the `market_stocks` spider, and `spiders/market_stocks.py` is empty.
 - **News tags:** manual tags (`is_manual=True`) are never overwritten by automatic categorization, and every manual change writes a `CategorizationCorrection`.

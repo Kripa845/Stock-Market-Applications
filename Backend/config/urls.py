@@ -21,6 +21,7 @@ urlpatterns = [
     path("api/market-intelligence/", include("apps.market_intelligence.api.urls")),
     path("api/market-indices/", include("apps.market_indices.api.urls")),
     path("api/market-calendar/", include("apps.market_calendar.api.urls")),
+    path("api/compare/", include("apps.comparison.api.urls")),
 
     # Auth & Users
     path("api/users/", include("apps.users.api.urls")),

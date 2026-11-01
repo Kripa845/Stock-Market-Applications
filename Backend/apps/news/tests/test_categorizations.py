@@ -26,6 +26,8 @@ from apps.news.services.categorization import (
     decide_company_match,
     invalidate_company_cache,
 )
+from django.utils import timezone
+from apps.news.tests.factories import news_source_for
 from apps.news.services.corrections import (
     apply_add,
     apply_remove,
@@ -41,7 +43,7 @@ class NewsFixtureMixin:
         raw = RawArticle.objects.create(crawl_run=run, source="test", url=url)
         return NewsArticle.objects.create(
             raw_article=raw,
-            source="test",
+            news_source=news_source_for("test"), source="test", published_at=timezone.now(),
             url=url,
             headline=headline,
             body=body,

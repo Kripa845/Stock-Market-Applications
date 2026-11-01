@@ -62,6 +62,11 @@ class CompanyTechnicalSnapshot(models.Model):
     patterns = models.JSONField(default=list, blank=True)
     dma_50 = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
     dma_200 = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    # Filled by services/momentum.py from raw (unadjusted) closes; NULL before 35 sessions.
+    rsi_14 = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    macd = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    macd_signal = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
+    macd_hist = models.DecimalField(max_digits=15, decimal_places=4, null=True, blank=True)
     signal = models.CharField(max_length=32, default="insufficient_history")
     signal_score = models.SmallIntegerField(null=True, blank=True)
     history_sessions = models.PositiveIntegerField(default=0)
