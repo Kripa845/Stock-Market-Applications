@@ -14,19 +14,20 @@ Whenever you (or Claude) add, change or remove something, in the same change:
 
 ---
 
-## In progress (uncommitted, as of 2026-11-01)
+## In progress (as of 2026-11-01)
 
-- **News source model + single ingest path**: `NewsSource` table, `news_source` FK, `normalized_url` / `external_id` identity, `ArticleLike`, `ArticleComment` (`apps/news/models.py`, `apps/news/services/ingest.py`). **No migration yet**: `makemigrations --check` reports pending changes for `news`.
-- **Stock comparison app**: side-by-side profile of 2–5 tracked companies plus a data-coverage report (`apps/comparison/`, `/api/compare/`, command `comparison_coverage`). Not yet in `project-log.md`.
-- **RSI / MACD on technical snapshots**: `market_intelligence/services/momentum.py`, migration `0006_snapshot_rsi_macd`, command `backfill_momentum_indicators`, tests `test_momentum.py`.
-- **Bonus / right-share adjustment report**: `market_data/services/price_adjustments.py` lists sessions where stored prices are not adjusted (reports only, changes no data).
+- **News source model + single ingest path**: `NewsSource`, `news_source` FK, URL / external-id identity, `ArticleLike`, `ArticleComment` (`apps/news/models.py`, `services/ingest.py`). Code and migrations are in `eb87a3a`; no project-log entry yet.
+- **Stock Comparison page** on branch `feature/stock-comparison-page` (`a3b5df3`), not merged into `main`.
 
 ## Next
 
 Open decisions and follow-ups (from `docs/status.md`):
 
-- [ ] Create and apply the `news` migration for the new models.
-- [ ] Add project-log entries for comparison, momentum and news ingest.
+- [ ] Crawl the missing 2026-10-30 prices (`run_crawl --type prices`), then `backfill_market_analysis` and `backfill_market_intelligence`.
+- [ ] Decide whether to store a bonus / right-adjusted price series (RSI, MACD, DMAs and 52-week ranges span unadjusted book closures for 17 of 20 companies).
+- [ ] Import quarterly history (at least 5 quarters with net profit) so TTM EPS, YoY growth and PEG can be computed.
+- [ ] Make the sidebar collapse on phone widths (it leaves ~70px for every page at 390px).
+- [ ] Add a project-log entry for news ingest.
 - [ ] Decide whether the public endpoints (`/api/market/public/snapshot/`, `public/chart/`) stay; then fix the failing test or remove them.
 - [ ] Decide the API number format (Decimal string vs number); fixes the 2 `test_broker_api.py` failures.
 - [ ] Decide whether intraday candles use the footprint filters (odd lots, pre-open); rebuild candles for 2026-10-08/09.
@@ -40,6 +41,11 @@ Open decisions and follow-ups (from `docs/status.md`):
 ## Timeline
 
 ### 2026-11-01
+- Stock Comparison page `/compare` (`pages/StockComparisonPage.tsx`, `api/compare.ts`, `hooks/useCompare.ts`); sidebar "Comparison" is now a group. `a3b5df3`
+- Stock comparison backend: `apps/comparison/`, `/api/compare/`, `compare/companies/`, `compare/coverage/`, command `comparison_coverage`. `eb87a3a`
+- RSI(14) / MACD(12/26/9) on technical snapshots (`market_intelligence/services/momentum.py`, migration `0006`, `backfill_momentum_indicators`; 13,226 rows backfilled). `eb87a3a`
+- Report of sessions where prices are not adjusted for bonus / right shares (`market_data/services/price_adjustments.py`; reports only). `eb87a3a`
+- News source model, single ingest path, likes and comments, with migrations. `eb87a3a`
 - Created this `MEMORY.md` journal and linked it from `CLAUDE.md`. `uncommitted`
 - News Feed source filter panel / chip row, `?source=` in the URL (`components/news/SourceFilter.tsx`, `config/newsSources.ts`). `uncommitted`
 

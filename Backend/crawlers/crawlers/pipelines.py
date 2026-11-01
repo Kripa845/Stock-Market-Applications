@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import re
+import threading
 import nepali_datetime
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -29,6 +30,7 @@ import django
 django.setup()
 
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.utils import timezone
 
 from itemadapter import ItemAdapter
@@ -388,6 +390,7 @@ class CrawlRunPipeline:
                     started_at=timezone.now(),
                     sources=[source],
                 )
+                spider.owns_crawl_run = True
 
             spider.crawl_run = crawl_run
             spider.crawl_run_id = crawl_run.id
@@ -429,58 +432,54 @@ class CrawlRunPipeline:
             return
 
         try:
-            crawl_run = CrawlRun.objects.get(
-                pk=crawl_run_id,
+            # One CrawlRun spans several spider processes (crawler_runs.tasks.run_crawl),
+            # so add this spider's article counts instead of overwriting the others'.
+            found = getattr(spider, "articles_seen", None)
+            if found is None:
+                found = sum(
+                    getattr(spider, name, 0)
+                    for name in ("news_created", "news_updated", "news_duplicate", "news_failed", "news_rejected")
+                )
+            CrawlRun.objects.filter(pk=crawl_run_id).update(
+                articles_found=F("articles_found") + found,
+                articles_created=F("articles_created") + getattr(spider, "news_created", 0),
+                articles_updated=F("articles_updated") + getattr(spider, "news_updated", 0),
+                articles_duplicate=F("articles_duplicate") + getattr(spider, "news_duplicate", 0),
             )
+            crawl_run = CrawlRun.objects.get(pk=crawl_run_id)
+            update_fields = []
 
-            crawl_run.status = CrawlRun.Status.SUCCESS
-            crawl_run.completed_at = timezone.now()
-
-            
-            crawl_run.articles_found = getattr(
-                spider,
-                "articles_seen",
-                0,
-            )
-
-            crawl_run.articles_created = getattr(
-                spider,
-                "news_created",
-                0,
-            )
-
-            crawl_run.articles_updated = getattr(
-                spider,
-                "news_updated",
-                0,
-            )
-
-            crawl_run.articles_duplicate = getattr(
-                spider,
-                "news_duplicate",
-                0,
-            )
+            # A run handed in by the Celery task is finalised by that task once every
+            # spider is done; marking it SUCCESS here would end it between spiders.
+            if getattr(spider, "owns_crawl_run", False):
+                crawl_run.status = CrawlRun.Status.SUCCESS
+                crawl_run.completed_at = timezone.now()
+                update_fields += ["status", "completed_at"]
 
             if spider.name == "trading_data":
                 crawl_run.prices_found = getattr(spider, "prices_found", 0)
                 crawl_run.prices_created = getattr(spider, "prices_created", 0)
                 crawl_run.prices_updated = getattr(spider, "prices_updated", 0)
+                update_fields += ["prices_found", "prices_created", "prices_updated"]
             elif spider.name == "floorsheet":
                 crawl_run.floorsheet_found = getattr(spider, "floorsheet_found", 0)
                 crawl_run.floorsheet_created = getattr(spider, "floorsheet_saved", 0)
                 crawl_run.floorsheet_updated = 0
+                update_fields += ["floorsheet_found", "floorsheet_created", "floorsheet_updated"]
 
-            crawl_run.save()
+            if update_fields:
+                crawl_run.save(update_fields=update_fields)
 
             spider.logger.info(
                 "CrawlRun %s completed | found=%s | created=%s | "
-                "updated=%s | duplicate=%s | failed=%s",
+                "updated=%s | duplicate=%s | failed=%s | rejected=%s",
                 crawl_run.id,
                 crawl_run.articles_found,
                 crawl_run.articles_created,
                 crawl_run.articles_updated,
                 crawl_run.articles_duplicate,
                 getattr(spider, "news_failed", 0),
+                getattr(spider, "news_rejected", 0),
             )
 
         except Exception as exc:
@@ -498,12 +497,15 @@ class NewsPipeline:
     which owns de-duplication and provenance."""
 
     def open_spider(self, spider):
-        self.counts = {"inserted": 0, "updated": 0, "duplicate": 0, "failed": 0}
+        self.counts = {"inserted": 0, "updated": 0, "duplicate": 0, "failed": 0, "rejected": 0}
+        # Items are ingested on deferToThread's pool; `+=` from several threads loses counts.
+        self.count_lock = threading.Lock()
 
         spider.news_created = 0
         spider.news_updated = 0
         spider.news_duplicate = 0
         spider.news_failed = 0
+        spider.news_rejected = 0
 
         self.spider_label = getattr(spider, "source", getattr(spider, "SOURCE", spider.name))
         # label -> NewsSource id; filled on the worker thread (no ORM in the asyncio loop).
@@ -521,7 +523,7 @@ class NewsPipeline:
         crawl_run_id = getattr(spider, "crawl_run_id", None)
 
         if not crawl_run_id:
-            spider.news_failed += 1
+            self._count(spider, "failed")
             spider.logger.error("Cannot save article because CrawlRun was not created: %s", url)
             return item
 
@@ -540,6 +542,20 @@ class NewsPipeline:
         }
         return deferToThread(self._ingest_sync, item, spider, label, crawl_run_id, raw_item)
 
+    _SPIDER_COUNTERS = {
+        "inserted": "news_created",
+        "updated": "news_updated",
+        "duplicate": "news_duplicate",
+        "failed": "news_failed",
+        "rejected": "news_rejected",
+    }
+
+    def _count(self, spider, status):
+        attr = self._SPIDER_COUNTERS[status]
+        with self.count_lock:
+            self.counts[status] += 1
+            setattr(spider, attr, getattr(spider, attr, 0) + 1)
+
     def _source_id(self, label):
         if label not in self.source_ids:
             source = resolve_source(label)
@@ -550,7 +566,7 @@ class NewsPipeline:
         url = raw_item["url"]
         source_id = self._source_id(label)
         if source_id is None:
-            spider.news_failed += 1
+            self._count(spider, "failed")
             spider.logger.error(
                 "No NewsSource matches %r: add one (see apps/news/README.md); skipping %s", label, url,
             )
@@ -558,21 +574,15 @@ class NewsPipeline:
         try:
             result = ingest_article(source_id, raw_item, ingest_run_id=crawl_run_id)
         except IngestRejected as exc:
+            self._count(spider, "rejected")
             spider.logger.warning("Skipping article: %s", exc)
             return item
         except Exception as exc:
-            self.counts["failed"] += 1
-            spider.news_failed += 1
+            self._count(spider, "failed")
             spider.logger.exception("Failed to save article %s: %s", url, exc)
             return item
 
-        self.counts[result.status] += 1
-        if result.status == "inserted":
-            spider.news_created += 1
-        elif result.status == "updated":
-            spider.news_updated += 1
-        else:
-            spider.news_duplicate += 1
+        self._count(spider, result.status)
 
         if result.status in {"inserted", "updated"}:
             # Re-categorise edited articles too; manual tags are never overwritten.
@@ -590,11 +600,12 @@ class NewsPipeline:
 
     def close_spider(self, spider):
         spider.logger.info(
-            "News pipeline finished | inserted=%s | updated=%s | duplicate=%s | failed=%s",
+            "News pipeline finished | inserted=%s | updated=%s | duplicate=%s | failed=%s | rejected=%s",
             self.counts["inserted"],
             self.counts["updated"],
             self.counts["duplicate"],
             self.counts["failed"],
+            self.counts["rejected"],
         )
 
 

@@ -30,7 +30,7 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 **Tests:** `news/tests/test_ingest.py`; fixtures use `news/tests/factories.py`.
 **Open:** "also reported by" in the API/UI, likes/comments API, `external_id` in spiders (see `docs/status.md`).
 
-### 2026-11-01: Stock Comparison page  `uncommitted`
+### 2026-11-01: Stock Comparison page  `a3b5df3`
 
 **What:** Pick 2–5 tracked companies (kept in `?symbols=`) and see summary cards, a 3-month trend chart (% from the first close), a metric table with the best P/E, P/B, ROE, EPS and yield highlighted, top buy / sell brokers and data notes. A missing figure shows "—" with the backend's reason.
 **Frontend:** route `/compare` (`pages/StockComparisonPage.tsx`, rule `view_analysis`), `api/compare.ts`, `hooks/useCompare.ts`. The sidebar "Comparison" entry is now a group: Stock Comparison, Watchlist Comparison.

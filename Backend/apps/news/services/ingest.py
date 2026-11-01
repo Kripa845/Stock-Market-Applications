@@ -10,7 +10,7 @@ See apps/news/README.md "Adding a news source".
 import logging
 import re
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from django.db import IntegrityError, transaction
@@ -75,6 +75,9 @@ def find_story_root(*, exclude_source_id, exclude_article_id=None, content_hash,
         NewsArticle.objects.filter(match)
         .exclude(data_provenance=SEEDED)
         .exclude(news_source_id=exclude_source_id)
+        # A copy whose root is our own portal's article would link two of our
+        # own articles that merely share a title ("same-source title" rule).
+        .exclude(duplicate_of__news_source_id=exclude_source_id)
         .exclude(pk=exclude_article_id)
         .order_by("published_at", "id")
         .only("id", "duplicate_of_id")
@@ -122,8 +125,8 @@ def ingest_article(source_id, raw_item, *, ingest_run_id, provenance="crawled") 
         raise IngestRejected(f"title missing: {url}")
     if not body:
         raise IngestRejected(f"body missing: {url}")
-    if published_at is None or timezone.is_naive(published_at):
-        raise IngestRejected(f"published_at missing or naive: {url}")
+    if not isinstance(published_at, datetime) or timezone.is_naive(published_at):
+        raise IngestRejected(f"published_at missing, unparsed or naive: {url}")
 
     content_hash = compute_content_hash(headline, body)
     canonical_hash = compute_canonical_hash(headline)
@@ -137,7 +140,7 @@ def ingest_article(source_id, raw_item, *, ingest_run_id, provenance="crawled") 
         existing = _find_existing(source.pk, external_id, normalized)
         if existing is not None:
             return _refresh(existing, raw_item, headline, body, image_url, external_id,
-                            content_hash, canonical_hash, now)
+                            content_hash, canonical_hash, now, ingest_run_id)
 
         # Exact copy re-posted by the same portal under another URL.
         same_source_copy = (
@@ -191,7 +194,7 @@ def ingest_article(source_id, raw_item, *, ingest_run_id, provenance="crawled") 
             if existing is None:
                 raise
             return _refresh(existing, raw_item, headline, body, image_url, external_id,
-                            content_hash, canonical_hash, now)
+                            content_hash, canonical_hash, now, ingest_run_id)
 
     return IngestResult("inserted", article.pk, root_id)
 
@@ -206,7 +209,7 @@ def _find_existing(source_id, external_id, normalized_url):
 
 
 def _refresh(article, raw_item, headline, body, image_url, external_id,
-             content_hash, canonical_hash, now) -> IngestResult:
+             content_hash, canonical_hash, now, ingest_run_id) -> IngestResult:
     """Touch last_seen_at; rewrite only fields the source actually changed."""
     fields = ["last_seen_at"]
     article.last_seen_at = now
@@ -217,7 +220,9 @@ def _refresh(article, raw_item, headline, body, image_url, external_id,
         article.body = body
         article.content_hash = content_hash
         article.canonical_hash = canonical_hash
-        fields += ["headline", "body", "content_hash", "canonical_hash"]
+        # The old score describes the old text; the sentiment batch rescores it.
+        article.sentiment_status = "pending"
+        fields += ["headline", "body", "content_hash", "canonical_hash", "sentiment_status"]
         changed = True
     if image_url and image_url != article.image_url:
         article.image_url = image_url
@@ -232,7 +237,8 @@ def _refresh(article, raw_item, headline, body, image_url, external_id,
         raw = article.raw_article
         raw.raw_html = raw_item.get("raw_html") or raw.raw_html
         raw.http_status = raw_item.get("http_status") or raw.http_status
-        raw.save(update_fields=["raw_html", "http_status"])
+        raw.crawl_run_id = ingest_run_id
+        raw.save(update_fields=["raw_html", "http_status", "crawl_run"])
     article.save(update_fields=fields)
 
     return IngestResult("updated" if changed else "duplicate", article.pk, article.duplicate_of_id)

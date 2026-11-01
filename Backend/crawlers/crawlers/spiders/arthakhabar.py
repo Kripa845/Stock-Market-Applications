@@ -114,7 +114,6 @@ class ArthakhabarSpider(BaseNewsSpider, scrapy.Spider):
         published_at = self.extract_published_at(
             response
         )
-        print("ARTHAKHABAR RAW PUBLISHED DATE:", repr(published_at))
         self.logger.info(
             "Arthakhabar article | headline=%r | "
             "published_at=%r | body_length=%s | url=%s",

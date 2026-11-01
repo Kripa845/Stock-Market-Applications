@@ -1,4 +1,6 @@
 from datetime import datetime, timedelta
+from types import SimpleNamespace
+from unittest import mock
 from zoneinfo import ZoneInfo
 
 from django.contrib.auth import get_user_model
@@ -10,6 +12,7 @@ from apps.companies.models import Company
 from apps.crawler_runs.models import CrawlRun
 from apps.news.models import ArticleCompanyTag, ArticleLike, NewsArticle, NewsSource, RawArticle
 from apps.news.services import dedupe
+from apps.news.services import ingest as ingest_mod
 from apps.news.services.ingest import IngestRejected, ingest_article, resolve_source
 from apps.news.services.normalize import (
     canonical_title,
@@ -39,6 +42,13 @@ class NormalizeTests(TestCase):
     def test_relative_or_empty_url_has_no_identity(self):
         self.assertEqual(normalize_url("/news/1"), "")
         self.assertEqual(normalize_url(""), "")
+        self.assertEqual(normalize_url("mailto:news@sharesansar.com"), "")
+
+    def test_http_and_https_are_one_identity(self):
+        self.assertEqual(
+            normalize_url("http://www.sharesansar.com/newsdetail/abc"),
+            normalize_url("https://sharesansar.com/newsdetail/abc/"),
+        )
 
     def test_canonical_title_folds_digits_and_punctuation(self):
         self.assertEqual(canonical_title("  नेप्से ३ अंकले बढ्यो! "), "नेप्से 3 अंकले बढ्यो")
@@ -97,6 +107,43 @@ class IngestTests(TestCase):
         self.assertNotEqual(article.content_hash, old_hash)
         self.assertIn("cash dividend", article.body)
 
+    def test_edit_queues_sentiment_rescore_and_records_run(self):
+        first = self.ingest()
+        NewsArticle.objects.filter(pk=first.article_id).update(sentiment_status="ok", sentiment=0.4)
+        later_run = CrawlRun.objects.create(crawl_type="news")
+        ingest_article(self.sharesansar.pk, self.item(body="Rewritten with new figures."), ingest_run_id=later_run.pk)
+        article = NewsArticle.objects.get(pk=first.article_id)
+        self.assertEqual(article.sentiment_status, "pending")
+        self.assertEqual(article.ingest_run, self.run)  # still the inserting run
+        self.assertEqual(article.raw_article.crawl_run, later_run)
+
+    def test_unchanged_rerun_keeps_sentiment(self):
+        first = self.ingest()
+        NewsArticle.objects.filter(pk=first.article_id).update(sentiment_status="ok")
+        self.ingest()
+        self.assertEqual(NewsArticle.objects.get(pk=first.article_id).sentiment_status, "ok")
+
+    def test_edited_article_seen_over_http_is_not_a_new_row(self):
+        first = self.ingest()
+        result = self.ingest(url="http://sharesansar.com/newsdetail/nabil-dividend", body="Corrected text.")
+        self.assertEqual((result.status, result.article_id), ("updated", first.article_id))
+        self.assertEqual(NewsArticle.objects.count(), 1)
+
+    def test_concurrent_insert_falls_back_to_update(self):
+        """The row another worker committed between lookup and insert is updated, not duplicated."""
+        first = self.ingest()
+        real_find = ingest_mod._find_existing
+        calls = []
+
+        def miss_once(*args, **kwargs):
+            calls.append(1)
+            return None if len(calls) == 1 else real_find(*args, **kwargs)
+
+        with mock.patch.object(ingest_mod, "_find_existing", side_effect=miss_once):
+            result = self.ingest(body="Edited while another worker inserted it.")
+        self.assertEqual((result.status, result.article_id), ("updated", first.article_id))
+        self.assertEqual(NewsArticle.objects.count(), 1)
+
     def test_external_id_identifies_across_url_changes(self):
         first = self.ingest(external_id="131443")
         result = self.ingest(url="https://www.sharesansar.com/newsdetail/renamed-slug", external_id="131443")
@@ -131,6 +178,17 @@ class IngestTests(TestCase):
         )
         self.assertIsNone(later.duplicate_of_id)
 
+    def test_own_portal_story_is_not_linked_through_another_portals_copy(self):
+        root = self.ingest()
+        self.ingest(source=self.merolagani, url="https://merolagani.com/NewsDetail.aspx?newsID=1",
+                    body="MeroLagani's copy.")
+        follow_up = self.ingest(url="https://www.sharesansar.com/newsdetail/nabil-dividend-2",
+                                body="A different ShareSansar article, same title.",
+                                published_at=WHEN + timedelta(days=1))
+        self.assertEqual(follow_up.status, "inserted")
+        self.assertIsNone(follow_up.duplicate_of_id)
+        self.assertEqual(NewsArticle.objects.get(pk=root.article_id).also_reported.count(), 1)
+
     def test_rejects_items_without_provenance_or_required_fields(self):
         cases = [
             dict(url=""),
@@ -139,6 +197,7 @@ class IngestTests(TestCase):
             dict(body=""),
             dict(published_at=None),
             dict(published_at=datetime(2026, 10, 20, 11, 0)),  # naive
+            dict(published_at="2026-10-20 11:00"),  # unparsed
         ]
         for overrides in cases:
             with self.subTest(overrides=overrides), self.assertRaises(IngestRejected):
@@ -252,9 +311,61 @@ class DedupeTests(TestCase):
         self.assertEqual(report.links, [])
         self.assertEqual(report.same_source_title_groups, 1)
 
+    def test_merge_when_survivor_points_at_loser_keeps_group(self):
+        other = self.make(self.merolagani, "https://merolagani.com/NewsDetail.aspx?newsID=3", "Unrelated title 12345")
+        loser = self.make(self.sharesansar, "https://www.sharesansar.com/a", "Identical text for merging")
+        survivor = self.make(self.sharesansar, "https://www.sharesansar.com/b", "Identical text for merging")
+        loser.duplicate_of = other
+        loser.save(update_fields=["duplicate_of"])
+        survivor.duplicate_of = loser
+        survivor.save(update_fields=["duplicate_of"])
+
+        dedupe.merge_into(survivor, loser)
+        survivor.refresh_from_db()
+        self.assertEqual(survivor.duplicate_of_id, other.pk)
+
 
 class SourceModelTests(TestCase):
     def test_slug_unique(self):
         NewsSource.objects.create(slug="x", name="X", base_url="https://x.com")
         with self.assertRaises(IntegrityError), transaction.atomic():
             NewsSource.objects.create(slug="x", name="Y", base_url="https://y.com")
+
+
+class CrawlRunCounterTests(TestCase):
+    """One CrawlRun spans every spider of a crawl (crawler_runs.tasks.run_crawl)."""
+
+    def spider(self, run, name, **counts):
+        return SimpleNamespace(name=name, crawl_run_id=run.pk, logger=mock.Mock(), **counts)
+
+    def test_counters_add_up_across_spiders_and_task_keeps_status(self):
+        from crawlers.crawlers.pipelines import CrawlRunPipeline
+
+        run = CrawlRun.objects.create(crawl_type="all", status=CrawlRun.Status.RUNNING)
+        CrawlRunPipeline._complete_crawl_run(self.spider(
+            run, "sharesansar", articles_seen=6, news_created=4, news_updated=1, news_duplicate=1))
+        # No articles_seen: found falls back to what the pipeline processed.
+        CrawlRunPipeline._complete_crawl_run(self.spider(
+            run, "fiscalnepal", news_created=2, news_duplicate=3, news_rejected=1))
+        CrawlRunPipeline._complete_crawl_run(self.spider(
+            run, "trading_data", news_created=0, prices_found=20, prices_created=20))
+
+        run.refresh_from_db()
+        self.assertEqual(
+            (run.articles_found, run.articles_created, run.articles_updated, run.articles_duplicate),
+            (12, 6, 1, 4),
+        )
+        self.assertEqual(run.prices_created, 20)
+        self.assertEqual(run.status, CrawlRun.Status.RUNNING)  # finalised by the task, not a spider
+
+    def test_standalone_run_is_finalised_by_the_spider(self):
+        from crawlers.crawlers.pipelines import CrawlRunPipeline
+
+        spider = SimpleNamespace(name="bizmandu", source="Bizmandu", logger=mock.Mock())
+        CrawlRunPipeline._create_crawl_run(spider)
+        spider.news_created = 2
+        CrawlRunPipeline._complete_crawl_run(spider)
+
+        run = CrawlRun.objects.get(pk=spider.crawl_run_id)
+        self.assertEqual((run.status, run.articles_created), (CrawlRun.Status.SUCCESS, 2))
+        self.assertIsNotNone(run.completed_at)

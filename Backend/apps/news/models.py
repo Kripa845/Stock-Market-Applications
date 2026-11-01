@@ -74,7 +74,7 @@ class NewsArticle(models.Model):
     normalized_url = models.CharField(max_length=1000)
     # The portal's own article id, when it exposes one; "" otherwise.
     external_id = models.CharField(max_length=200, blank=True, default="")
-    # Run that first inserted the row (RawArticle.crawl_run is the latest fetch).
+    # Run that first inserted the row (RawArticle.crawl_run is the latest run that changed it).
     ingest_run = models.ForeignKey(
         CrawlRun, on_delete=models.PROTECT, null=True, blank=True, related_name="ingested_articles",
     )

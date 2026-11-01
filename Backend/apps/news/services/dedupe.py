@@ -86,9 +86,13 @@ def merge_into(survivor: NewsArticle, loser: NewsArticle):
     loser.comments.update(article=survivor)
     liked = set(ArticleLike.objects.filter(article=survivor).values_list("user_id", flat=True))
     loser.likes.exclude(user_id__in=liked).update(article=survivor)
+    fields = ["last_seen_at"]
+    if survivor.duplicate_of_id == loser.pk:
+        # Pointing at the row being deleted would SET_NULL and orphan the group.
+        survivor.duplicate_of_id = None if loser.duplicate_of_id == survivor.pk else loser.duplicate_of_id
+        fields.append("duplicate_of")
     loser.also_reported.exclude(pk=survivor.pk).update(duplicate_of=survivor.duplicate_of_id or survivor.pk)
 
-    fields = ["last_seen_at"]
     survivor.last_seen_at = max(survivor.last_seen_at, loser.last_seen_at)
     if not survivor.image_url and loser.image_url:
         survivor.image_url = loser.image_url
@@ -98,7 +102,8 @@ def merge_into(survivor: NewsArticle, loser: NewsArticle):
         fields.append("external_id")
     if survivor.duplicate_of_id is None and loser.duplicate_of_id not in (None, survivor.pk):
         survivor.duplicate_of_id = loser.duplicate_of_id
-        fields.append("duplicate_of")
+        if "duplicate_of" not in fields:
+            fields.append("duplicate_of")
     survivor.save(update_fields=fields)
 
     logger.info("Merged article %s into %s (%s)", loser.pk, survivor.pk, loser.url)

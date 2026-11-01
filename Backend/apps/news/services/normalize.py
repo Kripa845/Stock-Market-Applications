@@ -15,11 +15,11 @@ MIN_CANONICAL_TITLE_LEN = 12
 
 
 def normalize_url(url: str) -> str:
-    """Identity form of a URL: lowercase host without www., no tracking params,
-    no fragment, no trailing slash. Path case and real query params are kept
-    (MeroLagani's NewsDetail.aspx?newsID=... is identified by its query)."""
+    """Identity form of a URL: https, lowercase host without www., no tracking
+    params, no fragment, no trailing slash. Path case and real query params are
+    kept (MeroLagani's NewsDetail.aspx?newsID=... is identified by its query)."""
     parts = urlsplit((url or "").strip())
-    if not parts.scheme or not parts.netloc:
+    if parts.scheme.lower() not in {"http", "https"} or not parts.netloc:
         return ""
     host = (parts.hostname or "").lower()
     if host.startswith("www."):
@@ -33,7 +33,8 @@ def normalize_url(url: str) -> str:
         if not k.lower().startswith("utm_") and k.lower() not in TRACKING_PARAMS
     )
     path = parts.path.rstrip("/") or ""
-    return urlunsplit((parts.scheme.lower(), host, path, urlencode(query), ""))
+    # Portals serve the same page over http and https; the scheme isn't identity.
+    return urlunsplit(("https", host, path, urlencode(query), ""))
 
 
 def _clean_unicode(text: str) -> str:

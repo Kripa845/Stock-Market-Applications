@@ -45,6 +45,22 @@ export function formatCount(value: number | string | null | undefined): string {
   return n === null || Number.isNaN(n) ? '—' : n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 }
 
+const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+
+/** 49.9B / 14.3M / 9.5K (international units); pair with formatThousands for the full figure. */
+export function formatCompactNumber(value: number | string | null | undefined): string {
+  const n = toNumber(value);
+  return n === null || Number.isNaN(n) ? '—' : COMPACT.format(n);
+}
+
+/** 49,911,956,488.80 with international thousands separators. */
+export function formatThousands(value: number | string | null | undefined, digits = 2): string {
+  const n = toNumber(value);
+  return n === null || Number.isNaN(n)
+    ? '—'
+    : n.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
 export function formatPrice(value: number | string | null | undefined): string {
   const n = toNumber(value);
   return n === null || Number.isNaN(n) ? '—' : n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
