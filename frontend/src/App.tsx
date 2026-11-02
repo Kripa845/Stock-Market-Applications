@@ -54,7 +54,7 @@ import StockDetail from './pages/StockDetail';
 import NewsPage from './pages/News';
 import NewsDetail from './pages/NewsDetail';
 import ExportPage from './pages/ExportPage';
-
+import StockDetailsPage from "./stock-detail/StockDetailsPage";
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFound from './pages/NotFound';
 
@@ -65,6 +65,7 @@ import { ROUTE_RULES } from './config/routePermissions';
 /* =========================================================
    PRIVATE ROUTE
 ========================================================= */
+
 
 function PrivateRoute({
   children,
@@ -323,7 +324,14 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
-
+          <Route
+  path="/stocks/:symbol"
+  element={
+    <PermissionRoute rule={ROUTE_RULES['/companies/:symbol']}>
+      <StockDetailsPage />
+    </PermissionRoute>
+  }
+/>
           <Route
             path="/market/month-by-month"
             element={

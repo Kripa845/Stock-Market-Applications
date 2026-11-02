@@ -78,7 +78,7 @@ function Segmented<T extends string | number>({ options, value, onChange, label 
           aria-pressed={option.key === value}
           onClick={() => onChange(option.key)}
           className={`px-2.5 py-2 text-xs transition ${
-            option.key === value ? 'bg-accent/20 font-semibold text-text-primary' : 'text-text-secondary hover:bg-bg-elevated hover:text-text-primary'
+            option.key === value ? 'bg-accent/20 font-semibold text-text-primary' : 'text-text-secondary hover:bg-blue-500/10 hover:text-text-primary'
           }`}
         >
           {option.label}
@@ -334,10 +334,10 @@ function SessionGrid({ companies, buckets, minutes, tab, density, loading, jumpT
             return (
               <div
                 key={company.company_id}
-                className="group absolute left-0 border-b border-bg-border hover:bg-bg-elevated/40"
+                className=" absolute left-0 border-b border-bg-borde"
                 style={{ top: HEAD_H + r * ROW_H, height: ROW_H, width }}
               >
-                <div className={`${stickyLeft} bg-bg-card group-hover:bg-bg-elevated`} style={{ width: LEFT_W, height: ROW_H }}>
+                <div className={`${stickyLeft} bg-bg-card`} style={{ width: LEFT_W, height: ROW_H }}>
                   {SN_W > 0 && (
                     <span className="self-center px-2 text-right font-mono text-[11px] text-text-muted" style={{ width: SN_W }}>{r + 1}</span>
                   )}

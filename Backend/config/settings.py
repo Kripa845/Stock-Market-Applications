@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.market_calendar",
     "apps.comparison",
+    "apps.stock_detail",
     
 ]
 

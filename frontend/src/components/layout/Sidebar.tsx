@@ -165,7 +165,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: Newspaper,
     to: '/news',
   },
-
+   {
+    label: 'Stock Details',
+    icon: Newspaper,
+    to: '/stocks/:symbol',
+  },
   // { type: 'divider', label: 'Data Collection' },
 
   {

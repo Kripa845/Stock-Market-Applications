@@ -1,4 +1,4 @@
-
+/* stylelint-disable at-rule-no-unknown */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -238,11 +238,11 @@
     color: #475569 !important;
   }
 
+  
   html[data-theme="light"] .btn-ghost:hover {
-    color: #0F172A !important;
-    background-color: #EFF6FF !important;
-  }
-
+  color: #5e4a4a !important;
+  background-color: #7C3AED !important;
+}
 
   /* =========================
      LOGIN / REGISTER LABEL
@@ -257,7 +257,7 @@
   }
 
   html[data-theme="light"] .label {
-    color: #0F172A !important;
+    color: #8d9fc8 !important;
   }
 
 
@@ -464,7 +464,7 @@ html[data-theme="light"] .sidebar-wrap .nav-item {
 }
 
 html[data-theme="light"] .sidebar-wrap .nav-item:hover {
-  color: #0F172A !important;
+  color: #892186 !important;
   background-color: #EFF6FF !important;
 }
 
@@ -570,7 +570,7 @@ html[data-theme="light"] .text-text-muted {
   color: #64748B !important;
 }
 html[data-theme="light"] .hover\:text-text-primary:hover {
-  color: #0F172A !important;
+  color: #8c99b8 !important;
 }
 html[data-theme="light"] .hover\:bg-blue-500\/10:hover {
   background-color: #EFF6FF !important;
