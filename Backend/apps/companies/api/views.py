@@ -30,6 +30,9 @@ from apps.users.company_access import (
     filter_company_queryset,
     require_company_access,
 )
+from apps.market_data.services.stock_performance import (
+    calculate_stock_performance,
+)
 from apps.companies.models import Company, TrackedCompany
 from apps.companies.api.serializers import CompanySerializer
 from apps.market_data.services.movers import normalize_period, tracked_movers
@@ -128,6 +131,61 @@ class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
             "PATCH": ["edit_companies"],
             "DELETE": ["delete_companies"],
         }.get(request.method, [])
+
+
+class TrackedCompanyQuoteAPIView(APIView):
+    """Current stock-detail quote for one active tracked company."""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
+
+    def get(self, request, symbol):
+        company = get_object_or_404(
+            Company.objects.select_related("tracking"),
+            symbol__iexact=symbol,
+            is_active=True,
+            tracking__is_tracked=True,
+        )
+        require_company_access(request.user, company.pk)
+        # Daily stock-detail figures are for the last completed calendar day;
+        # don't expose a same-day row while today's session is still underway.
+        as_of_date = timezone.localdate() - timedelta(days=1)
+        latest = DailyPrice.objects.filter(
+            company=company, source="crawled", date__lte=as_of_date,
+        ).order_by("-date").first()
+        if latest is None:
+            values = {
+                "open": None, "high": None, "low": None, "prev_close": None,
+                "week52_high": None, "week52_low": None, "market_cap": None,
+                "shares_outstanding": company.listed_shares, "volume": None,
+            }
+            return Response({
+                "symbol": company.symbol, "name": company.name, "as_of": None,
+                **values,
+                "missing_fields": [key for key, value in values.items() if value is None],
+            })
+
+        prior = DailyPrice.objects.filter(
+            company=company, source="crawled", date__lt=latest.date,
+        ).order_by("-date").first()
+        year_ago = latest.date - timedelta(days=365)
+        yearly = DailyPrice.objects.filter(
+            company=company, source="crawled", date__gte=year_ago, date__lte=latest.date,
+        )
+        week52_high = yearly.order_by("-high").values_list("high", flat=True).first()
+        week52_low = yearly.order_by("low").values_list("low", flat=True).first()
+        shares = company.listed_shares
+        values = {
+            "open": latest.open, "high": latest.high, "low": latest.low,
+            "prev_close": prior.close if prior else None,
+            "week52_high": week52_high, "week52_low": week52_low,
+            "market_cap": latest.close * shares if shares is not None else None,
+            "shares_outstanding": shares, "volume": latest.volume,
+        }
+        return Response({
+            "symbol": company.symbol, "name": company.name, "as_of": latest.date,
+            **values,
+            "missing_fields": [key for key, value in values.items() if value is None],
+        })
 
 
 class CompanyToggleTrackAPIView(APIView):
@@ -413,3 +471,49 @@ class TopLosersAPIView(_TrackedMoversSideAPIView):
 # companies/urls.py already points at views.top_gainers / views.top_losers.
 top_gainers = TopGainersAPIView.as_view()
 top_losers = TopLosersAPIView.as_view()
+
+class CompanyPerformanceAPIView(APIView):
+    """
+    GET /api/companies/<id>/performance/
+
+    Returns historical stock performance metrics.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
+
+    def get(self, request, pk):
+        company = get_object_or_404(
+            Company,
+            pk=pk,
+            is_active=True,
+        )
+
+        # Apply the existing company-level access restriction.
+        require_company_access(
+            request.user,
+            company.pk,
+        )
+
+        performance = calculate_stock_performance(company)
+
+        if not performance:
+            return Response(
+                {
+                    "status": "insufficient_history",
+                    "detail": "No crawled price history is available for this company.",
+                    "company_id": company.pk,
+                    "symbol": company.symbol,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            {
+                "status": "ok",
+                "company_id": company.pk,
+                "symbol": company.symbol,
+                "name": company.name,
+                **performance,
+            }
+        )

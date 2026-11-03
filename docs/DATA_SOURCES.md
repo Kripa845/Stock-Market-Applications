@@ -7,6 +7,7 @@ Where every dataset comes from, how often, how politely, and what happens when a
 | Dataset | Source | Collector | Writes | When |
 |---|---|---|---|---|
 | Daily prices (tracked) | ShareSansar company price history | spider `trading_data` | `DailyPrice` (`source="crawled"`) | 18:00 trading days |
+| Stock-detail quote tiles (active tracked companies) | ShareSansar crawled OHLCV; listed-share count from NEPSE sync or admin | spider `trading_data`; `sync_listed_shares` | `DailyPrice`; `Company.listed_shares` | `GET /api/companies/<symbol>/quote/` derives the latest crawled trading date on or before yesterday (Asia/Kathmandu); 52-week range uses 365 days ending on that quote date |
 | Whole-market daily rows | ShareSansar "today share price" | spider `market_stocks` (file `spiders/merolagani.py`) → `market_wide_pipeline.py` | `MarketStockDaily` | 18:10 trading days |
 | Floorsheet, latest session | ShareSansar | spider `floorsheet` | `FloorsheetTransaction` (no trade times) | 18:15 trading days |
 | Floorsheet with trade times, history | ShareHub (`sharehubnepal.com`) JSON | `floorsheet/services/sharehub_floorsheet.py` | `FloorsheetTransaction`, `IntradayCandle` | every 5 min in session; backfills by hand |

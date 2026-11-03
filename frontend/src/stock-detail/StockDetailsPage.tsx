@@ -1,5 +1,5 @@
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { mockStock } from "./mock";
 import type { StockDetail } from "./types";
@@ -9,19 +9,82 @@ import MasterGauge from "./Mastergauge";
 import RangeBars from "./Rangebars";
 import Technicals from "./Technicals";
 import KeyFinancials from "./Keyfinancials";
+import apiClient from "../api/client";
 
-// Quick-link chips next to the search box. Change to your own symbols.
-const QUICK_SYMBOLS = ["NICA", "NABIL", "NTC", "UPPER", "SHIVM"];
+const EMPTY_QUOTE = [
+  "Open", "High / Low", "Prev. close", "Volume", "52-week high", "52-week low", "Market cap", "Shares outstanding",
+].map((label) => ({ label, value: "—" }));
 
 /**
  * Drop-in page. Pass real data from your API; falls back to mock data for now.
  * e.g. <Route path="/stocks/:symbol" element={<StockDetailPage />} />
  */
 export default function StockDetailPage({ stock = mockStock }: { stock?: StockDetail }) {
-  const down = stock.change < 0;
+  const [liveQuote, setLiveQuote] = useState<StockDetail["quote"] | null>(null);
+  const [trackedCompanies, setTrackedCompanies] = useState<{ symbol: string; name: string }[]>([]);
+  const [quoteMeta, setQuoteMeta] = useState<{ name: string; asOf: string } | null>(null);
   const navigate = useNavigate();
   const { symbol: current } = useParams();
   const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLiveQuote(null);
+    setQuoteMeta(null);
+    if (!current) return () => { active = false; };
+    apiClient.get(`/companies/${encodeURIComponent(current)}/quote/`).then(({ data }) => {
+      if (!active) return;
+      setQuoteMeta({
+        name: data.name,
+        asOf: data.as_of ? new Date(`${data.as_of}T00:00:00`).toLocaleDateString() : "No crawled quote",
+      });
+      const price = (v: number | string | null) => v == null ? "—" : Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 });
+      const count = (v: number | string | null) => v == null ? "—" : Number(v).toLocaleString();
+      const cap = (v: number | string | null) => v == null ? "—" : `Rs. ${Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      setLiveQuote([
+        { label: "Open", value: price(data.open) },
+        { label: "High / Low", value: `${price(data.high)} / ${price(data.low)}` },
+        { label: "Prev. close", value: price(data.prev_close) },
+        { label: "Volume", value: count(data.volume) },
+        { label: "52-week high", value: price(data.week52_high) },
+        { label: "52-week low", value: price(data.week52_low) },
+        { label: "Market cap", value: cap(data.market_cap) },
+        { label: "Shares outstanding", value: count(data.shares_outstanding) },
+      ]);
+    }).catch(() => {
+      if (active) setLiveQuote([
+        "Open", "High / Low", "Prev. close", "Volume", "52-week high", "52-week low", "Market cap", "Shares outstanding",
+      ].map((label) => ({ label, value: "—" })));
+    });
+    return () => { active = false; };
+  }, [current]);
+
+  useEffect(() => {
+    let active = true;
+    const loadTrackedCompanies = async () => {
+      const all: { symbol: string; name: string }[] = [];
+      let page = 1;
+      let count = 0;
+      do {
+        const { data } = await apiClient.get(`/companies/?tracking=tracked&status=active&page=${page}`);
+        all.push(...(data.results ?? []));
+        count = data.count ?? all.length;
+        page += 1;
+      } while (all.length < count && page < 100);
+      if (active) setTrackedCompanies(all);
+    };
+    loadTrackedCompanies().catch(() => { if (active) setTrackedCompanies([]); });
+    return () => { active = false; };
+  }, []);
+
+  const displayStock = {
+    ...stock,
+    name: quoteMeta?.name ?? stock.name,
+    symbol: current?.toUpperCase() ?? stock.symbol,
+    asOf: quoteMeta ? `Data as of ${quoteMeta.asOf}` : current ? "Loading quote date…" : stock.asOf,
+    quote: current ? liveQuote ?? EMPTY_QUOTE : stock.quote,
+  };
+  const down = displayStock.change < 0;
 
   const goToSymbol = (e: FormEvent) => {
     e.preventDefault();
@@ -37,15 +100,15 @@ export default function StockDetailPage({ stock = mockStock }: { stock?: StockDe
       <header className="flex flex-wrap items-start justify-between gap-2 px-1 pb-2 pt-3">
         <div>
           <h1 className="text-[15px] font-extrabold text-white">
-            {stock.name} <span className="text-slate-400">({stock.symbol})</span>
+            {displayStock.name} <span className="text-slate-400">({displayStock.symbol})</span>
           </h1>
           <p className="text-[10px] text-slate-400">
-            {stock.sector} ·{" "}
-            <b className="text-white">Rs. {stock.ltp.toFixed(2)}</b>{" "}
+            {displayStock.sector} ·{" "}
+            <b className="text-white">Rs. {displayStock.ltp.toFixed(2)}</b>{" "}
             <span className={down ? "text-red-400" : "text-emerald-400"}>
-              {stock.change.toFixed(2)} ({stock.changePct.toFixed(2)}%)
+              {displayStock.change.toFixed(2)} ({displayStock.changePct.toFixed(2)}%)
             </span>{" "}
-            <span className="text-slate-500">{stock.asOf}</span>
+            <span className="text-slate-500">{displayStock.asOf}</span>
           </p>
         </div>
 
@@ -77,12 +140,14 @@ export default function StockDetailPage({ stock = mockStock }: { stock?: StockDe
             </button>
           </form>
 
-          {QUICK_SYMBOLS.map((sym) => {
+          <div className="flex max-h-16 max-w-full flex-wrap gap-1 overflow-y-auto">
+          {trackedCompanies.map(({ symbol: sym, name }) => {
             const active = current?.toUpperCase() === sym;
             return (
               <Link
                 key={sym}
                 to={`/stocks/${sym}`}
+                title={name}
                 className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold tracking-wide ${
                   active
                     ? "border-emerald-400 bg-emerald-500/20 text-emerald-300"
@@ -93,6 +158,7 @@ export default function StockDetailPage({ stock = mockStock }: { stock?: StockDe
               </Link>
             );
           })}
+          </div>
         </div>
       </header>
 
@@ -103,9 +169,9 @@ export default function StockDetailPage({ stock = mockStock }: { stock?: StockDe
             title="Price — last 6 months"
             right={<a href="#chart" className="text-emerald-400 hover:underline">Full chart</a>}
           >
-            <PriceChart data={stock.candles} />
+            <PriceChart data={displayStock.candles} />
             <div className="mt-2 grid grid-cols-2 gap-1.5 md:grid-cols-4">
-              {stock.quote.map((m) => (
+              {displayStock.quote.map((m) => (
                 <Tile key={m.label} {...m} />
               ))}
             </div>

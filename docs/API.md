@@ -112,6 +112,7 @@ Permission = the key for GET. Write methods may need more, so check the view.
 | Endpoint | Permission |
 |---|---|
 | `` (list / create), `<id>/` | `view_companies` / `create_companies` / `edit_companies` / `delete_companies` |
+| `<symbol>/quote/` | `view_price_history` (active tracked companies only; company access applies) |
 | `<id>/toggle-track/` | `manage_tracked_companies` |
 | `<id>/prices/`, `<id>/intraday/` | `view_price_history` |
 | `<id>/floorsheet/` | `view_market_data` |
@@ -119,6 +120,8 @@ Permission = the key for GET. Write methods may need more, so check the view.
 | `<id>/behavior/`, `<id>/behavior-summary/`, `<symbol>/news-correlation/`, `<id>/news-correlation/`, `<id>/news-price-correlation/` | `view_analysis` |
 | `sectors/` | `view_companies` |
 | `top-gainers/`, `top-losers/` | `view_market_data` (uses `movers.py`) |
+
+`<symbol>/quote/` supplies the eight stock-detail quote tiles for each active tracked company: latest crawled open / high / low / volume dated no later than yesterday in Asia/Kathmandu, previous crawled close, 52-week high / low from crawled daily rows within 365 days of that quote date, market cap (quote-date close × `Company.listed_shares`), and shares outstanding (`Company.listed_shares`). Fields without source data are `null` and named in `missing_fields`; the page displays an em dash for them and shows the quote date. The endpoint only returns active tracked companies and respects per-user company access. The stock page fetches every page of the active tracked company list and displays all companies visible to that user. Other stock-detail sections are not supplied by this quote endpoint.
 
 ### `market/` (tracked dashboard, plus dividends and quarterly report from `reports`)
 Every tracked response carries `"scope": "tracked_companies"`.

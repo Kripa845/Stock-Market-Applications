@@ -13,6 +13,8 @@ NEPSE and project terms as they are used in the code. Where a term maps to a mod
 | **Broker** | A NEPSE trading member, identified by number (e.g. `58`). Net buying by a broker can be many clients (`Broker`). |
 | **LTP** | Last traded price during the session (`Company.ltp`). Not the crawled close. |
 | **Close / previous close** | From crawled `DailyPrice`. Previous close is derived from the previous crawled session, never stored. NEPSE's official close is not always the last trade: odd lots never count, and from 2025-03-20 to 2025-09-21 it was the VWAP of trades from 14:45 (`settings.NEPSE_CLOSING_PRICE_RULES`; checked by `validate_floorsheet_grid`). |
+| **Stock-detail quote date** | The latest crawled `DailyPrice.date` no later than yesterday in Asia/Kathmandu; on weekends and holidays this can be the prior trading session. The stock-detail quote API uses this date for OHLCV and the 52-week range. |
+| **52-week high / low** | Highest `DailyPrice.high` / lowest `DailyPrice.low` among crawled rows in the 365 days ending on the stock-detail quote date. |
 | **Odd lot** | A trade under 10 shares. Excluded from the official close. |
 | **Adjusted change** | ShareSansar's published % change (`DailyPrice.source_change_pct`), using NEPSE's previous close adjusted for bonus / right shares. Differs from close-to-close on book-closure days. |
 | **Turnover** | Traded value in NPR (quantity × rate summed). |

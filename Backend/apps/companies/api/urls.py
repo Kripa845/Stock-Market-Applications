@@ -14,11 +14,18 @@ from apps.companies.api.views import (
     CompanyRvolAPIView,
     CompanyVolumeAnomaliesAPIView,
     CompanyToggleTrackAPIView,
+    TrackedCompanyQuoteAPIView,
+    CompanyPerformanceAPIView
 )
 from apps.companies.api.views import CompanySectorsAPIView
 
 
 urlpatterns = [
+    path(
+        "<str:symbol>/quote/",
+        TrackedCompanyQuoteAPIView.as_view(),
+        name="tracked-company-quote",
+    ),
     path(
         "",
         CompanyListCreateAPIView.as_view(),
@@ -86,6 +93,11 @@ path(
     "<int:pk>/news-price-correlation/",
     CompanyNewsPriceCorrelationAPIView.as_view(),
     name="company-news-price-correlation-spec",
+),
+path(
+    "<int:pk>/performance/",
+    CompanyPerformanceAPIView.as_view(),
+    name="company-performance",
 ),
 path(
     "sectors/",
