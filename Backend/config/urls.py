@@ -31,7 +31,7 @@ urlpatterns = [
     path("api/admin/crawl-runs/", include("apps.crawler_runs.api.urls")),
     path("api/admin/users/", AdminUserListCreateAPIView.as_view(), name="admin-users-api"),
     path("api/admin/users/<int:pk>/", AdminUserDetailAPIView.as_view(), name="admin-user-detail-api"),
-
+        path("", include("apps.announcements.urls")),
     # Dashboard & Reports / Export (role-gated: Analyst & Admin).
     # Both prefixes serve both URL sets; the frontend uses /api/dashboard/ and /api/reports/export/.
     path("api/dashboard/", include("apps.dashboard.api.urls")),

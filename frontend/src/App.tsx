@@ -29,7 +29,7 @@ import TopBrokerPage from './pages/TopBrokerPage';
 import BrokerListPage from './pages/BrokerListPage';
 import AccDistPage from './pages/AccDistPage';
 import BrokerPositionPage from './pages/BrokerPositionPage';
-
+import Announcementspage from "./announcements/Announcementspage";
 import CompaniesPage from './pages/admin/CompaniesPage';
 import UserManagementPage from './pages/admin/UserManagementPage';
 import WatchlistComparison from './pages/WatchlistComparison';
@@ -598,7 +598,14 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
-
+        <Route
+  path="/announcements"
+  element={
+    <PermissionRoute rule={ROUTE_RULES['/announcements']}>
+      <Announcementspage />
+    </PermissionRoute>
+  }
+/>
 
           {/* -----------------------------------------------
               CRAWL MANAGEMENT

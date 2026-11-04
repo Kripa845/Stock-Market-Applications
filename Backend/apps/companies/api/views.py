@@ -33,6 +33,7 @@ from apps.users.company_access import (
 from apps.market_data.services.stock_performance import (
     calculate_stock_performance,
 )
+from apps.reports.services.stock_detail import build_financials, build_technicals
 from apps.companies.models import Company, TrackedCompany
 from apps.companies.api.serializers import CompanySerializer
 from apps.market_data.services.movers import normalize_period, tracked_movers
@@ -612,4 +613,38 @@ class CompanyMasterScoreAPIView(APIView):
             "symbol": company.symbol,
             **result,
             "holding": get_holding(company),
+        })
+        
+        
+class CompanyTechnicalsAPIView(APIView):
+    """GET /api/companies/<id>/technicals/"""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_price_history"
+
+    def get(self, request, pk):
+        company = get_object_or_404(Company, pk=pk, is_active=True)
+        require_company_access(request.user, company.pk)
+
+        return Response({
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            **build_technicals(company),
+        })
+
+
+class CompanyFinancialsAPIView(APIView):
+    """GET /api/companies/<id>/financials/"""
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request, pk):
+        company = get_object_or_404(Company, pk=pk, is_active=True)
+        require_company_access(request.user, company.pk)
+
+        return Response({
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            **build_financials(company),
         })

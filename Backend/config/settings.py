@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.market_calendar",
     "apps.comparison",
     "apps.stock_detail",
+    "apps.announcements"
     
 ]
 
@@ -92,6 +93,11 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
+
+TRACKED_SYMBOLS = [
+    "ADBL", "AKJCL", "CBBL", "CHCL", "GUFL", "HDL", "HIDCL", "LICN", "MNBBL", "NABIL",
+    "NICA", "NLG", "NLIC", "NTC", "SANIMA", "SCB", "SHIVM", "STC", "TRH", "UPPER",
+]
 
 # ---------------------------------------------------------------------------
 # Database — credentials MUST come from environment variables.

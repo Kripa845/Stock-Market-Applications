@@ -2,14 +2,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { isAxiosError } from "axios";
-import { mockStock } from "./mock";
 import type { StockDetail, Candle, MasterScoreResponse } from "./types";
 import { Panel, Tile } from "./ui";
 import PriceChart from "./Pricechart";
 import MasterGauge from "./Mastergauge";
-import RangeBars from "./Rangebars";
-import Technicals from "./Technicals";
-import KeyFinancials from "./Keyfinancials";
 import apiClient from "../api/client";
 
 const EMPTY_QUOTE = [
@@ -104,13 +100,45 @@ interface TrackedCompany {
   id: number;
   symbol: string;
   name: string;
+  sector?: string;
 }
 
-export default function StockDetailPage({
-  stock = mockStock,
-}: {
-  stock?: StockDetail;
-}) {
+// GET /companies/<id>/technicals/
+interface TechIndicator {
+  key: string;
+  label: string;
+  value: number | null;
+  signal: string | null;
+}
+
+interface TechnicalsResponse {
+  status: string;
+  as_of?: string;
+  sessions?: number;
+  possible_corporate_action?: boolean;
+  indicators: TechIndicator[];
+  pivots: Record<"s3" | "s2" | "s1" | "pp" | "r1" | "r2" | "r3", number | null> | null;
+}
+
+// GET /companies/<id>/financials/
+interface FinancialsResponse {
+  status: string;
+  quarters: {
+    fiscal_year: string;
+    quarter: number;
+    reported_on: string | null;
+    is_latest: boolean;
+    filed: boolean;
+  }[];
+  rows: {
+    key: string;
+    label: string;
+    unit: "rs" | "per_share";
+    values: { value: number | null; yoy: string | null }[];
+  }[];
+}
+
+export default function StockDetailPage(_props: { stock?: StockDetail }) {
   const [liveQuote, setLiveQuote] = useState<StockDetail["quote"] | null>(null);
 
   const [trackedCompanies, setTrackedCompanies] = useState<TrackedCompany[]>([]);
@@ -139,6 +167,16 @@ export default function StockDetailPage({
   const [candles, setCandles] = useState<Candle[] | null>(null);
   const [candlesLoading, setCandlesLoading] = useState(false);
   const [candlesError, setCandlesError] = useState<string | null>(null);
+
+  // Technical indicators state
+  const [technicals, setTechnicals] = useState<TechnicalsResponse | null>(null);
+  const [technicalsLoading, setTechnicalsLoading] = useState(false);
+  const [technicalsError, setTechnicalsError] = useState<string | null>(null);
+
+  // Quarterly financials state
+  const [financials, setFinancials] = useState<FinancialsResponse | null>(null);
+  const [financialsLoading, setFinancialsLoading] = useState(false);
+  const [financialsError, setFinancialsError] = useState<string | null>(null);
 
   const navigate = useNavigate();
   const { symbol: rawSymbol } = useParams();
@@ -509,8 +547,127 @@ export default function StockDetailPage({
   }, [current, selectedCompany, trackedCompaniesLoaded]);
 
   // --------------------------------------------------
+  // 6b. Fetch technical indicators
+  // --------------------------------------------------
+
+  useEffect(() => {
+    let active = true;
+
+    setTechnicals(null);
+    setTechnicalsError(null);
+    setTechnicalsLoading(false);
+
+    if (!current || !trackedCompaniesLoaded || !selectedCompany) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const load = async () => {
+      try {
+        setTechnicalsLoading(true);
+        const { data } = await apiClient.get<TechnicalsResponse>(
+          `/companies/${selectedCompany.id}/technicals/`
+        );
+        if (active) setTechnicals(data);
+      } catch (error) {
+        console.error("Error fetching technical indicators:", error);
+        if (active) setTechnicalsError("Unable to load technical indicators.");
+      } finally {
+        if (active) setTechnicalsLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [current, selectedCompany, trackedCompaniesLoaded]);
+
+  // --------------------------------------------------
+  // 6c. Fetch quarterly financials
+  // --------------------------------------------------
+
+  useEffect(() => {
+    let active = true;
+
+    setFinancials(null);
+    setFinancialsError(null);
+    setFinancialsLoading(false);
+
+    if (!current || !trackedCompaniesLoaded || !selectedCompany) {
+      return () => {
+        active = false;
+      };
+    }
+
+    const load = async () => {
+      try {
+        setFinancialsLoading(true);
+        const { data } = await apiClient.get<FinancialsResponse>(
+          `/companies/${selectedCompany.id}/financials/`
+        );
+        if (active) setFinancials(data);
+      } catch (error) {
+        console.error("Error fetching financials:", error);
+        if (active) setFinancialsError("Unable to load quarterly financials.");
+      } finally {
+        if (active) setFinancialsLoading(false);
+      }
+    };
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, [current, selectedCompany, trackedCompaniesLoaded]);
+
+  // --------------------------------------------------
   // 7. Formatting helpers
   // --------------------------------------------------
+
+  // Nepali units: 1 Cr = 1e7, 1 Arba = 1e9
+  const formatAmount = (v: number | null, unit: "rs" | "per_share") => {
+    if (v == null || !Number.isFinite(v)) return "—";
+
+    if (unit === "per_share") {
+      return v.toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    const abs = Math.abs(v);
+    const sign = v < 0 ? "-" : "";
+
+    if (abs >= 1e9) return `${sign}${(abs / 1e9).toFixed(2)} Arba`;
+    if (abs >= 1e7) return `${sign}${(abs / 1e7).toFixed(2)} Cr`;
+    if (abs >= 1e5) return `${sign}${(abs / 1e5).toFixed(2)} Lakh`;
+    return v.toLocaleString();
+  };
+
+  const signalClass = (signal: string | null) => {
+    switch (signal) {
+      case "Bullish":
+        return "text-emerald-400";
+      case "Bearish":
+        return "text-red-400";
+      case "Overbought":
+      case "Oversold":
+        return "text-amber-400";
+      default:
+        return "text-text-secondary";
+    }
+  };
+
+  const yoyCellClass = (yoy: string | null) =>
+    yoy === "better"
+      ? "bg-emerald-500/10"
+      : yoy === "worse"
+        ? "bg-red-500/15"
+        : "";
 
   const formatCurrency = (value: number | string | null) => {
     if (value == null || !Number.isFinite(Number(value))) {
@@ -591,8 +748,8 @@ export default function StockDetailPage({
   return (
     <div className="min-h-screen bg-bg-primary px-2 pb-8 text-text-primary antialiased">
 
-      {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3 px-1 pb-3 pt-4">
+      {/* Page header (a div, so the global `header` light-theme rule can't turn it white) */}
+      <div className="flex flex-wrap items-start justify-between gap-3 px-1 pb-3 pt-4">
         <div className="min-w-0">
           {current ? (
             <>
@@ -604,9 +761,9 @@ export default function StockDetailPage({
               </h1>
 
               <p className="text-[10px] text-text-secondary">
-                {selectedCompany && (
+                {selectedCompany?.sector && (
                   <>
-                    {stock.sector} ·{" "}
+                    {selectedCompany.sector} ·{" "}
                   </>
                 )}
                 <b className="text-text-primary">
@@ -669,7 +826,7 @@ export default function StockDetailPage({
             </button>
           </form>
         </div>
-      </header>
+      </div>
 
       {/* Tracked companies */}
       <section className="mb-3 rounded-lg border border-bg-border bg-bg-card p-3">
@@ -1119,35 +1276,160 @@ export default function StockDetailPage({
             </Panel>
           </div>
 
-          {/* Row 3: peers + technicals (still mock data) */}
-          <div className="grid gap-2 lg:grid-cols-2">
-            <Panel
-              title={`Key indicators vs ${stock.sector}`}
-              className="min-h-[190px]"
-            >
-              <RangeBars rows={stock.rangeMetrics} />
-            </Panel>
+          {/* Row 3: technical indicators (live) */}
+          <Panel
+            title="Technical indicators"
+            right={
+              technicals?.as_of ? (
+                <span className="text-text-muted">
+                  As of {new Date(`${technicals.as_of}T00:00:00`).toLocaleDateString()}
+                </span>
+              ) : undefined
+            }
+          >
+            {!trackedCompaniesLoaded || technicalsLoading ? (
+              <p className="py-5 text-center text-xs text-text-secondary">
+                Loading technical indicators...
+              </p>
+            ) : technicalsError ? (
+              <p className="py-5 text-center text-xs text-red-400">
+                {technicalsError}
+              </p>
+            ) : technicals && technicals.indicators.length > 0 ? (
+              <>
+                {technicals.status === "insufficient_history" && (
+                  <p className="mb-2 text-[9px] text-amber-400">
+                    Limited price history: some indicators may be unavailable.
+                  </p>
+                )}
 
-            <Panel title="Technical indicators">
-              <Technicals rows={stock.technicals} pivots={stock.pivots} />
-            </Panel>
-          </div>
+                {technicals.possible_corporate_action && (
+                  <p className="mb-2 text-[9px] text-amber-400">
+                    A possible corporate action (bonus / right share) was detected.
+                    Moving averages and MACD may be distorted.
+                  </p>
+                )}
 
-          {/* Row 4: financials (still mock data) */}
+                <div className="divide-y divide-bg-border">
+                  {technicals.indicators.map((ind) => (
+                    <div
+                      key={ind.key}
+                      className="grid grid-cols-3 items-center py-1.5 text-[10px]"
+                    >
+                      <span className="text-text-secondary">{ind.label}</span>
+                      <span className="text-center font-bold text-text-primary">
+                        {ind.value == null ? "—" : ind.value.toFixed(2)}
+                      </span>
+                      <span className={`text-right font-bold ${signalClass(ind.signal)}`}>
+                        {ind.signal ?? "—"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {technicals.pivots && (
+                  <div className="mt-3">
+                    <h3 className="mb-1.5 text-[9px] font-bold uppercase text-text-muted">
+                      Pivot levels (classic)
+                    </h3>
+
+                    <div className="grid grid-cols-4 gap-1.5 md:grid-cols-7">
+                      {(["s3", "s2", "s1", "pp", "r1", "r2", "r3"] as const).map((k) => (
+                        <div
+                          key={k}
+                          className={`rounded-md border px-2 py-1.5 text-center ${
+                            k === "pp"
+                              ? "border-emerald-400/70 bg-emerald-500/10"
+                              : "border-bg-border bg-bg-elevated"
+                          }`}
+                        >
+                          <div className="text-[8px] font-bold uppercase text-text-muted">
+                            {k}
+                          </div>
+                          <div className="text-[10px] font-bold text-text-primary">
+                            {technicals.pivots?.[k] == null
+                              ? "—"
+                              : technicals.pivots[k]!.toFixed(2)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="py-5 text-center text-xs text-text-muted">
+                No technical data available.
+              </p>
+            )}
+          </Panel>
+
+          {/* Row 4: quarterly financials (live) */}
           <Panel
             title="Key financials — last 8 quarters"
             right={
               <span className="flex items-center gap-2">
                 <i className="inline-block size-1.5 rounded-full bg-red-500" /> worse
                 <i className="inline-block size-1.5 rounded-full bg-emerald-500" /> better vs same quarter last year
-                · amounts in Rs · per-share in Rs
               </span>
             }
           >
-            <KeyFinancials
-              quarters={stock.quarters}
-              rows={stock.financials}
-            />
+            {!trackedCompaniesLoaded || financialsLoading ? (
+              <p className="py-5 text-center text-xs text-text-secondary">
+                Loading quarterly financials...
+              </p>
+            ) : financialsError ? (
+              <p className="py-5 text-center text-xs text-red-400">
+                {financialsError}
+              </p>
+            ) : financials && financials.rows.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] border-collapse text-[10px]">
+                  <thead>
+                    <tr>
+                      <th className="py-1.5 pr-2 text-left text-[9px] font-normal uppercase text-text-muted">
+                        Particulars
+                      </th>
+                      {financials.quarters.map((q) => (
+                        <th
+                          key={`${q.fiscal_year}-${q.quarter}`}
+                          className="px-2 py-1.5 text-right font-normal text-text-muted"
+                        >
+                          <div className={q.is_latest ? "font-bold text-emerald-400" : ""}>
+                            Q{q.quarter}
+                          </div>
+                          <div className="text-[8px]">{q.fiscal_year}</div>
+                          {q.is_latest && <div className="text-[8px]">latest</div>}
+                          {!q.filed && (
+                            <div className="text-[8px] text-amber-400">not filed</div>
+                          )}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {financials.rows.map((row) => (
+                      <tr key={row.key} className="border-t border-bg-border">
+                        <td className="py-1.5 pr-2 text-text-secondary">{row.label}</td>
+                        {row.values.map((cell, i) => (
+                          <td
+                            key={i}
+                            className={`px-2 py-1.5 text-right font-bold text-text-primary ${yoyCellClass(cell.yoy)}`}
+                          >
+                            {formatAmount(cell.value, row.unit)}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="py-5 text-center text-xs text-text-muted">
+                No quarterly financials available.
+              </p>
+            )}
           </Panel>
         </div>
       )}

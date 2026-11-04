@@ -33,8 +33,16 @@ logger = logging.getLogger(__name__)
 
 FISCAL_YEAR_RE = re.compile(r"^\d{4}/(\d{2}|\d{4})$")
 REQUIRED = ("symbol", "fiscal_year", "quarter")
-DECIMAL_FIELDS = ("net_profit", "net_worth", "distributable_profit", "eps", "book_value", "dpps",
-                  "price_on_report_date")
+DECIMAL_FIELDS = (
+    "net_profit",
+    "net_worth",
+    "distributable_profit",
+    "eps",
+    "quarterly_eps",
+    "book_value",
+    "dpps",
+    "price_on_report_date",
+)
 
 
 class RowError(ValueError):

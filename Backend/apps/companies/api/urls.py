@@ -107,6 +107,8 @@ path(
     CompanyPerformanceAPIView.as_view(),
     name="company-performance",
 ),
+path("<int:pk>/technicals/", views.CompanyTechnicalsAPIView.as_view(), name="company-technicals"),
+path("<int:pk>/financials/", views.CompanyFinancialsAPIView.as_view(), name="company-financials"),
 path(
     "sectors/",
     CompanySectorsAPIView.as_view(),

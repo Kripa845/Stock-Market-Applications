@@ -31,6 +31,7 @@ import {
   Grid3x3,
   ClipboardList,
   Scale,
+  Megaphone,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -165,6 +166,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: Newspaper,
     to: '/news',
   },
+  { label: 'Announcements', to: '/announcements', icon: Megaphone },
    {
     label: 'Stock Details',
     icon: Newspaper,

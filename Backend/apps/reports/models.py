@@ -131,6 +131,13 @@ class QuarterlyReport(models.Model):
     share_count = models.BigIntegerField(null=True, blank=True)
 
     eps = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    quarterly_eps = models.DecimalField(
+    max_digits=12,
+    decimal_places=2,
+    null=True,
+    blank=True,
+    help_text="EPS reported for this individual quarter, not cumulative EPS.",
+)
     book_value = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     dpps = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     # Kept for reference only: ratios always use the latest crawled price.
@@ -145,7 +152,7 @@ class QuarterlyReport(models.Model):
     source = models.CharField(max_length=32, default="manual")
     scraped_at = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    
     class Meta:
         db_table = "market_data_quarterlyreport"
         ordering = ["company__symbol", "-fiscal_year", "-quarter"]
