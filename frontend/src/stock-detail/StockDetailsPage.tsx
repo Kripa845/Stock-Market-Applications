@@ -589,27 +589,27 @@ export default function StockDetailPage({
   // --------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-[#060b16] px-2 pb-8 text-slate-200 antialiased">
+    <div className="min-h-screen bg-bg-primary px-2 pb-8 text-text-primary antialiased">
 
       {/* Header */}
       <header className="flex flex-wrap items-start justify-between gap-3 px-1 pb-3 pt-4">
         <div className="min-w-0">
           {current ? (
             <>
-              <h1 className="text-[15px] font-extrabold text-white">
+              <h1 className="text-[15px] font-extrabold text-text-primary">
                 {displayName}{" "}
-                <span className="text-slate-400">
+                <span className="text-text-secondary">
                   ({current.toUpperCase()})
                 </span>
               </h1>
 
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-text-secondary">
                 {selectedCompany && (
                   <>
                     {stock.sector} ·{" "}
                   </>
                 )}
-                <b className="text-white">
+                <b className="text-text-primary">
                   {ltp != null ? `Rs. ${ltp.toFixed(2)}` : "—"}
                 </b>{" "}
                 {change != null && changePct != null && (
@@ -617,15 +617,15 @@ export default function StockDetailPage({
                     {change.toFixed(2)} ({changePct.toFixed(2)}%)
                   </span>
                 )}{" "}
-                <span className="text-slate-500">{asOfText}</span>
+                <span className="text-text-muted">{asOfText}</span>
               </p>
             </>
           ) : (
             <>
-              <h1 className="text-[15px] font-extrabold text-white">
+              <h1 className="text-[15px] font-extrabold text-text-primary">
                 Stock Details
               </h1>
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-text-secondary">
                 Select a company to view its details
               </p>
             </>
@@ -637,11 +637,11 @@ export default function StockDetailPage({
           <form
             role="search"
             onSubmit={goToSymbol}
-            className="flex h-9 items-center gap-2 rounded-lg border border-[#1e2d47] bg-[#0c1626] pl-3 pr-1.5 focus-within:border-emerald-500/70"
+            className="flex h-9 items-center gap-2 rounded-lg border border-bg-border bg-bg-elevated pl-3 pr-1.5 focus-within:border-emerald-500/70"
           >
             <svg
               viewBox="0 0 24 24"
-              className="size-4 text-slate-500"
+              className="size-4 text-text-muted"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"
@@ -658,7 +658,7 @@ export default function StockDetailPage({
               aria-label="Stock symbol"
               autoComplete="off"
               spellCheck={false}
-              className="w-32 bg-transparent text-xs uppercase text-slate-100 outline-none placeholder:normal-case placeholder:text-slate-500"
+              className="w-32 bg-transparent text-xs uppercase text-text-primary outline-none placeholder:normal-case placeholder:text-text-muted"
             />
 
             <button
@@ -672,14 +672,14 @@ export default function StockDetailPage({
       </header>
 
       {/* Tracked companies */}
-      <section className="mb-3 rounded-lg border border-[#16233a] bg-[#0a1220] p-3">
+      <section className="mb-3 rounded-lg border border-bg-border bg-bg-card p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h2 className="text-xs font-bold text-slate-100">
+            <h2 className="text-xs font-bold text-text-primary">
               Tracked companies
             </h2>
 
-            <p className="mt-0.5 text-[10px] text-slate-500">
+            <p className="mt-0.5 text-[10px] text-text-muted">
               {trackedCompaniesLoaded
                 ? `${trackedCompanies.length} active companies`
                 : "Loading companies…"}
@@ -705,18 +705,18 @@ export default function StockDetailPage({
                 className={`min-w-0 rounded-md border px-2.5 py-2 text-left transition-colors ${
                   active
                     ? "border-emerald-400/70 bg-emerald-500/10"
-                    : "border-[#1e2d47] bg-[#0c1626] hover:border-emerald-500/50 hover:bg-[#101d30]"
+                    : "border-bg-border bg-bg-elevated hover:border-emerald-500/50 hover:bg-blue-500/10"
                 }`}
               >
                 <span
                   className={`block text-[10px] font-bold ${
-                    active ? "text-emerald-300" : "text-slate-200"
+                    active ? "text-emerald-300" : "text-text-primary"
                   }`}
                 >
                   {sym}
                 </span>
 
-                <span className="mt-0.5 block truncate text-[9px] font-normal text-slate-500">
+                <span className="mt-0.5 block truncate text-[9px] font-normal text-text-muted">
                   {name}
                 </span>
               </Link>
@@ -724,7 +724,7 @@ export default function StockDetailPage({
           })}
 
           {trackedCompaniesLoaded && trackedCompanies.length === 0 && (
-            <p className="col-span-full py-4 text-center text-[11px] text-slate-500">
+            <p className="col-span-full py-4 text-center text-[11px] text-text-muted">
               No active tracked companies available.
             </p>
           )}
@@ -733,10 +733,10 @@ export default function StockDetailPage({
 
       {/* ---------- State 1: nothing selected -> friendly empty state ---------- */}
       {!current && (
-        <section className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#1e2d47] bg-[#0a1220] px-4 py-16 text-center">
+        <section className="flex flex-col items-center justify-center rounded-lg border border-dashed border-bg-border bg-bg-card px-4 py-16 text-center">
           <svg
             viewBox="0 0 24 24"
-            className="mb-3 size-10 text-slate-600"
+            className="mb-3 size-10 text-text-muted"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -749,11 +749,11 @@ export default function StockDetailPage({
             />
           </svg>
 
-          <h2 className="text-sm font-bold text-slate-100">
+          <h2 className="text-sm font-bold text-text-primary">
             Select a company to view its details
           </h2>
 
-          <p className="mt-1 max-w-sm text-[11px] text-slate-500">
+          <p className="mt-1 max-w-sm text-[11px] text-text-muted">
             Search a symbol above or pick one of the tracked companies to see
             its price chart, MASTER score, performance and valuation.
           </p>
@@ -762,12 +762,12 @@ export default function StockDetailPage({
 
       {/* ---------- State 2: symbol given but not a tracked company ---------- */}
       {symbolNotFound && (
-        <section className="flex flex-col items-center justify-center rounded-lg border border-[#1e2d47] bg-[#0a1220] px-4 py-16 text-center">
-          <h2 className="text-sm font-bold text-slate-100">
+        <section className="flex flex-col items-center justify-center rounded-lg border border-bg-border bg-bg-card px-4 py-16 text-center">
+          <h2 className="text-sm font-bold text-text-primary">
             “{current?.toUpperCase()}” is not a tracked company
           </h2>
 
-          <p className="mt-1 max-w-sm text-[11px] text-slate-500">
+          <p className="mt-1 max-w-sm text-[11px] text-text-muted">
             Check the symbol, or choose one of the tracked companies above.
           </p>
 
@@ -796,7 +796,7 @@ export default function StockDetailPage({
               }
             >
               {!trackedCompaniesLoaded || candlesLoading ? (
-                <p className="py-16 text-center text-xs text-slate-400">
+                <p className="py-16 text-center text-xs text-text-secondary">
                   Loading price history...
                 </p>
               ) : candlesError ? (
@@ -806,7 +806,7 @@ export default function StockDetailPage({
               ) : candles && candles.length > 0 ? (
                 <PriceChart data={candles} />
               ) : (
-                <p className="py-16 text-center text-xs text-slate-500">
+                <p className="py-16 text-center text-xs text-text-muted">
                   No price history available.
                 </p>
               )}
@@ -822,18 +822,18 @@ export default function StockDetailPage({
               title="MASTER score"
               right={
                 masterScore ? (
-                  <span className="text-slate-500">
+                  <span className="text-text-muted">
                     {new Date(`${masterScore.as_of}T00:00:00`).toLocaleDateString()}
                   </span>
                 ) : undefined
               }
             >
               {!trackedCompaniesLoaded || masterScoreLoading ? (
-                <p className="py-8 text-center text-xs text-slate-400">
+                <p className="py-8 text-center text-xs text-text-secondary">
                   Calculating score...
                 </p>
               ) : masterScoreError ? (
-                <p className="py-8 text-center text-xs text-slate-500">
+                <p className="py-8 text-center text-xs text-text-muted">
                   {masterScoreError}
                 </p>
               ) : gaugeProps ? (
@@ -842,33 +842,33 @@ export default function StockDetailPage({
 
                   <dl className="mt-3 space-y-1 text-[9px]">
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">Promoter holding</dt>
-                      <dd className="font-bold text-white">
+                      <dt className="text-text-muted">Promoter holding</dt>
+                      <dd className="font-bold text-text-primary">
                         {formatPercent(masterScore?.holding?.promoter ?? null)}
                       </dd>
                     </div>
 
                     <div className="flex justify-between">
-                      <dt className="text-slate-500">Public holding</dt>
-                      <dd className="font-bold text-white">
+                      <dt className="text-text-muted">Public holding</dt>
+                      <dd className="font-bold text-text-primary">
                         {formatPercent(masterScore?.holding?.public ?? null)}
                       </dd>
                     </div>
                   </dl>
 
                   {masterScore?.components && (
-                    <dl className="mt-3 space-y-1 border-t border-[#1e2d47] pt-2 text-[9px]">
+                    <dl className="mt-3 space-y-1 border-t border-bg-border pt-2 text-[9px]">
                       {Object.entries(masterScore.components).map(([k, v]) => (
                         <div key={k} className="flex justify-between">
-                          <dt className="capitalize text-slate-500">{k}</dt>
-                          <dd className="font-bold text-white">{v.toFixed(0)}</dd>
+                          <dt className="capitalize text-text-muted">{k}</dt>
+                          <dd className="font-bold text-text-primary">{v.toFixed(0)}</dd>
                         </div>
                       ))}
                     </dl>
                   )}
                 </>
               ) : (
-                <p className="py-8 text-center text-xs text-slate-500">
+                <p className="py-8 text-center text-xs text-text-muted">
                   No score available.
                 </p>
               )}
@@ -881,7 +881,7 @@ export default function StockDetailPage({
             {/* Backend Stock Performance */}
             <Panel title="Stock performance">
               {!trackedCompaniesLoaded || performanceLoading ? (
-                <p className="py-5 text-center text-xs text-slate-400">
+                <p className="py-5 text-center text-xs text-text-secondary">
                   Loading stock performance...
                 </p>
               ) : performanceError ? (
@@ -893,7 +893,7 @@ export default function StockDetailPage({
 
                   {/* Price changes */}
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold text-slate-400">
+                    <h3 className="mb-1.5 text-[10px] font-bold text-text-secondary">
                       PRICE CHANGES
                     </h3>
 
@@ -921,7 +921,7 @@ export default function StockDetailPage({
 
                   {/* Price range */}
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold text-slate-400">
+                    <h3 className="mb-1.5 text-[10px] font-bold text-text-secondary">
                       PRICE RANGE
                     </h3>
 
@@ -955,7 +955,7 @@ export default function StockDetailPage({
 
                   {/* Average close */}
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold text-slate-400">
+                    <h3 className="mb-1.5 text-[10px] font-bold text-text-secondary">
                       AVERAGE CLOSE
                     </h3>
 
@@ -982,7 +982,7 @@ export default function StockDetailPage({
 
                   {/* Average volume */}
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold text-slate-400">
+                    <h3 className="mb-1.5 text-[10px] font-bold text-text-secondary">
                       AVERAGE VOLUME
                     </h3>
 
@@ -1010,7 +1010,7 @@ export default function StockDetailPage({
 
                   {/* Risk indicators */}
                   <div>
-                    <h3 className="mb-1.5 text-[10px] font-bold text-slate-400">
+                    <h3 className="mb-1.5 text-[10px] font-bold text-text-secondary">
                       RISK INDICATORS
                     </h3>
 
@@ -1035,7 +1035,7 @@ export default function StockDetailPage({
                     </div>
 
                     {performance.beta_vs_nepse_1y && (
-                      <p className="mt-1.5 text-[9px] text-slate-500">
+                      <p className="mt-1.5 text-[9px] text-text-muted">
                         Beta observations: {performance.beta_vs_nepse_1y.observations} ·
                         Status: {performance.beta_vs_nepse_1y.status.replace("_", " ")}
                       </p>
@@ -1043,7 +1043,7 @@ export default function StockDetailPage({
                   </div>
                 </div>
               ) : (
-                <p className="py-5 text-center text-xs text-slate-500">
+                <p className="py-5 text-center text-xs text-text-muted">
                   No performance data available.
                 </p>
               )}
@@ -1059,7 +1059,7 @@ export default function StockDetailPage({
               }
             >
               {!trackedCompaniesLoaded || valuationLoading ? (
-                <p className="py-5 text-center text-xs text-slate-400">
+                <p className="py-5 text-center text-xs text-text-secondary">
                   Loading stock valuation...
                 </p>
               ) : valuationError ? (
@@ -1083,25 +1083,25 @@ export default function StockDetailPage({
                     <Tile label="DPPS Growth (YoY)" value={formatPercent(valuation.yoy)} />
                   </div>
 
-                  <div className="mt-3 border-t border-[#1e2d47] pt-2">
-                    <p className="text-[9px] text-slate-500">
+                  <div className="mt-3 border-t border-bg-border pt-2">
+                    <p className="text-[9px] text-text-muted">
                       Reporting period: {valuation.fiscal_year}, Q{valuation.quarter}
                       {" · "}
                       Reported: {valuation.reported_on ?? "—"}
                     </p>
 
-                    <p className="mt-1 text-[9px] text-slate-500">
+                    <p className="mt-1 text-[9px] text-text-muted">
                       Latest crawled price: {formatCurrency(valuation.ltp)}
                       {" · "}
                       Price date: {valuation.price_date ?? "—"}
                     </p>
 
-                    <p className="mt-1 text-[9px] text-slate-500">
+                    <p className="mt-1 text-[9px] text-text-muted">
                       Average DPPS calculated using {valuation.avg_years_used}/
                       {valuation.avg_window_years} available years.
                     </p>
 
-                    <p className="mt-2 text-[8px] text-slate-500">
+                    <p className="mt-2 text-[8px] text-text-muted">
                       DPPS means Distributable Profit Per Share. DPPS yield is not
                       actual cash dividend yield.
                       {" "}
@@ -1112,7 +1112,7 @@ export default function StockDetailPage({
                   </div>
                 </>
               ) : (
-                <p className="py-5 text-center text-xs text-slate-500">
+                <p className="py-5 text-center text-xs text-text-muted">
                   No valuation data available.
                 </p>
               )}

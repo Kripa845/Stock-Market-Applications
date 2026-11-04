@@ -22,6 +22,14 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 
 ## Log
 
+### 2026-11-04: Stock details page and light-theme styling  `c143aab` + uncommitted styling
+
+**What:** Added `/stocks/:symbol` with tracked-company selection, a crawled price chart, quote tiles, MASTER technical score, historical performance and quarterly valuation. The latest styling pass aligns the panels, labels and gauge with the shared light / dark theme colors. Details and calculation limits: [stock detail](features/stock-detail.md).
+**Backend:** Quote, performance and beta services under `companies/` and `market_data/`; quarterly valuation from `reports/`; MASTER score from `analysis/services/master_score.py`; `Shareholding` and `MasterScore` models.
+**API:** `/api/companies/<symbol>/quote/`, `/api/companies/<id>/performance/`, `/valuation/`, `/master-score/` (permissions in [API.md](API.md)).
+**Frontend:** route `/stocks/:symbol`, `stock-detail/StockDetailsPage.tsx`, `Pricechart.tsx`, `Mastergauge.tsx`, `ui.tsx`, theme rules in `index.css`.
+**Open:** historical metrics use unadjusted closes; stock-detail endpoint tests are not in place (see [status](status.md) and [testing](TESTING.md)).
+
 ### 2026-11-01: News provenance and de-duplication  `uncommitted`
 
 **What:** Every article now records its source (`NewsSource`), exact source URL, the crawl run that inserted it and when a crawl last saw it. Re-running a collector never adds a row: articles are identified per source by `external_id` or normalised URL, edits update the row in place, and the same story on another portal is kept but linked (`duplicate_of`).

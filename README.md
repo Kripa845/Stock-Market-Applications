@@ -12,7 +12,7 @@ A personal research app for the Nepal Stock Exchange (NEPSE). Scrapy spiders and
 |---|---|
 | Market | Tracked-company movers, turnover / volume / transaction leaders, heatmap, "Tracked Basket" index, NEPSE and 13 sub-indices with live intraday ticks |
 | Calendar | BS month calendar with index moves, holidays, dividend and IPO events; weekday summary; NEPSE day-by-day and month-by-month |
-| Stock page | Candlestick chart with about 110 indicators, intraday candles, floorsheet, support / resistance, broker accumulation, news and news-vs-price reaction |
+| Stock page | Candlestick chart, MASTER score, performance and valuation panels, with light / dark theme support; related analysis includes indicators, intraday candles, floorsheet, support / resistance, broker accumulation and news-vs-price reaction |
 | Brokers | Broker list and activity, top brokers per stock, market-wide accumulation / distribution, one broker's running position in a stock |
 | Fundamentals | Dividends (whole market), latest quarterly report per sector with PE / PB / DPPS yields |
 | News | Crawled hourly from five sites, tagged to companies automatically, with analyst corrections and an audit trail |
@@ -115,4 +115,4 @@ There is no CI. On 2026-10-30: 1017 tests, 5 failing (listed in [docs/status.md]
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | NEPSE and project terms |
 | [docs/status.md](docs/status.md) | Known issues and unfinished work |
 | [docs/project-log.md](docs/project-log.md) | Feature history, newest first |
-| [docs/features/](docs/features/) | Broker accumulation, quarterly report, news categorization |
+| [docs/features/](docs/features/) | Stock detail, stock comparison, broker accumulation, quarterly report, news categorization |

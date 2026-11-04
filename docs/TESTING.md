@@ -60,6 +60,7 @@ Crawler code tested directly from `apps/*/tests`: `TradingDataSpider` and `Tradi
 
 * **No frontend tests** at all (components, hooks, permission routing).
 * **`dashboard` app**: no tests.
+* **Stock-detail endpoints**: no dedicated tests currently cover the performance, beta, valuation or MASTER score API responses and their permission checks.
 * **Spiders without tests**: `floorsheet`, the news spiders (`sharesansar`, `bizmandu`, `nepsealpha`, `arthakhabar`, `fiscalnepal`), `market_stocks`. Their parsers break silently when a site changes.
 * **No coverage measurement**: `pytest-cov` is not installed; the table above counts tests, not lines.
 * **SQLite vs Postgres**: tests run on SQLite, production-like runs on Postgres. Postgres-only behaviour (e.g. `Ln` / float casts in `movers.py` SQL, `bulk_create` conflict handling) is not exercised against Postgres.

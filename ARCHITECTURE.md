@@ -81,7 +81,7 @@ apps/<app>/
 | App | Owns | Main models |
 |---|---|---|
 | `users` | Users, roles, permission keys, per-user company access | `User`, `CustomRole`, `RolePermissionConfig`, `UserCompanyAccess`, `Watchlist` |
-| `companies` | Company list, tracked companies | `Company`, `TrackedCompany` |
+| `companies` | Company list, tracked companies, stock quote and MASTER score data | `Company`, `TrackedCompany`, `Shareholding`, `MasterScore` |
 | `market_data` | Daily prices, live prices, movers, heatmap, watchlists, trading calendar | `DailyPrice`, `TradingHoliday`, `LiveFeedStatus` |
 | `floorsheet` | Every trade (buyer / seller broker), broker directory, intraday candles | `FloorsheetTransaction`, `Broker`, `IntradayCandle` |
 | `reports` | Dividends, EPS, quarterly reports, IPO issues, CSV / XLSX / PDF exports | `DividendAnnouncement`, `CompanyEarnings`, `QuarterlyReport`, `YearlyDPPS`, `IpoIssue` |
@@ -140,7 +140,8 @@ Routes are in `frontend/src/App.tsx`, rules in `config/routePermissions.ts`, pag
 | `/market/dividends` → `DividendsPage.tsx` | `/api/market/dividends/` | `reports/services/dividends.py` |
 | `/market/quarterly-report/:sector` → `QuarterlyReportPage.tsx` | `/api/market/quarterly-report/` | `reports/services/quarterly_reports.py`, `quarterly_metrics.py` |
 | `/companies` → `admin/CompaniesPage.tsx` | `/api/companies/` | `companies/api/views.py` |
-| `/companies/:symbol` → `StockDetail.tsx` | `/api/companies/<id>/…`, `/api/stocks/<symbol>/intraday/`, `/api/analysis/broker-*` | `companies/`, `floorsheet/`, `analysis/services/broker_accumulation.py` |
+| `/stocks/:symbol` → `stock-detail/StockDetailsPage.tsx` | `/api/companies/` (tracked list and quote), `/api/companies/<id>/{performance,valuation,master-score}/`, `/api/stocks/<symbol>/intraday/` | `companies/api/`, `market_data/services/{stock_performance,market_beta}.py`, `analysis/services/master_score.py`, `reports/services/quarterly_reports.py`, `floorsheet/` |
+| `/companies/:symbol` → legacy `StockDetail.tsx` | `/api/companies/<id>/…`, `/api/stocks/<symbol>/intraday/`, `/api/analysis/broker-*` | `companies/`, `floorsheet/`, `analysis/services/broker_accumulation.py` |
 | `/floorsheet` → `FloorsheetPage.tsx` | `/api/floorsheet/`, `summary/` | `floorsheet/api/views.py` |
 | `/floorsheet/summary` → `FloorsheetSummaryPage.tsx` | `/api/analysis/floorsheet-grid/` | `analysis/services/floorsheet_grid.py` |
 | `/technical-charts` → `TechnicalCharts.tsx` | `/api/market-intelligence/…`, `/api/market-indices/…` (intraday: `/api/companies/<id>/intraday/`, `/api/market-indices/intraday/`) | `market_intelligence/indicators/`, `services/technicals.py`, `floorsheet/services/intraday.py` |

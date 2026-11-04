@@ -1,52 +1,3 @@
-// import { useEffect, useRef } from "react";
-// import { init, dispose } from "klinecharts";
-// import type { Candle } from "./types";
-
-// const UP = "#10b981";
-// const DOWN = "#ef4444";
-
-// export default function PriceChart({ data, height = 170 }: { data: Candle[]; height?: number }) {
-//   const ref = useRef<HTMLDivElement>(null);
-
-//   useEffect(() => {
-//     const el = ref.current;
-//     if (!el) return;
-//     const chart = init(el);
-//     if (!chart) return;
-
-//     chart.setStyles({
-//       grid: { show: false },
-//       candle: {
-//         bar: {
-//           upColor: UP,
-//           downColor: DOWN,
-//           noChangeColor: "#64748b",
-//           upBorderColor: UP,
-//           downBorderColor: DOWN,
-//           noChangeBorderColor: "#64748b",
-//           upWickColor: UP,
-//           downWickColor: DOWN,
-//           noChangeWickColor: "#64748b",
-//         },
-//         priceMark: { show: false, last: { show: false } },
-//         tooltip: { showRule: "none" },
-//       },
-//       xAxis: { show: false },
-//       yAxis: { show: false },
-//       crosshair: { show: false },
-//       separator: { size: 0 },
-//     });
-
-//     chart.setDataLoader({
-//       getBars: ({ callback }) => {
-//         callback(data as any, false);
-//       },
-//     });
-//     return () => dispose(el);
-//   }, [data]);
-
-//   return <div ref={ref} style={{ height }} className="w-full" />;
-// }
 
 import type { Candle } from "./types";
 
@@ -59,7 +10,7 @@ const STEP = 8; // horizontal units per candle (the SVG scales to fit the panel 
 export default function PriceChart({ data, height = 170 }: { data: Candle[]; height?: number }) {
   if (!data || data.length === 0) {
     return (
-      <div style={{ height }} className="flex items-center justify-center text-[10px] text-slate-500">
+      <div style={{ height }} className="flex items-center justify-center text-[10px] text-text-muted">
         No price data available
       </div>
     );

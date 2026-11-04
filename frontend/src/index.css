@@ -521,7 +521,11 @@ html[data-theme="light"] .dashboard-card:hover {
   border-color: #3B82F6 !important;
   background-color: #EFF6FF !important;
 }
-
+html[data-theme="light"] .text-emerald-300,
+html[data-theme="light"] .text-emerald-400 { color: #047857 !important; }
+html[data-theme="light"] .text-red-400 { color: #DC2626 !important; }
+html[data-theme="light"] .border-emerald-700\/60 { border-color: rgba(4, 120, 87, 0.5) !important; }
+html[data-theme="light"] .border-emerald-400\/70 { border-color: #059669 !important; }
 /* Header */
 html[data-theme="light"] header {
   background-color: #FFFFFF !important;

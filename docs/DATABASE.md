@@ -1,6 +1,6 @@
 # Database
 
-PostgreSQL 16 in development and Docker (`config/settings.py` → `DATABASES`, `CONN_MAX_AGE` 60 s); tests use in-memory SQLite (`config/settings_test.py`). 41 models across 11 apps (`dashboard` has none), managed by Django migrations in `apps/<app>/migrations/`.
+PostgreSQL 16 in development and Docker (`config/settings.py` → `DATABASES`, `CONN_MAX_AGE` 60 s); tests use in-memory SQLite (`config/settings_test.py`). 43 models across 11 apps (`dashboard` has none), managed by Django migrations in `apps/<app>/migrations/`.
 
 This page lists the tables that matter, their natural keys, how they relate, and the rules not visible from the fields. For exact fields read each `models.py`. Every upsert uses the unique keys below, so re-running a crawl or import never duplicates rows. Terms: [GLOSSARY.md](GLOSSARY.md).
 
@@ -26,6 +26,8 @@ erDiagram
     Company ||--o{ WatchlistItem : ""
     Company ||--o| TrackedCompany : tracking
     Company ||--o{ DailyPrice : ""
+    Company ||--o{ MasterScore : ""
+    Company ||--o{ Shareholding : ""
     Company ||--o{ FloorsheetTransaction : ""
     Company ||--o{ IntradayCandle : ""
     Company ||--o{ DailyAnalysis : ""
@@ -63,6 +65,8 @@ Not linked by foreign key (joined by `symbol` or date): `Broker` (floorsheet `bu
 |---|---|---|
 | `Company` | `symbol` unique | `sector` (free text), `aliases` (JSON list, used for news matching), `is_active`, `created_by` → User. Live fields `ltp`, `previous_close`, `prices_updated_at`, `session_volume`, `session_turnover` are written by `market_data/services/live_prices.py` during the session. `listed_shares` from the admin or `sync_listed_shares`. |
 | `TrackedCompany` | one-to-one `company` (`related_name="tracking"`) | `is_tracked`. Read via `companies/services/selection.py::tracked_active_companies()`. |
+| `MasterScore` | (`company`, `date`) | Stored 0–100 technical score, band and component scores. The stock-detail API currently computes its displayed score from crawled daily prices. |
+| `Shareholding` | none (ordered by `as_of`) | Promoter and public ownership percentages used by the MASTER score panel. |
 
 ## market_data
 | Model | Key | Notes |
