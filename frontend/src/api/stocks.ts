@@ -5,6 +5,7 @@ import type {
   DailyPrice,
   FloorsheetTransaction,
 } from '../types';
+import type { MasterScoreResponse } from '../stock-detail/types';
 
 export const stocksApi = {
   getCompanies: (params?: {
@@ -134,5 +135,10 @@ export const stocksApi = {
         results: FloorsheetTransaction[];
       }>('/market-data/floorsheet/', { params })
       .then((response) => response.data),
-};
 
+
+  getMasterScore: (id: number) =>
+      apiClient
+        .get<MasterScoreResponse>(`/companies/${id}/master-score/`)
+        .then((response) => response.data),
+  };

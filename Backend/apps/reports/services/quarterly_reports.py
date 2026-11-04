@@ -184,3 +184,69 @@ def fill_yearly_dpps(fiscal_year=None, company_ids=None):
     if created or updated:
         invalidate_cache()
     return created, updated
+def company_quarterly_report(company):
+    """
+    Return the latest available quarterly valuation metrics
+    for one company.
+
+    Uses the existing price selection and financial calculations.
+    """
+
+    # 1. Find this company's latest available quarterly report.
+    reports = QuarterlyReport.objects.filter(
+        company=company
+    )
+
+    report = reports.order_by(
+        "-fiscal_year",
+        "-quarter",
+    ).first()
+
+    if report is None:
+        return None
+
+    # 2. Find the same quarter from the previous fiscal year.
+    previous_year = metrics.previous_fiscal_year(
+        report.fiscal_year
+    )
+
+    previous_report = reports.filter(
+        fiscal_year=previous_year,
+        quarter=report.quarter,
+    ).first()
+
+    # 3. Retrieve yearly DPPS records for this company.
+    dpps_by_year = dict(
+        YearlyDPPS.objects.filter(
+            company=company
+        ).values_list(
+            "fiscal_year",
+            "dpps",
+        )
+    )
+
+    # 4. Get the latest crawled price using the existing rule.
+    price_data = get_latest_prices([company.pk])
+
+    ltp, price_date = price_data.get(
+        company.pk,
+        (None, None),
+    )
+
+    # 5. Reuse the existing financial calculation function.
+    result = metrics.build_report_row(
+        report=report,
+        ltp=ltp,
+        dpps_by_year=dpps_by_year,
+        previous_report=previous_report,
+    )
+
+    # 6. Add reporting-period and price-date information.
+    result.update({
+        "fiscal_year": report.fiscal_year,
+        "quarter": report.quarter,
+        "price_date": price_date,
+        "avg_window_years": metrics.AVG_WINDOW_YEARS,
+    })
+
+    return result

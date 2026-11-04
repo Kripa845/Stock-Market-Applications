@@ -17,6 +17,9 @@ from apps.companies.api.views import (
     TrackedCompanyQuoteAPIView,
     CompanyPerformanceAPIView
 )
+from apps.companies.api.views import (
+    CompanyValuationAPIView,
+)
 from apps.companies.api.views import CompanySectorsAPIView
 
 
@@ -76,7 +79,11 @@ urlpatterns = [
     CompanyBehaviorSummaryAPIView.as_view(),
     name="company-behavior-summary",
 ),
-
+path(
+    "<int:pk>/valuation/",
+    CompanyValuationAPIView.as_view(),
+    name="company-valuation",
+),
     path(
         "<int:pk>/behavior-summary/",
         CompanyBehaviorSummaryAPIView.as_view(),
@@ -94,6 +101,7 @@ path(
     CompanyNewsPriceCorrelationAPIView.as_view(),
     name="company-news-price-correlation-spec",
 ),
+path("<int:pk>/master-score/", views.CompanyMasterScoreAPIView.as_view(), name="company-master-score"),
 path(
     "<int:pk>/performance/",
     CompanyPerformanceAPIView.as_view(),

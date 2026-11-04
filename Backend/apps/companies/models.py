@@ -51,3 +51,27 @@ class TrackedCompany(models.Model):
     is_tracked = models.BooleanField(
         default=True,
     )
+    
+    
+# companies/models.py
+class MasterScore(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="master_scores")
+    date = models.DateField()
+    score = models.DecimalField(max_digits=5, decimal_places=1)
+    band = models.CharField(max_length=40)
+    components = models.JSONField(default=dict)   # for the Methodology page
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("company", "date")
+        ordering = ["-date"]
+
+# only if Company doesn't already have them:
+class Shareholding(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="holdings")
+    as_of = models.DateField()
+    promoter_pct = models.DecimalField(max_digits=5, decimal_places=2)
+    public_pct = models.DecimalField(max_digits=5, decimal_places=2)
+
+    class Meta:
+        ordering = ["-as_of"]

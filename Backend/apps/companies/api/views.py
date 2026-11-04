@@ -51,7 +51,14 @@ def _company_list_queryset():
         )
         .select_related("tracking")
     )
-
+def get_holding(company):                      # 👈 paste it here
+    latest = company.holdings.order_by("-as_of").first()
+    if latest is None:
+        return None
+    return {
+        "promoter": float(latest.promoter_pct),
+        "public": float(latest.public_pct),
+    }
 
 class CompanyListCreateAPIView(generics.ListCreateAPIView):
     """
@@ -517,3 +524,92 @@ class CompanyPerformanceAPIView(APIView):
                 **performance,
             }
         )
+        
+        
+class CompanyValuationAPIView(APIView):
+    """
+    GET /api/companies/<id>/valuation/
+
+    Returns the latest quarterly valuation metrics
+    for one company.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request, pk):
+        company = get_object_or_404(
+            Company,
+            pk=pk,
+            is_active=True,
+        )
+
+        require_company_access(
+            request.user,
+            company.pk,
+        )
+
+        from apps.reports.services.quarterly_reports import (
+            company_quarterly_report,
+        )
+
+        valuation = company_quarterly_report(company)
+
+        if valuation is None:
+            return Response(
+                {
+                    "status": "no_filed_report",
+                    "detail": (
+                        "No quarterly financial report "
+                        "is available for this company."
+                    ),
+                    "company_id": company.pk,
+                    "symbol": company.symbol,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "status": "ok",
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            "name": company.name,
+            **valuation,
+        })
+        
+from django.core.cache import cache
+from apps.analysis.services.master_score import compute_master_score
+
+
+class CompanyMasterScoreAPIView(APIView):
+    """GET /api/companies/<id>/master-score/"""
+    permission_classes = [HasAppPermission]
+    permission_key = "view_analysis"   # or "view_market_data"
+
+    def get(self, request, pk):
+        company = get_object_or_404(Company, pk=pk, is_active=True)
+        require_company_access(request.user, company.pk)
+
+        result = cache.get_or_set(
+            f"master_score:{company.pk}",
+            lambda: compute_master_score(company) or {},
+            timeout=60 * 30,
+        )
+        if not result:
+            return Response(
+                {
+                    "status": "insufficient_history",
+                    "detail": "Not enough crawled price history to compute a score.",
+                    "company_id": company.pk,
+                    "symbol": company.symbol,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "status": "ok",
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            **result,
+            "holding": get_holding(company),
+        })

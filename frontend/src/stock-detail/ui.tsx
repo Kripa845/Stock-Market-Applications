@@ -19,10 +19,10 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className={`rounded-md border border-[#16233a] bg-[#0a1220] p-3 ${className}`}>
+    <section className={`rounded-lg border border-[#16233a] bg-[#0a1220] p-3 sm:p-4 ${className}`}>
       {(title || right) && (
         <header className="mb-2 flex items-center justify-between">
-          <h2 className="text-[11px] font-bold text-slate-100">{title}</h2>
+          <h2 className="text-xs font-bold text-slate-100">{title}</h2>
           <div className="text-[9px] text-slate-500">{right}</div>
         </header>
       )}
@@ -38,8 +38,8 @@ export function Tile({ label, value, tone = "neutral", wide }: Metric) {
         wide ? "col-span-2" : ""
       }`}
     >
-      <div className="text-[8px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={`mt-1 text-[11px] font-bold tabular-nums ${toneText[tone]}`}>{value}</div>
+      <div className="text-[9px] uppercase tracking-wide text-slate-400">{label}</div>
+      <div className={`mt-1 text-xs font-bold tabular-nums ${toneText[tone]}`}>{value}</div>
     </div>
   );
 }

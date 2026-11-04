@@ -11,6 +11,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.companies.models import Company
+from apps.users.company_access import require_company_access
 from apps.reports.models import DividendAnnouncement
 from apps.reports.services import dividends, quarterly_reports
 from apps.users.permissions import HasAppPermission
@@ -114,3 +116,56 @@ class QuarterlyReportPeriodsAPIView(APIView):
         if error:
             return error
         return Response({"sector": sector, "periods": quarterly_reports.periods(sector)})
+    
+    
+class CompanyValuationAPIView(APIView):
+    """
+    GET /api/companies/<id>/valuation/
+
+    Returns the latest quarterly valuation metrics
+    for one company.
+    """
+
+    permission_classes = [HasAppPermission]
+    permission_key = "view_market_data"
+
+    def get(self, request, pk):
+        company = get_object_or_404(
+            Company,
+            pk=pk,
+            is_active=True,
+        )
+
+        # Apply existing company-level access restriction.
+        require_company_access(
+            request.user,
+            company.pk,
+        )
+
+        from apps.reports.services.quarterly_reports import (
+            company_quarterly_report,
+        )
+
+        valuation = company_quarterly_report(company)
+
+        if valuation is None:
+            return Response(
+                {
+                    "status": "no_filed_report",
+                    "detail": (
+                        "No quarterly financial report "
+                        "is available for this company."
+                    ),
+                    "company_id": company.pk,
+                    "symbol": company.symbol,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response({
+            "status": "ok",
+            "company_id": company.pk,
+            "symbol": company.symbol,
+            "name": company.name,
+            **valuation,
+        })

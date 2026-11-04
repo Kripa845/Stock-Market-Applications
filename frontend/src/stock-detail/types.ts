@@ -75,3 +75,25 @@ export interface StockDetail {
   quarters: FinQuarter[];
   financials: FinRow[];
 }
+
+export interface MasterScoreResponse {
+  status: 'ok';
+  company_id: number;
+  symbol: string;
+  score: number;
+  band: string;
+  as_of: string;
+  components: { trend: number; momentum: number; macd: number; volume: number };
+  holding: { promoter: number; public: number } | null;
+}
+
+
+interface PriceRow {
+  date: string;
+  open: number | string | null;
+  high: number | string | null;
+  low: number | string | null;
+  close: number | string | null;
+  volume: number | string | null;
+}
+
