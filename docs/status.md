@@ -14,6 +14,8 @@ Known problems and unfinished work. Last checked against the code on **2026-10-3
 
 ## Data gaps to watch
 
+* **Announcements are not synced on a schedule** (checked 2026-11-04). The API and page are available, but `sync_announcements_task` is not registered in `CELERY_BEAT_SCHEDULE`; run `manage.py sync_announcements` to refresh the ShareHub feed.
+
 * **News de-duplication: follow-ups** (2026-11-01). The DB now links cross-source copies (`NewsArticle.duplicate_of`), but the API/feed don't expose it yet, so there's no "also reported by" card. `ArticleLike` / `ArticleComment` tables exist with no API or UI. No spider sets `external_id` yet (MeroLagani's `newsID` would be the obvious one, but MeroLagani has no scheduled news spider: its 493 articles come from an older crawler). On the current data `dedupe_news` finds nothing to merge or link.
 
 * **No DailyPrice for 2026-10-30** (found 2026-11-01). Prices, DailyAnalysis and snapshots all end on 10-29 for all 20 companies, while the floorsheet has 10-30 (7,896 trades). The 18:00 price crawl did not run that Friday. CrawlRun shows nothing after the 16:45 NPT news run until 11-01, which ran only news, brokers and dividends. Fix: `run_crawl --type prices`, then `rebuild_all_analysis` and `backfill_market_intelligence`.

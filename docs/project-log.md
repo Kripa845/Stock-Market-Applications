@@ -22,6 +22,20 @@ Rules: keep each entry short, link to `docs/features/<feature>.md` for anything 
 
 ## Log
 
+### 2026-11-05: Nepalipaisa financial reports page `uncommitted`
+
+**What:** Added a paginated filing-document browser with sector, company, BS fiscal-year and duration filters. See [financial reports](features/financial-reports.md).
+**Backend:** `apps/financial_reports/` stores source document metadata and provides `sync_financial_reports` plus list and filter endpoints.
+**Frontend:** `/financial-reports` lists source document links.
+**Data:** Sync is manual; configure `FINANCIAL_REPORT_FILE_BASE_URL` for working document links.
+
+### 2026-11-04: ShareHub announcements page  `uncommitted`
+
+**What:** Added a filterable, paginated feed of ShareHub announcements and events for tracked companies and market-wide NEPSE notices. Cards link to the source details; filters cover symbol, event flag, type, source, category and publication date. See [features/announcements.md](features/announcements.md).
+**Backend:** `apps/announcements/` stores feed entries keyed by ShareHub ID, provides list/filter endpoints and `manage.py sync_announcements`.
+**Frontend:** `/announcements` (`announcements/Announcementspage.tsx`), gated by `view_news`.
+**Open:** Feed sync is manual; its Celery task is not scheduled. API endpoints require login but do not apply per-company access.
+
 ### 2026-11-04: Stock details page and light-theme styling  `c143aab` + uncommitted styling
 
 **What:** Added `/stocks/:symbol` with tracked-company selection, a crawled price chart, quote tiles, MASTER technical score, historical performance and quarterly valuation. The latest styling pass aligns the panels, labels and gauge with the shared light / dark theme colors. Details and calculation limits: [stock detail](features/stock-detail.md).

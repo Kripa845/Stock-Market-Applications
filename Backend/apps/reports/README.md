@@ -1,6 +1,6 @@
 # reports
 
-Company fundamentals (dividends, EPS, quarterly reports) and the data exports.
+Company fundamentals (dividends, EPS, quarterly reports) and the data exports. Nepalipaisa filing documents live in the separate `apps/financial_reports/` app; see [docs/features/financial-reports.md](../../../docs/features/financial-reports.md).
 
 | Where | What |
 |---|---|

@@ -38,4 +38,5 @@ urlpatterns = [
     path("api/dashboard/", include("apps.reports.exports.urls")),
     path("api/reports/", include("apps.dashboard.api.urls")),
     path("api/reports/", include("apps.reports.exports.urls")),
+    path("", include("apps.financial_reports.urls")),
 ]

@@ -62,5 +62,7 @@ NEPSE and project terms as they are used in the code. Where a term maps to a mod
 | **Permission key** | A string such as `view_market_data` checked by `HasAppPermission` (`ROLE_PERMISSIONS`). |
 | **Company access** | Which companies a non-admin user may see (`UserCompanyAccess`). |
 | **CrawlRun** | One recorded spider run with status, counters and logs. |
+| **Announcement** | A ShareHub notice or event (`Announcement`), linked by symbol to a tracked company when applicable; a blank symbol is a market-wide NEPSE item. |
+| **Financial report** | A filing document indexed by Nepalipaisa and stored as `FinancialReport`; the app keeps metadata and links to the source file. |
 | **Circuit breaker** | The app's pause on NEPSE calls after 3 failed runs (30 min, held in Redis). Not NEPSE's own price limits. |
 | **BS / AD** | Bikram Sambat (Nepali calendar) / Gregorian. Dates are stored in AD; BS conversion only through `nepali_datetime` (valid BS 1975–2100). Some news sites publish BS dates (`crawlers/crawlers/utils/dates.py`). |

@@ -14,10 +14,10 @@ Whenever you (or Claude) add, change or remove something, in the same change:
 
 ---
 
-## In progress (as of 2026-11-01)
+## In progress (as of 2026-11-04)
 
-- **News source model + single ingest path**: `NewsSource`, `news_source` FK, URL / external-id identity, `ArticleLike`, `ArticleComment` (`apps/news/models.py`, `services/ingest.py`). Code and migrations are in `eb87a3a`; no project-log entry yet.
 - **Stock Comparison page** on branch `feature/stock-comparison-page` (`a3b5df3`), not merged into `main`.
+- **Announcements feed refresh**: page and API are implemented; ShareHub sync remains manual because `sync_announcements_task` is not in Celery beat (`apps/announcements/`, `docs/status.md`).
 
 ## Next
 
@@ -35,10 +35,15 @@ Open decisions and follow-ups (from `docs/status.md`):
 - [ ] Enter NEPSE holidays in `TradingHoliday`.
 - [ ] Remove `Backend/data/backups/data.json` (contains a user password hash) from the repo.
 - [ ] Align the `Scrapy` pin in `requirements.txt` with the installed 2.18.
+- [ ] Add a Celery beat schedule for `sync_announcements_task` if automatic ShareHub announcement refresh is desired.
 
 ---
 
 ## Timeline
+
+### 2026-11-04
+- Announcements page and ShareHub feed docs: route/API, model, data source, filter behavior, permissions, manual refresh, test gap and schedule status (`apps/announcements/`, `docs/features/announcements.md`, `docs/API.md`, `docs/DATABASE.md`, `docs/DATA_SOURCES.md`). `uncommitted`
+- Stock detail documentation and feature page (`docs/features/stock-detail.md`, API, architecture, database, glossary, data sources). `uncommitted`
 
 ### 2026-11-01
 - Stock Comparison page `/compare` (`pages/StockComparisonPage.tsx`, `api/compare.ts`, `hooks/useCompare.ts`); sidebar "Comparison" is now a group. `a3b5df3`

@@ -86,7 +86,7 @@ const holdingFrom = (units: string, wacc: string) => ({
   units: units === '' ? 0 : Math.max(0, Math.floor(Number(units))),
   wacc: wacc === '' ? 0 : Math.max(0, Number(wacc)),
 });
-
+//AddCompanyModal component
 function AddCompanyModal({ watchlist, savedSymbols, onClose, onAdded }: {
   watchlist: NamedWatchlist;
   savedSymbols: Set<string>;
@@ -102,6 +102,8 @@ function AddCompanyModal({ watchlist, savedSymbols, onClose, onAdded }: {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  //Searching companies through the API
+  
   useEffect(() => {
     let cancelled = false;
     setSearching(true);

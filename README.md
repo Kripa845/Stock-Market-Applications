@@ -15,6 +15,8 @@ A personal research app for the Nepal Stock Exchange (NEPSE). Scrapy spiders and
 | Stock page | Candlestick chart, MASTER score, performance and valuation panels, with light / dark theme support; related analysis includes indicators, intraday candles, floorsheet, support / resistance, broker accumulation and news-vs-price reaction |
 | Brokers | Broker list and activity, top brokers per stock, market-wide accumulation / distribution, one broker's running position in a stock |
 | Fundamentals | Dividends (whole market), latest quarterly report per sector with PE / PB / DPPS yields |
+| Financial reports | Paginated links to company filings from Nepalipaisa, filtered by sector, company, fiscal year and duration |
+| Announcements | Filterable ShareHub market-wide and tracked-company notices and events |
 | News | Crawled hourly from five sites, tagged to companies automatically, with analyst corrections and an audit trail |
 | Admin | Users, roles and permissions, per-user company access, crawl runs, CSV / XLSX / PDF exports |
 
@@ -115,4 +117,4 @@ There is no CI. On 2026-10-30: 1017 tests, 5 failing (listed in [docs/status.md]
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | NEPSE and project terms |
 | [docs/status.md](docs/status.md) | Known issues and unfinished work |
 | [docs/project-log.md](docs/project-log.md) | Feature history, newest first |
-| [docs/features/](docs/features/) | Stock detail, stock comparison, broker accumulation, quarterly report, news categorization |
+| [docs/features/](docs/features/) | Announcements, financial reports, stock detail, stock comparison, broker accumulation, quarterly report, news categorization |

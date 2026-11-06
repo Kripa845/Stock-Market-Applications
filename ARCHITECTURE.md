@@ -10,36 +10,260 @@ It is not deployed anywhere: it runs on one machine, natively on Windows or with
 
 ## Data flow
 
-```mermaid
-flowchart LR
-    subgraph Sources["External sources (unofficial)"]
-        SS[ShareSansar]
-        SH[ShareHub]
-        NP[NEPSE via nepse-data-api]
-        NT[nepsetrading.com]
-        NEWS[News sites]
-    end
-
-    subgraph Workers["Celery worker (queue: crawling)"]
-        BEAT[[Celery beat<br/>DatabaseScheduler]]
-        RUN[crawler_runs.tasks<br/>runner.run_spider]
-        SPIDER[scrapy crawl &lt;spider&gt;<br/>subprocess]
-        SVC[Direct-fetch services<br/>live_prices, nepse_indices,<br/>sharehub_floorsheet, nepsetrading]
-        DERIVE[Derive tasks<br/>analysis, market_intelligence,<br/>categorize news]
-    end
-
-    DB[(PostgreSQL)]
-    REDIS[(Redis<br/>broker + circuit breaker)]
-    API[Django / DRF<br/>/api/...]
-    UI[React SPA]
-
-    BEAT --> REDIS --> RUN --> SPIDER
-    BEAT --> SVC
-    SS & NEWS --> SPIDER
-    SPIDER -->|pipelines upsert| DB
-    SH & NP & NT & SS --> SVC -->|update_or_create| DB
-    DB --> DERIVE --> DB
-    DB --> API -->|JSON, JWT| UI
+```drawio locked
+<mxfile>
+  <diagram id="VgRqncqiKPkraNGRtt4z" name="Page-1">
+    <mxGraphModel dx="2063" dy="1297" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <UserObject label="" mermaidData="{&#xa;  &quot;data&quot;: &quot;flowchart LR\n    subgraph Sources[\&quot;External sources (unofficial)\&quot;]\n        SS[ShareSansar]\n        SH[ShareHub]\n        NP[NEPSE via nepse-data-api]\n        NT[nepsetrading.com]\n        NEWS[News sites]\n    end\n\n    subgraph Workers[\&quot;Celery worker (queue: crawling)\&quot;]\n        BEAT[[Celery beat&lt;br/&gt;DatabaseScheduler]]\n        RUN[crawler_runs.tasks&lt;br/&gt;runner.run_spider]\n        SPIDER[scrapy crawl &amp;lt;spider&amp;gt;&lt;br/&gt;subprocess]\n        SVC[Direct-fetch services&lt;br/&gt;live_prices, nepse_indices,&lt;br/&gt;sharehub_floorsheet, nepsetrading]\n        DERIVE[Derive tasks&lt;br/&gt;analysis, market_intelligence,&lt;br/&gt;categorize news]\n    end\n\n    DB[(PostgreSQL)]\n    REDIS[(Redis&lt;br/&gt;broker + circuit breaker)]\n    API[Django / DRF&lt;br/&gt;/api/...]\n    UI[React SPA]\n\n    BEAT --&gt; REDIS --&gt; RUN --&gt; SPIDER\n    BEAT --&gt; SVC\n    SS &amp; NEWS --&gt; SPIDER\n    SPIDER --&gt;|pipelines upsert| DB\n    SH &amp; NP &amp; NT &amp; SS --&gt; SVC --&gt;|update_or_create| DB\n    DB --&gt; DERIVE --&gt; DB\n    DB --&gt; API --&gt;|JSON, JWT| UI&quot;,&#xa;  &quot;config&quot;: null&#xa;}" id="34">
+          <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;" vertex="1">
+            <mxGeometry as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="External sources (unofficial)" mermaidId="n:Sources" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="External sources (unofficial)" id="2">
+          <mxCell parent="34" style="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="540" width="312" x="489" y="497" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="ShareSansar" mermaidId="n:SS" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="ShareSansar" id="3">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="146" x="83" y="461" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="ShareHub" mermaidId="n:SH" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="ShareHub" id="4">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="128" x="92" y="357" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="NEPSE via nepse-data-api" mermaidId="n:NP" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="NEPSE via nepse-data-api" id="5">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="242" x="35" y="253" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="nepsetrading.com" mermaidId="n:NT" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="nepsetrading.com" id="6">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="188" x="62" y="149" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="News sites" mermaidId="n:NEWS" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="News sites" id="7">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="135" x="89" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Celery worker (queue: crawling)" mermaidId="n:Workers" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Celery worker (queue: crawling)" id="8">
+          <mxCell parent="34" style="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="361" width="1774" x="10" y="116" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Celery beat&#xa;DatabaseScheduler" mermaidId="n:BEAT" mermaidBaseStyle="html=1;strokeWidth=1;shape=process;whiteSpace=wrap;size=0.04;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Celery beat&#xa;DatabaseScheduler" id="9">
+          <mxCell parent="8" style="html=1;strokeWidth=1;shape=process;whiteSpace=wrap;size=0.04;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="53" width="168" x="35" y="117" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="crawler_runs.tasks&#xa;runner.run_spider" mermaidId="n:RUN" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="crawler_runs.tasks&#xa;runner.run_spider" id="10">
+          <mxCell parent="8" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="73" width="194" x="538" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="scrapy crawl &amp;lt;spider&amp;gt;&#xa;subprocess" mermaidId="n:SPIDER" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="scrapy crawl &amp;lt;spider&amp;gt;&#xa;subprocess" id="11">
+          <mxCell parent="8" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="73" width="215" x="879" y="120" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Direct-fetch services&#xa;live_prices, nepse_indices,&#xa;sharehub_floorsheet, nepsetrading" mermaidId="n:SVC" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Direct-fetch services&#xa;live_prices, nepse_indices,&#xa;sharehub_floorsheet, nepsetrading" id="12">
+          <mxCell parent="8" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="93" width="310" x="831" y="243" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Derive tasks&#xa;analysis, market_intelligence,&#xa;categorize news" mermaidId="n:DERIVE" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Derive tasks&#xa;analysis, market_intelligence,&#xa;categorize news" id="13">
+          <mxCell parent="8" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="93" width="276" x="1463" y="136" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:RUN-&gt;SPIDER#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0.09;entryY=0;" mermaidBaseValue="" id="32">
+          <mxCell edge="1" parent="8" source="10" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0.09;entryY=0;" target="11">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="781" y="82" />
+                <mxPoint x="806" y="82" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:BEAT-&gt;SVC#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.64;entryX=0.3;entryY=0;" mermaidBaseValue="" id="33">
+          <mxCell edge="1" parent="8" source="9" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.64;entryX=0.3;entryY=0;" target="12">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="228" y="153" />
+                <mxPoint x="346" y="153" />
+                <mxPoint x="464" y="153" />
+                <mxPoint x="489" y="153" />
+                <mxPoint x="635" y="153" />
+                <mxPoint x="781" y="153" />
+                <mxPoint x="806" y="153" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="PostgreSQL" mermaidId="n:DB" mermaidBaseStyle="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="PostgreSQL" id="14">
+          <mxCell parent="34" style="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="67" width="94" x="1329" y="524" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Redis&#xa;broker + circuit breaker" mermaidId="n:REDIS" mermaidBaseStyle="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Redis&#xa;broker + circuit breaker" id="15">
+          <mxCell parent="34" style="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="81" width="186" x="263" y="10" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Django / DRF&#xa;/api/..." mermaidId="n:API" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Django / DRF&#xa;/api/..." id="16">
+          <mxCell parent="34" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="73" width="155" x="1534" y="522" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="React SPA" mermaidId="n:UI" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="React SPA" id="17">
+          <mxCell parent="34" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="129" x="1902" y="532" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:BEAT-&gt;REDIS#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.78;exitY=0;entryX=0.32;entryY=1;" mermaidBaseValue="" id="18">
+          <mxCell edge="1" parent="34" source="9" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.78;exitY=0;entryX=0.32;entryY=1;" target="15">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="238" y="198" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:REDIS-&gt;RUN#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.68;exitY=1;entryX=0;entryY=0.51;" mermaidBaseValue="" id="19">
+          <mxCell edge="1" parent="34" source="15" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.68;exitY=1;entryX=0;entryY=0.51;" target="10">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="474" y="198" />
+                <mxPoint x="499" y="198" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:SS-&gt;SPIDER#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.11;entryX=0.32;entryY=1;" mermaidBaseValue="" id="20">
+          <mxCell edge="1" parent="34" source="3" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.11;entryX=0.32;entryY=1;" target="11">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="791" y="943" />
+                <mxPoint x="816" y="446" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:NEWS-&gt;SPIDER#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0;entryY=0.63;" mermaidBaseValue="" id="21">
+          <mxCell edge="1" parent="34" source="7" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0;entryY=0.63;" target="11">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="791" y="569" />
+                <mxPoint x="816" y="289" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="pipelines upsert" mermaidId="e:SPIDER-&gt;DB#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0.33;entryY=0;" mermaidBaseValue="pipelines upsert" id="22">
+          <mxCell edge="1" parent="34" source="11" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0.33;entryY=0;" target="14">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="1240" y="273" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:SH-&gt;SVC#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0;entryY=0.69;" mermaidBaseValue="" id="23">
+          <mxCell edge="1" parent="34" source="4" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0;entryY=0.69;" target="12">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="791" y="881" />
+                <mxPoint x="816" y="426" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:NP-&gt;SVC#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0;entryY=0.51;" mermaidBaseValue="" id="24">
+          <mxCell edge="1" parent="34" source="5" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0;entryY=0.51;" target="12">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="791" y="777" />
+                <mxPoint x="816" y="406" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:NT-&gt;SVC#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0.09;entryY=0;" mermaidBaseValue="" id="25">
+          <mxCell edge="1" parent="34" source="6" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.5;entryX=0.09;entryY=0;" target="12">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="791" y="673" />
+                <mxPoint x="816" y="340" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:SS-&gt;SVC#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.61;entryX=0.05;entryY=1;" mermaidBaseValue="" id="26">
+          <mxCell edge="1" parent="34" source="3" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.61;entryX=0.05;entryY=1;" target="12">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="791" y="996" />
+                <mxPoint x="816" y="466" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="update_or_create" mermaidId="e:SVC-&gt;DB#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0.18;entryY=0;" mermaidBaseValue="update_or_create" id="27">
+          <mxCell edge="1" parent="34" source="12" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0.18;entryY=0;" target="14">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="1240" y="406" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:DB-&gt;DERIVE#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5638297872340425;exitY=0;entryX=0.5217391304347826;entryY=1;curved=1;exitX=0.56;exitY=0;entryX=0.52;entryY=1;" mermaidBaseValue="" id="28">
+          <mxCell edge="1" parent="34" source="14" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.56;exitY=0;entryX=0.52;entryY=1;" target="13">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint as="offset" />
+              <Array as="points">
+                <mxPoint x="1506" y="435" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:DERIVE-&gt;DB#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.4782608695652174;exitY=1;entryX=0.43617021276595747;entryY=0;curved=1;exitX=0.48;exitY=1;entryX=0.44;entryY=0;" mermaidBaseValue="" id="29">
+          <mxCell edge="1" parent="34" source="13" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.48;exitY=1;entryX=0.44;entryY=0;" target="14">
+            <mxGeometry relative="1" as="geometry">
+              <mxPoint as="offset" />
+              <Array as="points">
+                <mxPoint x="1482" y="435" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:DB-&gt;API#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0;entryY=0.51;" mermaidBaseValue="" id="30">
+          <mxCell edge="1" parent="34" source="14" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0;entryY=0.51;" target="16">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="1448" y="559" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="JSON, JWT" mermaidId="e:API-&gt;UI#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0;entryY=0.5;" mermaidBaseValue="JSON, JWT" id="31">
+          <mxCell edge="1" parent="34" source="16" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.51;entryX=0;entryY=0.5;" target="17">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
 ```
 
 ## Directory map
@@ -89,10 +313,12 @@ apps/<app>/
 | `market_intelligence` | ~110 technical indicators (computed on request), breadth, sector rotation, support / resistance | `*Snapshot`, `SupportResistanceSet` |
 | `analysis` | Broker accumulation / position, floorsheet grid, daily pressure, volume anomalies, news vs price | `DailyAnalysis`, `VolumeAnomaly`, `NewsPriceCorrelation` |
 | `news` | Crawled articles, company tagging, sentiment | `NewsArticle`, `ArticleCompanyTag`, `CategorizationCorrection` |
+| `announcements` | ShareHub market and tracked-company announcements and events | `Announcement` |
 | `crawler_runs` | Starting spiders and recording each run | `CrawlRun` |
 | `dashboard` | Role dashboards and export endpoints | none |
 | `market_calendar` | BS / AD month calendar, weekday / day-by-day / month-by-month summaries | none (derived) |
 | `comparison` | Side-by-side profile of 2–5 tracked companies, data-coverage report (`/api/compare/`, [docs/features/stock-comparison.md](docs/features/stock-comparison.md)) | none (derived) |
+| `financial_reports` | Nepalipaisa filing document metadata and sync command | `FinancialReport` |
 
 **Dependency direction:** `users`, `companies` → `market_data`, `floorsheet`, `reports`, `market_indices` → `analysis`, `market_intelligence`, `dashboard`, `market_calendar` → `comparison`. Lower layers never import upper ones.
 
@@ -139,6 +365,7 @@ Routes are in `frontend/src/App.tsx`, rules in `config/routePermissions.ts`, pag
 | `/market/month-by-month` → `MonthByMonthPage.tsx` | `/api/market-calendar/monthly/` | `market_calendar/services/monthly_returns.py` |
 | `/market/dividends` → `DividendsPage.tsx` | `/api/market/dividends/` | `reports/services/dividends.py` |
 | `/market/quarterly-report/:sector` → `QuarterlyReportPage.tsx` | `/api/market/quarterly-report/` | `reports/services/quarterly_reports.py`, `quarterly_metrics.py` |
+| `/financial-reports` → `FinancialReports.tsx` | `/api/financial-reports/`, `/api/financial-reports/filters/` | `financial_reports/views.py`, `FinancialReport`; sync via `sync_financial_reports` |
 | `/companies` → `admin/CompaniesPage.tsx` | `/api/companies/` | `companies/api/views.py` |
 | `/stocks/:symbol` → `stock-detail/StockDetailsPage.tsx` | `/api/companies/` (tracked list and quote), `/api/companies/<id>/{performance,valuation,master-score}/`, `/api/stocks/<symbol>/intraday/` | `companies/api/`, `market_data/services/{stock_performance,market_beta}.py`, `analysis/services/master_score.py`, `reports/services/quarterly_reports.py`, `floorsheet/` |
 | `/companies/:symbol` → legacy `StockDetail.tsx` | `/api/companies/<id>/…`, `/api/stocks/<symbol>/intraday/`, `/api/analysis/broker-*` | `companies/`, `floorsheet/`, `analysis/services/broker_accumulation.py` |
@@ -155,6 +382,7 @@ Routes are in `frontend/src/App.tsx`, rules in `config/routePermissions.ts`, pag
 | `/live-trading` → `WatchlistPage.tsx`, `/watchlist-comparison` → `WatchlistComparison.tsx` | `/api/market/…`, `/api/floorsheet/` | `market_data/`, `floorsheet/` |
 | `/compare` → `StockComparisonPage.tsx` | `/api/compare/`, `/api/compare/companies/` | `comparison/services/compare.py` |
 | `/news[/:id]` → `News.tsx`, `NewsDetail.tsx` | `/api/news/…` | `news/api/views.py` |
+| `/announcements` → `announcements/Announcementspage.tsx` | `/api/announcements/`, `/api/announcements/filters/` | `announcements/views.py`, `services.py` |
 | `/crawl` → `CrawlerStatus.tsx` | `/api/crawler-runs/…` | `crawler_runs/api/views.py`, `tasks.py` |
 | `/reports` → `ExportPage.tsx` | `/api/reports/export/…` | `reports/exports/` |
 | `/users`, `/roles-permissions` → `admin/UserManagementPage.tsx`, `admin/RolesPermissionPage.tsx` | `/api/users/admin/…` | `users/api/views.py` |

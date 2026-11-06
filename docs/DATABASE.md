@@ -1,6 +1,6 @@
 # Database
 
-PostgreSQL 16 in development and Docker (`config/settings.py` → `DATABASES`, `CONN_MAX_AGE` 60 s); tests use in-memory SQLite (`config/settings_test.py`). 43 models across 11 apps (`dashboard` has none), managed by Django migrations in `apps/<app>/migrations/`.
+PostgreSQL 16 in development and Docker (`config/settings.py` → `DATABASES`, `CONN_MAX_AGE` 60 s); tests use in-memory SQLite (`config/settings_test.py`). 45 models across 13 apps (`dashboard` has none), managed by Django migrations in `apps/<app>/migrations/`.
 
 This page lists the tables that matter, their natural keys, how they relate, and the rules not visible from the fields. For exact fields read each `models.py`. Every upsert uses the unique keys below, so re-running a crawl or import never duplicates rows. Terms: [GLOSSARY.md](GLOSSARY.md).
 
@@ -58,7 +58,7 @@ erDiagram
     MarketIndex ||--o{ IndexCheck : checks
 ```
 
-Not linked by foreign key (joined by `symbol` or date): `Broker` (floorsheet `buyer_broker` / `seller_broker` hold the broker number as a string), `MarketStockDaily`, `CompanyDaily`, `StockSector`, `CompanyEarnings`, `TradingHoliday`, the market-wide snapshots.
+Not linked by foreign key (joined by `symbol` or date): `Broker` (floorsheet `buyer_broker` / `seller_broker` hold the broker number as a string), `Announcement` (matched by symbol; blank means market-wide), `MarketStockDaily`, `CompanyDaily`, `StockSector`, `CompanyEarnings`, `TradingHoliday`, the market-wide snapshots.
 
 ## companies
 | Model | Key | Notes |
@@ -143,6 +143,16 @@ Indicators are not stored: `market_intelligence/indicators/registry.py` computes
 | `RolePermissionConfig`, `CustomRole` | `role_key`, none | Editable permission lists (keys in `users/api/serializers.py` → `ROLE_PERMISSIONS`). |
 | `UserCompanyAccess` | (`user`, `company`) | Per-user allowed companies, on top of role permissions. Only rows with `status=1` and an active company count. Admins are unrestricted; a non-admin with no rows sees **no** companies (`users/company_access.py::get_accessible_company_ids`). |
 | `Watchlist` / `WatchlistItem` | (`user`, `name`) / (`watchlist`, `company`) | Named lists, one `is_default`. Items hold `units` and `wacc` (Decimal). |
+
+## announcements
+| Model | Key | Notes |
+|---|---|---|
+| `Announcement` | `external_id` unique | ShareHub announcement feed; symbol is blank for market-wide notices. Includes title, event flag, type, category, source, publication time and details URL. `raw` retains the source payload and is excluded from the API serializer. |
+
+## financial_reports
+| Model | Key | Notes |
+|---|---|---|
+| `FinancialReport` | `document_id` unique | Nepalipaisa filing document for a tracked company. Stores BS/AD fiscal years, duration, report dates, title and source file name; the document link is built from `FINANCIAL_REPORT_FILE_BASE_URL` at response time. |
 
 Also installed: `django_celery_beat` tables (beat schedule, `DatabaseScheduler`) and `token_blacklist` (SimpleJWT rotated refresh tokens).
 

@@ -88,7 +88,7 @@ Field names are from `ROW_FIELDS` and `tracked_movers()` in `market_data/service
 Two layers, both on the backend:
 
 1. **App permission.** The view sets `permission_key = "<key>"` and uses `HasAppPermission`. Views whose permission depends on the method use `HasViewMethodPermissions` + `get_required_permissions(request)` (e.g. GET needs `view_watchlist`, POST `add_watchlist`, DELETE `remove_watchlist`). The keys and their groups are in `apps/users/api/serializers.py` → `ROLE_PERMISSIONS`. Within a group, each key implies the earlier ones are needed.
-2. **Company access.** Admins see every company. Every other user sees only the companies granted in `UserCompanyAccess` (none granted = none visible). Helpers in `apps/users/company_access.py`: `filter_company_queryset()`, `require_company_access()`, `get_accessible_company_ids()` (`None` = unrestricted admin, `[]` = nothing). They apply to company lists, prices, floorsheet, analysis, market intelligence, dashboards, crawl runs, watchlists and exports. **Not** narrowed: reading news, dividends, the quarterly report, the market-wide indices, and public-issue (IPO) events on the market calendar (its dividend events are narrowed). Manual news correction needs `correct_categories` **and** access to that company.
+2. **Company access.** Admins see every company. Every other user sees only the companies granted in `UserCompanyAccess` (none granted = none visible). Helpers in `apps/users/company_access.py`: `filter_company_queryset()`, `require_company_access()`, `get_accessible_company_ids()` (`None` = unrestricted admin, `[]` = nothing). They apply to company lists, prices, floorsheet, analysis, market intelligence, dashboards, crawl runs, watchlists and exports. **Not** narrowed: reading news and announcements, dividends, the quarterly report, the market-wide indices, and public-issue (IPO) events on the market calendar (its dividend events are narrowed). Manual news correction needs `correct_categories` **and** access to that company.
 
 When adding an endpoint: choose a `permission_key`, apply a company-access helper if it returns per-company data, and add the matching frontend rule in `config/routePermissions.ts`.
 
@@ -199,6 +199,22 @@ Each day has a `status`: `traded`, `holiday`, `weekend` (from the trading week i
 | `public/latest/` | **public** |
 | `<id>/recategorize/`, `corrections/` | `correct_categories` (+ company access to change a tag) |
 | `<id>/trigger-categorize/` | `categorize_news` |
+
+### `announcements/`
+The announcements endpoints require an authenticated user through DRF's default permission. The frontend `/announcements` route is additionally gated by `view_news`. These endpoints do not apply `UserCompanyAccess`; the selector covers all tracked symbols plus market-wide announcements.
+
+| Endpoint | Query parameters / result |
+|---|---|
+| `` (paginated, 12 by default; `size` up to 100) | Filters: `symbol`, `is_event=true|false`, `type`, `source`, `category`, `date_from=YYYY-MM-DD`, `date_to=YYYY-MM-DD`; newest publication first |
+| `filters/` | Available event/type/source/category options and the configured tracked symbols |
+
+### `financial-reports/`
+The legacy Django views currently have no explicit authentication or permission decorators. Results include active filings for tracked companies only; they do not apply per-user company access. The page is `/financial-reports`.
+
+| Endpoint | Query parameters / result |
+|---|---|
+| `GET /api/financial-reports/` | Optional `sector`, `company` (symbol), `fiscal_year` (BS), `duration`, and `page`; returns `results`, `page`, `num_pages`, `total`. Results contain source date, symbol, title and `file_url`. Page size is 10. |
+| `GET /api/financial-reports/filters/` | Dropdown options for sectors, tracked companies, fiscal years and durations |
 
 ### `crawler-runs/` (also at `admin/crawl-runs/`)
 | Endpoint | Permission |

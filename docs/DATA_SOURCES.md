@@ -22,6 +22,8 @@ Where every dataset comes from, how often, how politely, and what happens when a
 | Broker directory details | ShareHub | `floorsheet/services/broker_directory.py` (`sync_broker_directory`) | `Broker` | by command |
 | News | ShareSansar, Bizmandu, NepseAlpha, Arthakhabar, Fiscal Nepal | `NEWS_SPIDERS` in `crawlers/runner.py` (base: `spiders/base_news.py`) | `RawArticle`, `NewsArticle` | hourly |
 | News images | `content.sharesansar.com` | `news/services/article_images.py` | `NewsArticle` | with news / `backfill_news_images` |
+| Announcements and events | ShareHub JSON feed (`/data/api/v1/announcement`) | `apps/announcements/services.py::sync_announcements` | `Announcement` (upserted by `external_id`) | Manual: `manage.py sync_announcements [--days 7]`; not currently in Celery beat |
+| Financial report documents | Nepalipaisa JSON API (`GetFinancialReportDocuments`) | `apps/financial_reports/management/commands/sync_financial_reports.py` | `FinancialReport` (upserted by source document ID) | Manual: `manage.py sync_financial_reports` (incremental); `--full` crawls all pages; `--symbol NABIL` limits to one tracked company |
 | Seed files | repo | management commands | sectors, brokers, logos | once |
 
 Not scheduled (exist but not in any `runner.py` list): `nepalipaisa` (news) and `moneymitra_brokers`. Spiders are found by `name`, not file name: there is no `merolagani` spider, and `spiders/market_stocks.py` is an empty file.

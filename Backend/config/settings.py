@@ -59,7 +59,8 @@ INSTALLED_APPS = [
     "apps.market_calendar",
     "apps.comparison",
     "apps.stock_detail",
-    "apps.announcements"
+    "apps.announcements",
+    "apps.financial_reports",
     
 ]
 
@@ -425,7 +426,7 @@ REDIS_URL = os.getenv(
     "REDIS_URL",
     "redis://localhost:6379/0",
 )
-
+FINANCIAL_REPORT_FILE_BASE_URL = "https://nepalipaisa.com/document?cn=FinancialReport&fn="
 
 # ---------------------------------------------------------------------------
 # Internationalization

@@ -53,8 +53,7 @@ class AnnouncementFilterOptions(APIView):
             ],
             "source": [{"value": s, "label": s} for s in ["Nepse", "Company", "Registrars", "Other"]],
             "category": [{"value": c, "label": c} for c in [
-                "Nepse Circular", "Nepse News and Alert", "Financials", "IPO/FPO Update",
-                "Right Shares", "Auction", "AGM/SGM", "Corporate Announcement", "Dividend", "Other",
+                "Nepse Circular", "Nepse News and Alert",
             ]],
             "symbols": sorted(settings.TRACKED_SYMBOLS),
         })

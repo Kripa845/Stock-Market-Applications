@@ -52,6 +52,7 @@ Tests per app (collected with `pytest --collect-only`):
 | `crawler_runs` | 39 | `test_crawler_runs.py` (crawl runs, triggering, spider lists) |
 | `floorsheet` | 39 | intraday candles, intraday, broker directory, broker import |
 | `companies` | 12 | companies API, tracked selection |
+| `announcements` | 0 | `tests.py` is an empty scaffold |
 | `dashboard` | 0 | none |
 
 Crawler code tested directly from `apps/*/tests`: `TradingDataSpider` and `TradingDataPipeline`, `BrokersSpider` and `BrokerPipeline`, the `dividends` and `ipo_issues` spiders' parsers, `market_wide_pipeline`, and `crawlers/crawlers/utils/dates.py`.
@@ -60,6 +61,7 @@ Crawler code tested directly from `apps/*/tests`: `TradingDataSpider` and `Tradi
 
 * **No frontend tests** at all (components, hooks, permission routing).
 * **`dashboard` app**: no tests.
+* **Announcements app**: `apps/announcements/tests.py` is an empty scaffold; feed normalization, filtering, pagination and permission behavior have no dedicated tests.
 * **Stock-detail endpoints**: no dedicated tests currently cover the performance, beta, valuation or MASTER score API responses and their permission checks.
 * **Spiders without tests**: `floorsheet`, the news spiders (`sharesansar`, `bizmandu`, `nepsealpha`, `arthakhabar`, `fiscalnepal`), `market_stocks`. Their parsers break silently when a site changes.
 * **No coverage measurement**: `pytest-cov` is not installed; the table above counts tests, not lines.

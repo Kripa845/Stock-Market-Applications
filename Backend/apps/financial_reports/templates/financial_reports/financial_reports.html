@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Financial Reports</title>
+<style>
+  :root { --green:#2eb886; --gold:#d9a932; --line:#e3e5e8; --bg:#f0f1f3; }
+  body { font-family: system-ui, sans-serif; color:#222; margin:0; padding:24px; background:#fff; }
+  .card { max-width:1200px; margin:0 auto; border-top:4px solid #1e8c63; padding:16px 24px 24px; }
+  h1 { font-size:26px; margin:8px 0 4px; display:inline-block; border-bottom:4px solid var(--green); padding-bottom:6px; }
+  .filters { display:flex; flex-wrap:wrap; gap:12px; background:var(--bg); padding:16px; border-radius:10px; margin:20px 0; }
+  .filters select { flex:1 1 180px; padding:10px; border:1px solid var(--line); border-radius:6px; background:#fff; font-size:14px; }
+  button { border:0; border-radius:8px; padding:10px 28px; color:#fff; font-size:14px; cursor:pointer; }
+  #searchBtn { background:var(--green); } #resetBtn { background:var(--gold); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th { background:var(--bg); text-align:left; padding:12px 10px; border-bottom:1px solid #999; }
+  td { padding:10px; border-bottom:1px solid var(--line); }
+  td.date { text-decoration:underline dotted; white-space:nowrap; }
+  .pdf { color:#d32f2f; font-weight:600; text-decoration:none; }
+  .muted { color:#999; }
+  .pager { display:inline-flex; margin-top:18px; border:1px solid var(--line); border-radius:4px; overflow:hidden; }
+  .pager button { background:#fff; color:#333; border:0; border-right:1px solid var(--line); border-radius:0; padding:8px 14px; }
+  .pager button.active { background:var(--green); color:#fff; font-weight:600; }
+  .pager button:disabled { color:#aaa; cursor:default; }
+  .empty { text-align:center; padding:30px; color:#777; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Financial Reports</h1>
+
+  <div class="filters">
+    <select id="sector">
+      <option value="">All Sectors</option>
+      {% for s in sectors %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+    </select>
+    <select id="company"><option value="">All Companies</option></select>
+    <select id="fiscalYear">
+      <option value="">All Fiscal Years</option>
+      {% for fy in fiscal_years %}<option value="{{ fy }}">{{ fy }} BS</option>{% endfor %}
+    </select>
+    <select id="duration">
+      <option value="">All Durations</option>
+      {% for d in durations %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+    </select>
+    <button id="searchBtn" type="button">Search</button>
+    <button id="resetBtn" type="button">Reset</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>#</th><th>Date</th><th>Symbol</th><th>Fiscal Year</th><th>Duration</th><th>Title</th><th>View</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="pager" class="pager"></div>
+</div>
+
+{{ companies|json_script:"companies-data" }}
+<script>
+(function () {
+  const API_URL = "{% url 'financial_reports:financial_reports_api' %}";
+  const companies = JSON.parse(document.getElementById("companies-data").textContent);
+  const el = id => document.getElementById(id);
+
+  // Company dropdown: tracked companies only, narrowed by the chosen sector.
+  function fillCompanies() {
+    const sector = el("sector").value;
+    const select = el("company");
+    select.innerHTML = "";
+    select.add(new Option("All Companies", ""));
+    companies
+      .filter(c => !sector || c.sector === sector)
+      .forEach(c => select.add(new Option(c.symbol + " - " + c.name, c.symbol)));
+  }
+
+  function cell(text, cls) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    if (cls) td.className = cls;
+    return td;
+  }
+
+  function render(data) {
+    const body = el("rows");
+    body.innerHTML = "";
+    if (!data.results.length) {
+      const tr = document.createElement("tr");
+      const td = cell("No reports found.", "empty");
+      td.colSpan = 7;
+      tr.appendChild(td);
+      body.appendChild(tr);
+    }
+    data.results.forEach(r => {
+      const tr = document.createElement("tr");
+      tr.appendChild(cell(r.sn + "."));
+      tr.appendChild(cell(r.date + " BS", "date"));
+      tr.appendChild(cell(r.symbol));
+      tr.appendChild(cell(r.fiscal_year + " BS"));
+      tr.appendChild(cell(r.duration));
+      tr.appendChild(cell(r.title));
+      const view = document.createElement("td");
+      if (r.file_url) {
+        const a = document.createElement("a");
+        a.href = r.file_url; a.target = "_blank"; a.rel = "noopener";
+        a.className = "pdf"; a.textContent = "PDF";
+        view.appendChild(a);
+      } else {
+        view.textContent = "-"; view.className = "muted";
+      }
+      tr.appendChild(view);
+      body.appendChild(tr);
+    });
+    renderPager(data);
+  }
+
+  function renderPager(data) {
+    const pager = el("pager");
+    pager.innerHTML = "";
+    if (data.num_pages <= 1) return;
+    const add = (label, page, opts) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = label;
+      if (opts && opts.disabled) b.disabled = true;
+      if (opts && opts.active) b.className = "active";
+      b.addEventListener("click", () => load(page));
+      pager.appendChild(b);
+    };
+    add("Prev", data.page - 1, { disabled: data.page <= 1 });
+    const first = Math.max(1, Math.min(data.page - 2, data.num_pages - 4));
+    const last = Math.min(data.num_pages, first + 4);
+    for (let p = first; p <= last; p++) add(String(p), p, { active: p === data.page });
+    add("Next", data.page + 1, { disabled: data.page >= data.num_pages });
+  }
+
+  async function load(page) {
+    const params = new URLSearchParams({
+      sector: el("sector").value,
+      company: el("company").value,
+      fiscal_year: el("fiscalYear").value,
+      duration: el("duration").value,
+      page: page || 1,
+    });
+    try {
+      const resp = await fetch(API_URL + "?" + params.toString());
+      if (!resp.ok) throw new Error(resp.status);
+      render(await resp.json());
+    } catch (e) {
+      el("rows").innerHTML = "";
+      const tr = document.createElement("tr");
+      const td = cell("Could not load reports. Please try again.", "empty");
+      td.colSpan = 7;
+      tr.appendChild(td);
+      el("rows").appendChild(tr);
+    }
+  }
+
+  el("sector").addEventListener("change", fillCompanies);
+  el("searchBtn").addEventListener("click", () => load(1));
+  el("resetBtn").addEventListener("click", () => {
+    ["sector", "company", "fiscalYear", "duration"].forEach(id => el(id).value = "");
+    fillCompanies();
+    load(1);
+  });
+
+  fillCompanies();
+  load(1);
+})();
+</script>
+</body>
+</html>

@@ -179,7 +179,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: Radio,
     to: '/crawl',
   },
-
+{
+    label: 'Financial Reports',
+    icon: FileSpreadsheet,
+    to: '/financial-reports',
+  },
   // { type: 'divider', label: 'Reports' },
 
   {

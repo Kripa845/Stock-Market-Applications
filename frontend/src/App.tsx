@@ -57,7 +57,7 @@ import ExportPage from './pages/ExportPage';
 import StockDetailsPage from "./stock-detail/StockDetailsPage";
 import ForbiddenPage from './pages/ForbiddenPage';
 import NotFound from './pages/NotFound';
-
+import FinancialReports from "./pages/FinancialReports";
 import type { RouteRule } from './config/routePermissions';
 import { ROUTE_RULES } from './config/routePermissions';
 
@@ -441,6 +441,19 @@ function AppRoutes() {
               </PermissionRoute>
             }
           />
+         
+  {/* Other routes */}
+
+  <Route
+    path="/financial-reports"
+    element={
+      <PermissionRoute rule={ROUTE_RULES["/financial-reports"]}>
+        <FinancialReports />
+      </PermissionRoute>
+    }
+  />
+
+
 
 
           {/* -----------------------------------------------
