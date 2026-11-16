@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 import math
-
+import hashlib
 from django.db.models import Avg, Count, DecimalField, ExpressionWrapper, F, Sum, Max, Min, StdDev
 from django.db.models.functions import Trim
 from django.shortcuts import get_object_or_404
@@ -1673,7 +1673,8 @@ class BrokerActivityAPIView(APIView):
             require_company_access(request.user, company.pk)
 
         stamp = FloorsheetTransaction.objects.filter(company__in=companies).aggregate(latest=Max("id"))["latest"]
-        key = f"broker-activity:{','.join(symbols)}:{broker}:{range_key}:{exclude_self}:{stamp}"
+        symbols_key = hashlib.md5(",".join(symbols).encode()).hexdigest()
+        key = f"broker-activity:{symbols_key}:{broker}:{range_key}:{exclude_self}:{stamp}"
         payload = cache.get(key)
         if payload is None:
             result = build_broker_activity(broker, companies, range_key, exclude_self)

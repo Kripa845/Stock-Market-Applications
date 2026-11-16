@@ -207,7 +207,7 @@ def to_json(value):
     return value
 
 
-MAX_STOCKS = 8
+MAX_STOCKS = 500
 
 
 def session_buckets(sessions, minutes):

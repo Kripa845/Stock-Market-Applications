@@ -6,14 +6,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { AlertTriangle, Info, RefreshCw, TrendingUp, X } from 'lucide-react';
-
+import CompanyLogo from '../components/companies/CompanyLogo';
 import PageHeader from '../components/common/PageHeader';
 import BrokerBadge from '../components/brokers/BrokerBadge';
 import Picker, { type PickerOption } from '../components/brokers/position/Picker';
 import AccDistLineChart, { type LineSeries } from '../components/brokers/position/AccDistLineChart';
 import AccDistPie from '../components/brokers/position/AccDistPie';
 import PositionPriceView from '../components/brokers/position/PositionPriceView';
-import { seriesColor, signed, toneText } from '../components/brokers/position/format';
+import { signed, toneText } from '../components/brokers/position/format';
 import { formatCount, formatTradeDate } from '../components/market/format';
 import {
   MAX_ACTIVITY_STOCKS, POSITION_RANGES, brokerActivityApi, type BrokerActivity, type PositionRange,
@@ -41,6 +41,7 @@ const FILTERS = [
 type Filter = (typeof FILTERS)[number]['key'];
 
 const DEFAULT_STOCKS = 5;
+const CHIPS_COLLAPSED = 12;
 const timeFormat = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kathmandu', hour: '2-digit', minute: '2-digit', hour12: false });
 const dateOnly = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00`);
 
@@ -95,6 +96,15 @@ function useColourSlots(symbols: string[]) {
   }, [symbols]);
 }
 
+/** Small footer under the chart and the table. The company logo image goes here once the file exists. */
+function BrandFooter({ note }: { note?: string }) {
+  return (
+    <div className="bd-brand-footer">
+      <span>{note}</span>
+    </div>
+  );
+}
+
 export default function BrokerPositionPage() {
   const [params, setParams] = useSearchParams();
   const symbolsParam = params.get('symbols') ?? params.get('symbol') ?? '';
@@ -109,6 +119,7 @@ export default function BrokerPositionPage() {
   const excludeSelf = params.get('self') === '0';
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [highlight, setHighlight] = useState<string | null>(null);
+  const [showAllChips, setShowAllChips] = useState(false);
   const slots = useColourSlots(symbols);
 
   const update = (patch: Record<string, string>) => {
@@ -128,6 +139,12 @@ export default function BrokerPositionPage() {
 
   const companies = useQuery({ queryKey: ['companies', 'all-active'], queryFn: allActiveCompanies, staleTime: 10 * 60_000 });
   const brokers = useQuery({ queryKey: ['analysis', 'broker-list'], queryFn: () => analysisApi.getBrokerList(), staleTime: 10 * 60_000 });
+
+  // Looked up by symbol for the stock logos in the table. Must stay below the `companies` query.
+  const companyBySymbol = useMemo(
+    () => new Map((companies.data ?? []).map((c) => [c.symbol, c])),
+    [companies.data],
+  );
 
   // Open on the first few tracked companies only when the URL has no selection at all.
   useEffect(() => {
@@ -165,8 +182,16 @@ export default function BrokerPositionPage() {
   const lines: LineSeries[] = useMemo(() => (data?.series ?? []).map((s) => {
     const values = lineValues(s.bought, s.sold, tab, filter);
     const cumulative = filter === 'cum' || filter === 'cumnet';
-    return { symbol: s.symbol, slot: slots[s.symbol] ?? 0, values, total: cumulative ? values[values.length - 1] ?? 0 : values.reduce((a, v) => a + v, 0) };
-  }), [data, tab, filter, slots]);
+    const company = companyBySymbol.get(s.symbol);
+    return {
+      symbol: s.symbol,
+      slot: slots[s.symbol] ?? 0,
+      values,
+      total: cumulative ? values[values.length - 1] ?? 0 : values.reduce((a, v) => a + v, 0),
+      name: company?.name,
+      logoUrl: company?.logo_url,
+    };
+  }), [data, tab, filter, slots, companyBySymbol]);
 
   const toggle = (symbol: string) => {
     setHidden((h) => {
@@ -185,7 +210,7 @@ export default function BrokerPositionPage() {
       value: c.symbol,
       label: c.symbol,
       hint: isHidden ? `hidden · ${c.name}` : c.name,
-      color: slots[c.symbol] != null ? (isHidden ? 'var(--trading-muted)' : seriesColor(slots[c.symbol])) : undefined,
+      icon: <CompanyLogo symbol={c.symbol} name={c.name} logoUrl={c.logo_url} size="sm" />,
       muted: isHidden,
     };
   });
@@ -243,7 +268,7 @@ export default function BrokerPositionPage() {
 
       {/* Filters */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-[2.2fr_1fr_1fr]">
-        <Picker label="Add stock(s)" placeholder="Select tracked stocks" heading={`Tracked companies · up to ${MAX_ACTIVITY_STOCKS}`}
+        <Picker label="Add stock(s)" placeholder="Select tracked stocks" heading="Tracked companies"
           options={stockOptions} selected={symbols} multi max={MAX_ACTIVITY_STOCKS} onChange={select}
           onHover={(value) => setHighlight(value && symbols.includes(value) && !hidden.has(value) ? value : null)} />
         <Picker label="Select broker" placeholder={data?.broker ? `Most active: ${data.broker}` : 'Select broker'}
@@ -256,9 +281,8 @@ export default function BrokerPositionPage() {
       {/* Selected stocks: click to show / hide, x to remove */}
       <div className="flex min-h-8 flex-wrap items-center gap-2">
         {symbols.length === 0 && <span className="text-sm text-text-muted">No stock selected. Open Add stock(s) to pick from your tracked list.</span>}
-        {symbols.map((s) => {
+        {(showAllChips ? symbols : symbols.slice(0, CHIPS_COLLAPSED)).map((s) => {
           const on = !hidden.has(s);
-          const colour = seriesColor(slots[s] ?? 0);
           const lit = on && highlight === s;
           return (
             <span key={s} role="button" tabIndex={0} aria-pressed={on} onClick={() => toggle(s)}
@@ -271,7 +295,14 @@ export default function BrokerPositionPage() {
                   : lit ? 'border-accent bg-accent/15 text-text-primary'
                     : 'border-bg-border bg-bg-card text-text-primary hover:border-accent/60'
               }`}>
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: on ? colour : 'var(--trading-muted)' }} />
+              <span className={on ? '' : 'opacity-50 grayscale'}>
+                <CompanyLogo
+                  symbol={s}
+                  name={companyBySymbol.get(s)?.name}
+                  logoUrl={companyBySymbol.get(s)?.logo_url}
+                  size="sm"
+                />
+              </span>
               <span className={on ? '' : 'line-through'}>{s}</span>
               <button type="button" aria-label={`Remove ${s}`} onClick={(e) => { e.stopPropagation(); select(symbols.filter((x) => x !== s)); }}
                 className="rounded-full p-0.5 text-text-muted hover:bg-bg-elevated hover:text-text-primary">
@@ -280,6 +311,11 @@ export default function BrokerPositionPage() {
             </span>
           );
         })}
+        {symbols.length > CHIPS_COLLAPSED && (
+          <button type="button" onClick={() => setShowAllChips((v) => !v)} className="rounded-full border border-bg-border px-2.5 py-1 text-xs font-semibold text-accent hover:border-accent/60">
+            {showAllChips ? 'Show fewer' : `+ ${symbols.length - CHIPS_COLLAPSED} more`}
+          </button>
+        )}
         {symbols.length > 0 && (
           <span className="text-[11px] text-text-muted">
             Hover to highlight · click to show / hide
@@ -349,10 +385,24 @@ export default function BrokerPositionPage() {
                 <PositionPriceView symbol={focus} broker={activeBroker} range={range} excludeSelf={excludeSelf} />
               </>
             ) : isPie ? (
-              <AccDistPie side={tab === 'accpie' ? 'bought' : 'sold'}
-                slices={data.series.filter((s) => !hidden.has(s.symbol)).map((s) => ({
-                  symbol: s.symbol, slot: slots[s.symbol] ?? 0, value: tab === 'accpie' ? s.totals.bought : s.totals.sold,
-                }))} />
+              <AccDistPie
+  side={tab === 'accpie' ? 'bought' : 'sold'}
+  slices={data.series
+    .filter((s) => !hidden.has(s.symbol))
+    .map((s) => {
+      const company = companyBySymbol.get(s.symbol);
+
+      return {
+        symbol: s.symbol,
+        slot: slots[s.symbol] ?? 0,
+        value:
+          tab === 'accpie'
+            ? s.totals.bought
+            : s.totals.sold,
+        logoUrl: company?.logo_url ?? null,
+      };
+    })}
+/>
             ) : (
               <AccDistLineChart times={data.times} shortLabel={shortLabel} longLabel={longLabel} series={lines}
                 hidden={hidden} highlight={highlight} yTitle={FILTERS.find((f) => f.key === filter)?.label ?? ''} onToggle={toggle}
@@ -360,14 +410,15 @@ export default function BrokerPositionPage() {
             )}
 
             {data.warnings.map((w) => <p key={w} className="flex items-center gap-2 text-xs text-down"><AlertTriangle size={13} /> {w}</p>)}
+            <BrandFooter note="Source: stored floorsheet data" />
           </div>
         )}
       </section>
 
       {data && tab !== 'price' && data.series.length > 0 && (
-        <div className="overflow-x-auto rounded-md border border-bg-border">
+        <div className="max-h-[560px] overflow-auto rounded-md border border-bg-border">
           <table className="w-full text-xs">
-            <thead className="bg-bg-elevated text-[11px] uppercase tracking-wide text-text-muted">
+            <thead className="sticky top-0 z-10 bg-bg-elevated text-[11px] uppercase tracking-wide text-text-muted">
               <tr>
                 {['Stock', 'Bought', 'Sold', 'Net', 'Avg buy', 'Avg sell', 'Trades'].map((h, i) => (
                   <th key={h} className={`px-3 py-2 font-medium ${i ? 'text-right' : 'text-left'}`}>{h}</th>
@@ -379,7 +430,13 @@ export default function BrokerPositionPage() {
                 <tr key={s.symbol} className="table-row font-mono">
                   <td className="px-3 py-2 text-left font-sans">
                     <span className="inline-flex items-center gap-2 font-semibold text-text-primary">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: seriesColor(slots[s.symbol] ?? 0) }} />{s.symbol}
+                      <CompanyLogo
+                        symbol={s.symbol}
+                        name={companyBySymbol.get(s.symbol)?.name}
+                        logoUrl={companyBySymbol.get(s.symbol)?.logo_url}
+                        size="sm"
+                      />
+                      {s.symbol}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-right text-text-secondary">{formatCount(s.totals.bought)}</td>
@@ -392,6 +449,7 @@ export default function BrokerPositionPage() {
               ))}
             </tbody>
           </table>
+          <div className="px-3 pb-3"><BrandFooter note="Source: stored floorsheet data" /></div>
         </div>
       )}
 
@@ -401,7 +459,7 @@ export default function BrokerPositionPage() {
           Accumulation = shares the broker bought, distribution = shares it sold, from the stored floorsheet of your tracked stocks.
           Cumulative lines start at 0 at the start of the range: they show buying or selling <em>within</em> the range, not holdings.
           1D / 2D use each trade's own time (1- / 5-minute buckets); 1W … 1Y are per session, counted back over stored sessions.
-          Broker numbers are trading members: one broker's buying can be many clients. Up to {MAX_ACTIVITY_STOCKS} stocks at once so every line keeps a distinct colour.
+          Broker numbers are trading members: one broker's buying can be many clients. Stocks are told apart by their logos, so any number can be charted; the biggest lines get a logo next to their end.
           {' '}<Link to="/broker-acc-dist" className="inline-flex items-center gap-1 text-accent hover:underline"><TrendingUp size={12} /> Market-wide Acc/Dist</Link>
         </span>
       </p>

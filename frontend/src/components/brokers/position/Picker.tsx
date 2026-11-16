@@ -1,14 +1,17 @@
-// Searchable dropdown for the Broker Acc / Dist page: multi-select (stocks, with colour dots and a
-// cap) or single-select (broker).  Keyboard: Enter / Space / ArrowDown open; arrows move; Enter picks;
-// Escape closes.
-import { useEffect, useMemo, useRef, useState } from 'react';
+// Searchable dropdown for the Broker Acc / Dist page: multi-select (stocks, with company logos and an
+// optional cap) or single-select (broker).  Keyboard: Enter / Space / ArrowDown open; arrows move;
+// Enter picks; Escape closes.
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Check, ChevronDown, X } from 'lucide-react';
 
 export interface PickerOption {
   value: string;
   label: string;
   hint?: string;
+  /** A small colour dot; used when there is no icon. */
   color?: string;
+  /** A logo or any small element shown before the label (replaces the colour dot). */
+  icon?: ReactNode;
   /** Selected but hidden on the chart. */
   muted?: boolean;
 }
@@ -20,7 +23,7 @@ interface PickerProps {
   selected: string[];
   onChange: (values: string[]) => void;
   multi?: boolean;
-  /** Multi-select only: options beyond this many are disabled. */
+  /** Multi-select only: options beyond this many are disabled. Leave out (or Infinity) for no limit. */
   max?: number;
   heading?: string;
   disabled?: boolean;
@@ -61,12 +64,20 @@ export default function Picker({
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
-  const full = multi && max != null && selected.length >= max;
+  // No cap when max is missing or Infinity.
+  const cap = multi && max != null && Number.isFinite(max) ? max : null;
+  const full = cap != null && selected.length >= cap;
   const pick = (value: string) => {
     if (!multi) { onChange([value]); setOpen(false); return; }
     if (selected.includes(value)) onChange(selected.filter((v) => v !== value));
     else if (!full) onChange([...selected, value]);
   };
+  // Adds every option currently shown (so a search like "bank" selects just those), up to the cap.
+  const selectAll = () => {
+    const values = [...new Set([...selected, ...matches.map((o) => o.value)])];
+    onChange(cap != null ? values.slice(0, cap) : values);
+  };
+  const allShownSelected = matches.length > 0 && matches.every((o) => selected.includes(o.value));
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((a) => Math.min(matches.length - 1, a + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((a) => Math.max(0, a - 1)); }
@@ -74,7 +85,9 @@ export default function Picker({
     else if (e.key === 'Escape') setOpen(false);
   };
   const byValue = new Map(options.map((o) => [o.value, o]));
-  const shown = selected.map((v) => byValue.get(v)?.label ?? v).join(', ');
+  const shown = selected.length > 12
+    ? `${selected.length} stocks selected`
+    : selected.map((v) => byValue.get(v)?.label ?? v).join(', ');
 
   return (
     <div ref={root} className={`relative min-w-0 ${disabled ? 'pointer-events-none opacity-50' : ''}`}>
@@ -100,7 +113,7 @@ export default function Picker({
       </div>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 flex max-h-[360px] flex-col overflow-hidden rounded-md border border-bg-border bg-bg-card shadow-2xl">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 flex max-h-[420px] flex-col overflow-hidden rounded-md border border-bg-border bg-bg-card shadow-2xl">
           {heading && <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted">{heading}</p>}
           <input ref={search} value={query} onChange={(e) => { setQuery(e.target.value); setActive(0); }} onKeyDown={onKey}
             placeholder="Search" aria-label={`Search ${label}`}
@@ -113,7 +126,7 @@ export default function Picker({
               return (
                 <div key={o.value} role="option" aria-selected={on} aria-disabled={blocked}
                   onMouseEnter={() => setActive(i)} onClick={() => !blocked && pick(o.value)}
-                  className={`flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm ${i === active ? 'bg-bg-elevated' : ''} ${
+                  className={`flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-sm ${i === active ? 'bg-bg-elevated' : ''} ${
                     blocked ? 'cursor-not-allowed opacity-40' : ''
                   } ${on ? (o.muted ? 'font-semibold text-text-muted' : 'font-semibold text-text-primary') : 'text-text-secondary'}`}>
                   {multi && (
@@ -121,7 +134,9 @@ export default function Picker({
                       {on && <Check size={11} strokeWidth={3} />}
                     </span>
                   )}
-                  {o.color && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: o.color }} />}
+                  {o.icon
+                    ? <span className={`shrink-0 ${o.muted ? 'opacity-50 grayscale' : ''}`}>{o.icon}</span>
+                    : o.color && <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: o.color }} />}
                   <span className={`truncate ${o.muted ? 'line-through' : ''}`}>{o.label}</span>
                   {o.hint && <span className="ml-auto truncate pl-2 text-xs text-text-muted">{o.hint}</span>}
                   {!multi && on && <Check size={14} className="ml-auto text-accent" />}
@@ -130,12 +145,18 @@ export default function Picker({
             })}
           </div>
           {multi && (
-            <div className="flex items-center justify-between border-t border-bg-border px-3 py-2 text-xs">
-              <span className="text-text-muted">{selected.length}{max != null ? ` / ${max}` : ''} selected</span>
-              <button type="button" onClick={() => onChange([])} disabled={!selected.length}
-                className="font-semibold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline">
-                Select none
-              </button>
+            <div className="flex items-center justify-between gap-3 border-t border-bg-border px-3 py-2 text-xs">
+              <span className="text-text-muted">{selected.length}{cap != null ? ` / ${cap}` : ''} selected</span>
+              <span className="flex items-center gap-3">
+                <button type="button" onClick={selectAll} disabled={allShownSelected || full || matches.length === 0}
+                  className="font-semibold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline">
+                  {query.trim() ? `Select all ${matches.length} shown` : 'Select all'}
+                </button>
+                <button type="button" onClick={() => onChange([])} disabled={!selected.length}
+                  className="font-semibold text-accent hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline">
+                  Select none
+                </button>
+              </span>
             </div>
           )}
         </div>

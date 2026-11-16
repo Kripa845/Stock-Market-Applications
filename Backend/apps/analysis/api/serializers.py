@@ -301,6 +301,11 @@ class AccDistRowSerializer(serializers.Serializer):
 
     symbol = serializers.CharField()
     sector = serializers.CharField()
+    logo_url = serializers.URLField(
+        allow_null=True,
+        allow_blank=True,
+        required=False,
+    )
     broker = serializers.CharField()
     net_qty = serializers.IntegerField()
     net_amount = _number()

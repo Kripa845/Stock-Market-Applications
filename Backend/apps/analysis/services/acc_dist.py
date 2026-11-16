@@ -83,7 +83,7 @@ def _companies(company_ids):
         for row in Company.objects
         .filter(id__in=company_ids)
         .annotate(public_shares=Subquery(latest_public))
-        .values("id", "symbol", "sector", "listed_shares", "public_shares")
+        .values("id", "symbol", "sector","logo_url", "listed_shares", "public_shares")
     }
 
 
@@ -138,15 +138,22 @@ def build_acc_dist(period=DEFAULT_PERIOD, company_ids=None):
         float_shares, float_basis = _float_base(company)
         float_pct = _ratio(net_qty * 100, float_shares)
         result["accumulation" if net_qty > 0 else "distribution"].append({
-            "symbol": company["symbol"],
-            "sector": company["sector"],
-            "broker": broker,
-            "net_qty": net_qty,
-            "net_amount": pair["buy_amount"] - pair["sell_amount"],
-            "avg_rate": _price(_ratio(pair[f"{side}_amount"], pair[f"{side}_qty"])),
-            "float_qty_pct": None if float_pct is None else float_pct.quantize(FLOAT_PCT_PLACES),
-            "float_basis": float_basis,
-        })
+    "symbol": company["symbol"],
+    "sector": company["sector"],
+    "logo_url": company["logo_url"],
+    "broker": broker,
+    "net_qty": net_qty,
+    "net_amount": pair["buy_amount"] - pair["sell_amount"],
+    "avg_rate": _price(_ratio(
+        pair[f"{side}_amount"],
+        pair[f"{side}_qty"],
+    )),
+    "float_qty_pct": (
+        None if float_pct is None
+        else float_pct.quantize(FLOAT_PCT_PLACES)
+    ),
+    "float_basis": float_basis,
+})
 
     for key, sign in (("accumulation", -1), ("distribution", 1)):
         rows = sorted(result[key], key=lambda row: (sign * row["net_amount"], row["symbol"], row["broker"]))

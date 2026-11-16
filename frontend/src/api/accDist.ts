@@ -18,6 +18,7 @@ export type AccDistSide = 'accumulation' | 'distribution';
 export interface AccDistRow {
   symbol: string;
   sector: string;
+  logo_url?: string | null;
   /** Broker number: the net buyer on the accumulation side, net seller on distribution. */
   broker: string;
   net_qty: number;

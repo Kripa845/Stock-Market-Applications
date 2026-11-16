@@ -122,7 +122,7 @@ export interface BrokerActivity {
   broker_metadata: BrokerPosition['broker_metadata'];
 }
 
-export const MAX_ACTIVITY_STOCKS = 8;
+export const MAX_ACTIVITY_STOCKS = 500;
 
 export const brokerActivityApi = {
   get: (params: { symbols: string[]; broker?: string; range: PositionRange; excludeSelf: boolean }) =>

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import type { AccDistRow, AccDistSide } from '../../../api/accDist';
 import { formatNepaliUnits, formatPrice } from '../../market/format';
-
+import { useMemo, type CSSProperties } from 'react';
 export type RankOrder = 'asc' | 'desc';
 
 interface AccDistTableProps {
@@ -34,13 +34,16 @@ const th = 'whitespace-nowrap px-3 py-2.5 font-medium';
 
 export default function AccDistTable({ side, rows, loading, emptyMessage, rankOrder, onToggleRank }: AccDistTableProps) {
   const acc = side === 'accumulation';
-  const tone = acc ? 'text-up' : 'text-down';
+  const tone = acc ? 'num-up' : 'num-down';
   const RankIcon = rankOrder === 'asc' ? ChevronUp : ChevronDown;
-
+  const maxAmount = useMemo(
+  () => rows.reduce((max, r) => Math.max(max, Math.abs(Number(r.net_amount))), 0),
+  [rows],
+);
   return (
     <div className="max-h-[640px] overflow-auto rounded-lg border border-bg-border">
       <table className="w-full min-w-[580px] text-[13px]">
-        <thead className="sticky top-0 z-10 bg-bg-card">
+        <thead className="sticky top-0 z-10 acc-thead">
           <tr className="border-b border-bg-border text-[11px] uppercase tracking-wider text-text-secondary">
             <th className={`${th} text-left`}>Symbol</th>
             <th className={`${th} text-right`}>Tot Qnt</th>
@@ -85,7 +88,7 @@ export default function AccDistTable({ side, rows, loading, emptyMessage, rankOr
                 <td className="px-3 text-left font-semibold text-text-primary">
                   <Link to={`/companies/${row.symbol}`} className="hover:text-accent-light" title={row.sector}>{row.symbol}</Link>
                 </td>
-                <td className={`px-3 text-right font-mono tabular-nums ${tone}`}>{formatNepaliUnits(row.net_qty)}</td>
+                <td className={`px-3 text-right tabular-nums ${tone}`}>{formatNepaliUnits(row.net_qty)}</td>
                 <td className="px-3 text-center font-semibold text-text-primary">
                   <Link to={`/broker-position?symbol=${row.symbol}&broker=${row.broker}`} className="hover:text-accent-light"
                     title={`Broker ${row.broker}'s running net in ${row.symbol}`}>{row.broker}</Link>
@@ -93,7 +96,12 @@ export default function AccDistTable({ side, rows, loading, emptyMessage, rankOr
                 <td className="px-3 text-center">
                   <FloatPill row={row} tone={tone} />
                 </td>
-                <td className={`px-3 text-right font-mono font-semibold tabular-nums ${tone}`}>{formatNepaliUnits(row.net_amount)}</td>
+                <td
+  className={`acc-bar ${acc ? 'acc-bar--up' : 'acc-bar--down'} px-3 text-right font-semibold tabular-nums ${tone}`}
+  style={{ '--bar': `${maxAmount ? (Math.abs(Number(row.net_amount)) / maxAmount) * 100 : 0}%` } as CSSProperties}
+>
+  {formatNepaliUnits(row.net_amount)}
+</td>
                 <td className="px-3 text-right font-mono tabular-nums text-text-secondary">{formatPrice(row.avg_rate)}</td>
                 <td className="px-3 text-right font-mono tabular-nums text-text-muted">{row.rank}</td>
               </tr>

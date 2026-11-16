@@ -11,13 +11,13 @@ const FLOAT_OPTIONS = [
   { label: '≥ 1.00 %', min: 1 },
 ] as const;
 
-const fieldClass = 'input py-2 text-[13px]';
+const fieldClass = 'input-app';
 
 /** Input with its label sitting on the top border. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <label className="relative block min-w-0">
-      <span className="pointer-events-none absolute -top-2 left-2.5 z-[1] bg-bg-card px-1 text-[10px] font-medium text-text-secondary">
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-text-muted">
         {label}
       </span>
       {children}
@@ -105,7 +105,7 @@ export default function AccDistPanel({ side, period, onPeriodChange, rows, loadi
         </label>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 pt-1 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Field label="Symbol">
           <input
             value={symbol}

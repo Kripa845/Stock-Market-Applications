@@ -1019,3 +1019,129 @@ html:not([data-theme="light"]) {
 .bd-chart.has-focus .series:not(.is-focus) { opacity: .22; transition: opacity .15s; }
 .bd-chart .grid line { stroke: var(--bd-grid); }
 .bd-chart text { fill: var(--bd-muted); font-size: 12px; }
+
+
+/* App inputs: theme-aware (don't use .input here, it is white/black for login only) */
+.input-app {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1px solid var(--bd-border);
+  background: var(--bd-surface-2) !important;
+  color: var(--bd-text) !important;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input-app::placeholder { color: var(--bd-muted); }
+.input-app:hover { border-color: color-mix(in srgb, var(--bd-accent) 45%, var(--bd-border)); }
+.input-app:focus {
+  border-color: var(--bd-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bd-accent) 22%, transparent);
+}
+
+/* Numbers: readable in both themes */
+.num-up   { color: var(--bd-pos); }
+.num-down { color: var(--bd-neg); }
+
+/* Data bar behind the amount cell. --bar is set per row from React. */
+.acc-bar {
+  background-repeat: no-repeat;
+  background-image: linear-gradient(to left, var(--bar-color) var(--bar, 0%), transparent var(--bar, 0%));
+}
+.acc-bar--up   { --bar-color: var(--bd-pos-bg); }
+.acc-bar--down { --bar-color: var(--bd-neg-bg); }
+
+.num-up   { color: var(--bd-pos); }
+.num-down { color: var(--bd-neg); }
+
+.acc-bar {
+  background-repeat: no-repeat;
+  background-image: linear-gradient(
+    to left,
+    var(--bar-color) var(--bar, 0%),
+    transparent var(--bar, 0%)
+  );
+}
+.acc-bar--up   { --bar-color: color-mix(in srgb, var(--bd-pos) 16%, transparent); }
+.acc-bar--down { --bar-color: color-mix(in srgb, var(--bd-neg) 16%, transparent); }
+.acc-thead {
+  background-color: #ffffff;
+  box-shadow: 0 1px 0 var(--bd-border);
+}
+html:not([data-theme="light"]) .acc-thead {
+  background-color: #1a1433;
+}
+
+.bd-brand-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--bd-border);
+  font-size: 11px;
+  color: var(--bd-muted);
+}
+.bd-brand-footer img {
+  height: 22px;
+  width: auto;
+}
+/* =========================================
+   CHART SERIES COLORS — DARK THEME
+   ========================================= */
+
+:root {
+  --series-1: #60A5FA;
+  --series-2: #FB923C;
+  --series-3: #34D399;
+  --series-4: #C084FC;
+  --series-5: #FACC15;
+  --series-6: #F472B6;
+  --series-7: #22D3EE;
+  --series-8: #F87171;
+  --series-9: #A3E635;
+  --series-10: #818CF8;
+  --series-11: #2DD4BF;
+  --series-12: #FDBA74;
+  --series-13: #A78BFA;
+  --series-14: #4ADE80;
+  --series-15: #E879F9;
+  --series-16: #38BDF8;
+  --series-17: #BEF264;
+  --series-18: #FB7185;
+  --series-19: #D8B4FE;
+  --series-20: #FDE047;
+
+  --series-other: #94A3B8;
+}
+
+/* =========================================
+   CHART SERIES COLORS — LIGHT THEME
+   ========================================= */
+
+html[data-theme="light"] {
+  --series-1: #2563EB;
+  --series-2: #EA580C;
+  --series-3: #059669;
+  --series-4: #9333EA;
+  --series-5: #A16207;
+  --series-6: #DB2777;
+  --series-7: #0891B2;
+  --series-8: #DC2626;
+  --series-9: #4D7C0F;
+  --series-10: #4F46E5;
+  --series-11: #0F766E;
+  --series-12: #C2410C;
+  --series-13: #7E22CE;
+  --series-14: #15803D;
+  --series-15: #A21CAF;
+  --series-16: #0369A1;
+  --series-17: #3F6212;
+  --series-18: #BE123C;
+  --series-19: #6B21A8;
+  --series-20: #854D0E;
+
+  --series-other: #64748B;
+}
