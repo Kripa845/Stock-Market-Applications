@@ -87,10 +87,12 @@ Field names are from `ROW_FIELDS` and `tracked_movers()` in `market_data/service
 
 Two layers, both on the backend:
 
-1. **App permission.** The view sets `permission_key = "<key>"` and uses `HasAppPermission`. Views whose permission depends on the method use `HasViewMethodPermissions` + `get_required_permissions(request)` (e.g. GET needs `view_watchlist`, POST `add_watchlist`, DELETE `remove_watchlist`). The keys and their groups are in `apps/users/api/serializers.py` → `ROLE_PERMISSIONS`. Within a group, each key implies the earlier ones are needed.
+1. **App permission.** A view may set `permission_key` for one required key or `permission_keys` for any-of alternatives. `HasViewMethodPermissions` also accepts a tuple/list entry from `get_required_permissions(request)` as any-of; separate entries are all required. The page-group definitions, valid keys, and dependencies are in `apps/users/api/serializers.py`. Each new page key is enforced by at least one backend endpoint.
 2. **Company access.** Admins see every company. Every other user sees only the companies granted in `UserCompanyAccess` (none granted = none visible). Helpers in `apps/users/company_access.py`: `filter_company_queryset()`, `require_company_access()`, `get_accessible_company_ids()` (`None` = unrestricted admin, `[]` = nothing). They apply to company lists, prices, floorsheet, analysis, market intelligence, dashboards, crawl runs, watchlists and exports. **Not** narrowed: reading news and announcements, dividends, the quarterly report, the market-wide indices, and public-issue (IPO) events on the market calendar (its dividend events are narrowed). Manual news correction needs `correct_categories` **and** access to that company.
 
-When adding an endpoint: choose a `permission_key`, apply a company-access helper if it returns per-company data, and add the matching frontend rule in `config/routePermissions.ts`.
+The four broad legacy keys remain valid. Existing endpoints accept either their previous key or the matching page key, so a role holding a legacy key keeps its broad access. To limit a role to selected pages, remove the matching legacy key from that role. The Roles & Permissions definition API returns sidebar page groups, `dependencies`, `requires_any`, and a separate `legacy_groups` payload.
+
+When adding an endpoint: choose a permission key, apply a company-access helper if it returns per-company data, and add the matching frontend rule in `config/routePermissions.ts`.
 
 ## Endpoints
 
@@ -201,7 +203,7 @@ Each day has a `status`: `traded`, `holiday`, `weekend` (from the trading week i
 | `<id>/trigger-categorize/` | `categorize_news` |
 
 ### `announcements/`
-The announcements endpoints require an authenticated user through DRF's default permission. The frontend `/announcements` route is additionally gated by `view_news`. These endpoints do not apply `UserCompanyAccess`; the selector covers all tracked symbols plus market-wide announcements.
+List and filter endpoints accept either `view_news` or `view_announcements`. They do not apply `UserCompanyAccess`; the selector covers all tracked symbols plus market-wide announcements. The backend currently has no announcement create, edit, or delete endpoint.
 
 | Endpoint | Query parameters / result |
 |---|---|
@@ -209,7 +211,7 @@ The announcements endpoints require an authenticated user through DRF's default 
 | `filters/` | Available event/type/source/category options and the configured tracked symbols |
 
 ### `financial-reports/`
-The legacy Django views currently have no explicit authentication or permission decorators. Results include active filings for tracked companies only; they do not apply per-user company access. The page is `/financial-reports`.
+The JSON API endpoints accept `view_financial_reports`, `view_market_data`, or `view_reports`. Results include active filings for tracked companies only; they do not apply per-user company access. There is no upload or export API. The React page is `/financial-reports`.
 
 | Endpoint | Query parameters / result |
 |---|---|
@@ -227,5 +229,9 @@ The legacy Django views currently have no explicit authentication or permission 
 | Endpoint | Permission |
 |---|---|
 | `summary/`, `admin/`, `analyst/`, `viewer/` | role-dependent, see `dashboard/api/views.py` |
-| `export/companies/` | `view_reports` |
-| `export/news/`, `export/trading/`, `export/brokers/`, `export/floorsheet/`, `export/report/` (CSV / XLSX / PDF) | `export_reports` + company access |
+| `export/companies/` | `view_reports`, `export_reports`, `export_broker_analysis`, or `export_floorsheet` |
+| `export/news/`, `export/trading/`, `export/report/` (CSV / XLSX / PDF) | `export_reports` + company access |
+| `export/brokers/` | `export_reports` or `export_broker_analysis` + company access |
+| `export/floorsheet/` | `export_reports` or `export_floorsheet` + company access |
+
+`export_dividends`, stock/watchlist-comparison export, and financial-report upload/export are not listed because those backend endpoints do not exist.

@@ -9,6 +9,7 @@ from django.db.models import Avg, Count, Max, Min, Sum
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.api_schema import document_api_view
 
 from apps.analysis.models import DailyAnalysis
 from apps.floorsheet.models import FloorsheetTransaction
@@ -47,6 +48,7 @@ from apps.reports.exports.common import (
 # COMBINED ANALYSIS REPORT (PDF + XLSX)
 # ============================================================
 
+@document_api_view("Reports")
 class ExportReportAPIView(APIView):
    
     permission_classes = [HasAppPermission]

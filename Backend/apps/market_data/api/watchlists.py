@@ -12,6 +12,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.api_schema import document_api_view
+
 from apps.companies.models import Company
 from apps.market_data.api.market_views import SCOPE, _tracked_company
 from apps.market_data.services import market_stats, movers
@@ -21,6 +23,7 @@ from apps.users.models import Watchlist, WatchlistItem
 from apps.users.permissions import HasViewMethodPermissions
 
 
+@document_api_view("Market data")
 class WatchlistAPIView(APIView):
     """
     GET    /api/market/watchlist/          the user's default list with latest ltp / change
@@ -35,7 +38,7 @@ class WatchlistAPIView(APIView):
         return {
             "POST": "add_watchlist",
             "DELETE": "remove_watchlist",
-        }.get(request.method, "view_watchlist")
+        }.get(request.method, [("view_watchlist", "view_live_trading")])
 
     def _items(self, request):
         items = WatchlistItem.objects.filter(watchlist=Watchlist.default_for(request.user))
@@ -119,9 +122,10 @@ class _WatchlistPermissions:
             "POST": "add_watchlist",
             "PATCH": "add_watchlist",
             "DELETE": "remove_watchlist",
-        }.get(request.method, "view_watchlist")
+        }.get(request.method, [("view_watchlist", "view_live_trading")])
 
 
+@document_api_view("Market data")
 class WatchlistsAPIView(_WatchlistPermissions, APIView):
     """
     GET  /api/market/watchlists/      the user's named lists (a "Primary" default is created on first use)
@@ -143,6 +147,7 @@ class WatchlistsAPIView(_WatchlistPermissions, APIView):
         return Response(_watchlist_payload(watchlist), status=status.HTTP_201_CREATED)
 
 
+@document_api_view("Market data")
 class WatchlistDetailAPIView(_WatchlistPermissions, APIView):
     """
     PATCH  /api/market/watchlists/<id>/    {"name": "...", "is_default": true}
@@ -178,6 +183,7 @@ class WatchlistDetailAPIView(_WatchlistPermissions, APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@document_api_view("Market data")
 class WatchlistItemsAPIView(_WatchlistPermissions, APIView):
     """
     GET  /api/market/watchlists/<id>/items/   rows (latest crawled session + holding) and summary totals
@@ -239,6 +245,7 @@ def _clean_holding(data):
     return holding, None
 
 
+@document_api_view("Market data")
 class WatchlistItemDetailAPIView(_WatchlistPermissions, APIView):
     """
     PATCH  /api/market/watchlists/<id>/items/<item_id>/   {"units": 100, "wacc": 380.5}

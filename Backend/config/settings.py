@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "apps.stock_detail",
     "apps.announcements",
     "apps.financial_reports",
+    "drf_spectacular",
     
 ]
 
@@ -154,6 +155,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # ---------------------------------------------------------------------------
 
 REST_FRAMEWORK = {
+     "DEFAULT_SCHEMA_CLASS": "apps.api_schema.UniquePathAutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
@@ -186,7 +188,34 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Stock Market Data API",
+    "DESCRIPTION": (
+        "StockScope API for tracked NEPSE market data, company research, "
+        "analysis, user access, and administrative workflows. "
+        "Authenticate protected operations with a JWT access token."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "TAGS": [
+        {"name": "Authentication", "description": "Registration and JWT token operations."},
+        {"name": "Companies", "description": "Tracked companies, prices, and company research."},
+        {"name": "Market data", "description": "Market summaries, movers, watchlists, and live data."},
+        {"name": "Analysis", "description": "Broker, behavior, and news correlation analysis."},
+        {"name": "Users and authentication", "description": "User profile, roles, and access administration."},
+        {"name": "Crawler runs", "description": "Administrative crawler run operations."},
+        {"name": "News", "description": "News articles and categorization."},
+        {"name": "Floorsheet", "description": "Trade by trade floorsheet and intraday candles."},
+        {"name": "Dashboard", "description": "Role-based dashboard summaries."},
+        {"name": "Market calendar", "description": "Trading calendar and return summaries."},
+        {"name": "Market indices", "description": "NEPSE and sector indices."},
+        {"name": "Market intelligence", "description": "Market breadth, rankings, and technical indicators."},
+        {"name": "Reports", "description": "Dividends, quarterly reports, and exports."},
+        {"name": "Company comparison", "description": "Compare company metrics and coverage."},
+        {"name": "Announcements", "description": "Market announcements and event listings."},
+    ],
+}
 # ---------------------------------------------------------------------------
 # Celery
 #

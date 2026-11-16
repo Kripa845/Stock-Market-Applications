@@ -1,4 +1,5 @@
 from datetime import date
+from apps.api_schema import document_api_view
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,12 +15,14 @@ def _error(exc, status=400):
     return Response({"detail": exc.message, "code": exc.code, **exc.details}, status=status)
 
 
+@document_api_view('Company comparison')
 class CompareAPIView(APIView):
     """GET /api/compare/?symbols=ADBL,CHCL[&date=YYYY-MM-DD for the broker tables]"""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_stock_comparison']
     def get(self, request):
         try:
             companies = parse_symbols(request.query_params.get("symbols"))
@@ -42,12 +45,14 @@ class CompareAPIView(APIView):
         })
 
 
+@document_api_view('Company comparison')
 class CompareCompaniesAPIView(APIView):
     """GET /api/compare/companies/[?sector=Hydropower] -- the picker list."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_stock_comparison']
     def get(self, request):
         companies = filter_company_queryset(tracked_companies(), request.user, "id").order_by("symbol")
         sectors = sorted(set(companies.values_list("sector", flat=True)))
@@ -60,11 +65,13 @@ class CompareCompaniesAPIView(APIView):
         })
 
 
+@document_api_view('Company comparison')
 class CompareCoverageAPIView(APIView):
     """GET /api/compare/coverage/ -- what each accessible tracked company is missing."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_stock_comparison']
     def get(self, request):
         return Response(coverage_report(company_ids=get_accessible_company_ids(request.user)))

@@ -7,6 +7,7 @@ numbers; the frontend formats them (Cr / L, percent).
 """
 
 from datetime import date, timedelta
+from apps.api_schema import document_api_view
 
 from django.core.cache import cache
 from django.utils import timezone
@@ -40,9 +41,11 @@ def _cached(key, builder):
     return data
 
 
+@document_api_view('Market indices')
 class _MarketIndicesView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
+    permission_keys = ['view_market_data', 'view_indices']
 
 
 def _index_response(request, name, builder):
@@ -58,6 +61,7 @@ def _index_response(request, name, builder):
     return Response({**data, "market_open": open_now, "requested_date": day, "units": UNITS})
 
 
+@document_api_view("Market indices")
 class IndicesAPIView(_MarketIndicesView):
     """Main indices: NEPSE, Sensitive, Float, Sensitive Float."""
 
@@ -65,6 +69,7 @@ class IndicesAPIView(_MarketIndicesView):
         return _index_response(request, "indices", aggregates.main_index_table)
 
 
+@document_api_view("Market indices")
 class SubIndicesAPIView(_MarketIndicesView):
     """13 sub-indices: OHLC + CH + sector turnover / volume / transactions."""
 
@@ -72,6 +77,7 @@ class SubIndicesAPIView(_MarketIndicesView):
         return _index_response(request, "sub-indices", aggregates.sub_index_table)
 
 
+@document_api_view("Market indices")
 class MarketAnalysisAPIView(_MarketIndicesView):
     """Donut data (shares) and bar data (change %) per sector."""
 
@@ -80,6 +86,7 @@ class MarketAnalysisAPIView(_MarketIndicesView):
         return Response({**data, "units": UNITS})
 
 
+@document_api_view("Market indices")
 class MarketTopAPIView(_MarketIndicesView):
     """Top 10 whole-market stocks. ?by=turnover|volume|transactions"""
 
@@ -93,6 +100,7 @@ class MarketTopAPIView(_MarketIndicesView):
         return Response({**data, "units": UNITS})
 
 
+@document_api_view("Market indices")
 class TrackedSectorsAPIView(_MarketIndicesView):
     """Panel B: the same sector table, tracked companies only."""
 
@@ -101,6 +109,7 @@ class TrackedSectorsAPIView(_MarketIndicesView):
         return Response({**data, "units": UNITS})
 
 
+@document_api_view("Market indices")
 class IndexHistoryAPIView(_MarketIndicesView):
     """
     Daily OHLC of one index for the candlestick chart, oldest first.
@@ -144,6 +153,8 @@ class IndexHistoryAPIView(_MarketIndicesView):
         })
 
 
+@document_api_view('Market indices')
+@document_api_view("Market indices")
 class IndexVerificationAPIView(APIView):
     """
     GET  /api/market-indices/verify/?date=YYYY-MM-DD   per-index scraped / missing / mismatch vs NEPSE's feed
@@ -155,7 +166,7 @@ class IndexVerificationAPIView(APIView):
     VERIFY_CACHE_SECONDS = 300
 
     def get_required_permissions(self, request):
-        return "run_crawler" if request.method == "POST" else "view_market_data"
+        return ["run_crawler"] if request.method == "POST" else [("view_market_data", "view_indices")]
 
     def _day(self, request):
         raw = request.query_params.get("date", "").strip()
@@ -206,6 +217,7 @@ def _index_or_404(request):
     return index, None
 
 
+@document_api_view("Market indices")
 class IndexIntradayAPIView(_MarketIndicesView):
     """GET /api/market-indices/intraday/?code=NEPSE&days=5 -- recorded 5-minute index values as one-point bars."""
 
@@ -220,10 +232,12 @@ class IndexIntradayAPIView(_MarketIndicesView):
         return Response({"code": index.code, "bars": index_technicals.intraday_bars(index, days)})
 
 
+@document_api_view("Market indices")
 class IndexSupportResistanceAPIView(_MarketIndicesView):
     """GET /api/market-indices/support-resistance/?code=NEPSE -- same levels as for companies, from IndexDaily."""
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_indices']
     def get(self, request):
         index, error = _index_or_404(request)
         if error:
@@ -233,6 +247,7 @@ class IndexSupportResistanceAPIView(_MarketIndicesView):
         return Response(data)
 
 
+@document_api_view("Market indices")
 class IndexIndicatorSeriesAPIView(_MarketIndicesView):
     """GET /api/market-indices/indicators/?code=NEPSE&specs=[...] -- the company indicator library on IndexDaily.
 
@@ -241,6 +256,7 @@ class IndexIndicatorSeriesAPIView(_MarketIndicesView):
     """
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_indices', 'use_indicators']
     def get(self, request):
         index, error = _index_or_404(request)
         if error:

@@ -74,10 +74,116 @@ ROLE_PERMISSIONS = {
 }
 
 
+LEGACY_PERMISSION_KEYS = frozenset({
+    "view_market_data", "view_price_history", "view_trading_volume", "view_analysis",
+})
+
+# Migration 0012 may already have stored these abandoned-approach keys. Keep them
+# round-trippable so editing a role does not fail or silently erase old JSON values;
+# they are intentionally absent from the UI catalogue until their endpoints exist.
+PRESERVED_UNLISTED_PERMISSION_KEYS = frozenset({
+    "export_dividends", "create_events", "edit_events", "delete_events",
+    "save_layouts", "export_stock_comparison", "export_watchlist_comparison",
+    "create_announcements", "edit_announcements", "delete_announcements",
+    "export_financial_reports", "upload_financial_reports",
+})
+
+# Page-level keys are exposed only where the backend has a corresponding protected
+# endpoint. Features without a backend endpoint (for example event editing or layout
+# persistence) intentionally have no checkbox yet.
+PAGE_PERMISSION_GROUPS = [
+    {"key": "dashboard", "name": "Dashboard", "permissions": [{"key": "view_dashboard", "name": "View Dashboard"}]},
+    {"key": "market_overview", "name": "Market Overview", "permissions": [
+        {"key": "view_top_gainer", "name": "View Top Gainer"},
+        {"key": "view_top_losers", "name": "View Top Losers"},
+        {"key": "view_top_turnover", "name": "View Top Turnover"},
+        {"key": "view_top_volume", "name": "View Top Volume"},
+        {"key": "view_top_transactions", "name": "View Top Transactions"},
+    ]},
+    {"key": "indices", "name": "Indices", "permissions": [{"key": "view_indices", "name": "View Indices"}]},
+    {"key": "dividends", "name": "Proposed Dividend", "permissions": [{"key": "view_dividends", "name": "View Dividends"}]},
+    {"key": "calendar", "name": "Market Calendar", "permissions": [{"key": "view_calendar", "name": "View Calendar"}]},
+    {"key": "summary", "name": "Summary", "permissions": [
+        {"key": "view_nepse_day_by_day", "name": "View NEPSE Day by Day"},
+        {"key": "view_nepse_month_by_month", "name": "View NEPSE Month by Month"},
+        {"key": "view_weekday_summary", "name": "View Weekday Summary"},
+        {"key": "view_floorsheet_summary", "name": "View Floorsheet Summary"},
+    ]},
+    {"key": "latest_reports", "name": "Latest Report", "permissions": [{"key": "view_latest_reports", "name": "View Latest Reports"}]},
+    {"key": "charts", "name": "Technical Charts", "permissions": [
+        {"key": "view_charts", "name": "View Charts"},
+        {"key": "use_indicators", "name": "Use Indicators"},
+    ]},
+    {"key": "floorsheet", "name": "Floorsheet", "permissions": [
+        {"key": "view_floorsheet", "name": "View Floorsheet"},
+        {"key": "export_floorsheet", "name": "Export Floorsheet"},
+    ]},
+    {"key": "broker_analysis", "name": "Broker Analysis", "permissions": [
+        {"key": "view_top_broker", "name": "View Top Broker"},
+        {"key": "view_broker_explorer", "name": "View Broker Explorer"},
+        {"key": "view_broker_list", "name": "View Broker List"},
+        {"key": "view_broker_accumulation", "name": "View Broker Accumulation"},
+        {"key": "view_broker_acc_dist_chart", "name": "View Broker Acc/Dist Chart"},
+        {"key": "export_broker_analysis", "name": "Export Broker Analysis"},
+    ], "requires_any": {"export_broker_analysis": [
+        "view_top_broker", "view_broker_explorer", "view_broker_list",
+        "view_broker_accumulation", "view_broker_acc_dist_chart",
+    ]}},
+    {"key": "live_trading", "name": "Live Trading", "permissions": [{"key": "view_live_trading", "name": "View Live Trading"}]},
+    {"key": "stock_comparison", "name": "Stock Comparison", "permissions": [{"key": "view_stock_comparison", "name": "View Stock Comparison"}]},
+    {"key": "watchlist_comparison", "name": "Watchlist Comparison", "permissions": [{"key": "view_watchlist_comparison", "name": "View Watchlist Comparison"}]},
+    {"key": "announcements", "name": "Announcements", "permissions": [{"key": "view_announcements", "name": "View Announcements"}]},
+    {"key": "stock_details", "name": "Stock Details", "permissions": [{"key": "view_stock_details", "name": "View Stock Details"}]},
+    {"key": "financial_reports", "name": "Financial Reports", "permissions": [{"key": "view_financial_reports", "name": "View Financial Reports"}]},
+]
+
+LEGACY_GROUP_NAMES = {
+    "market_data": "Market Data",
+    "analysis": "Analysis",
+    "companies": "Companies",
+    "watchlist": "Watchlist",
+    "news": "News Feed",
+    "crawler": "Crawl Management",
+    "reports": "Reports",
+    "users": "User Management",
+    "roles_permissions": "Roles & Permissions",
+}
+SIDEBAR_GROUP_ORDER = ["companies", "watchlist", "news", "crawler", "reports", "users", "roles_permissions"]
+PAGE_DEPENDENCIES = {
+    permission["key"]: [group["permissions"][0]["key"]]
+    for group in PAGE_PERMISSION_GROUPS
+    if group["key"] not in {"market_overview", "summary", "broker_analysis"}
+    for permission in group["permissions"][1:]
+}
+PERMISSION_REQUIRES_ANY = {
+    key: list(options)
+    for group in PAGE_PERMISSION_GROUPS
+    for key, options in group.get("requires_any", {}).items()
+}
+
 VALID_PERMISSION_KEYS = {
     permission["key"]
     for permissions in ROLE_PERMISSIONS.values()
     for permission in permissions
+} | {
+    permission["key"]
+    for group in PAGE_PERMISSION_GROUPS
+    for permission in group["permissions"]
+} | PRESERVED_UNLISTED_PERMISSION_KEYS
+
+PRESERVED_UNLISTED_DEPENDENCIES = {
+    "export_dividends": ["view_dividends"],
+    "create_events": ["view_calendar"],
+    "edit_events": ["view_calendar"],
+    "delete_events": ["view_calendar"],
+    "save_layouts": ["view_charts"],
+    "export_stock_comparison": ["view_stock_comparison"],
+    "export_watchlist_comparison": ["view_watchlist_comparison"],
+    "create_announcements": ["view_announcements"],
+    "edit_announcements": ["view_announcements"],
+    "delete_announcements": ["view_announcements"],
+    "export_financial_reports": ["view_financial_reports"],
+    "upload_financial_reports": ["view_financial_reports"],
 }
 
 
@@ -103,6 +209,8 @@ def _build_dependencies() -> dict:
 
 
 PERMISSION_DEPENDENCIES: dict = _build_dependencies()
+PERMISSION_DEPENDENCIES.update(PAGE_DEPENDENCIES)
+PERMISSION_DEPENDENCIES.update(PRESERVED_UNLISTED_DEPENDENCIES)
 
 
 def validate_permission_dependencies(
@@ -153,7 +261,44 @@ def validate_permission_dependencies(
                 f"{perm_name} requires: {missing_names}."
             )
 
+        alternatives = PERMISSION_REQUIRES_ANY.get(perm_key, [])
+        if alternatives and not perm_set.intersection(alternatives):
+            errors.append(
+                f"{perm_key} requires at least one of: {', '.join(alternatives)}."
+            )
+
     return errors
+
+
+def permission_definitions_payload() -> dict:
+    """Groups displayed by sidebar page, plus the retained legacy permissions."""
+    sidebar_groups = []
+    for key in SIDEBAR_GROUP_ORDER:
+        if key not in ROLE_PERMISSIONS:
+            continue
+        sidebar_groups.append({
+            "key": key,
+            "name": LEGACY_GROUP_NAMES.get(key, key.replace("_", " ").title()),
+            "permissions": ROLE_PERMISSIONS[key],
+        })
+    return {
+        "groups": PAGE_PERMISSION_GROUPS + sidebar_groups,
+        "legacy_groups": [{
+            "key": "legacy_broad",
+            "name": "Legacy broad permissions",
+            "permissions": [
+                {"key": key, "name": ROLE_PERMISSIONS[group][idx]["name"], "description": description}
+                for group, idx, key, description in [
+                    ("market_data", 0, "view_market_data", "Dashboard, market overview, indices, dividends, calendar, summaries, latest reports, live trading and stock details."),
+                    ("market_data", 1, "view_price_history", "Technical charts, company price history and intraday candles."),
+                    ("market_data", 2, "view_trading_volume", "Floorsheet, floorsheet summaries and company volume analysis."),
+                    ("analysis", 0, "view_analysis", "Broker analysis, comparisons, technical analysis, and related company and market analysis."),
+                ]
+            ],
+        }],
+        "dependencies": PERMISSION_DEPENDENCIES,
+        "requires_any": PERMISSION_REQUIRES_ANY,
+    }
 
 
 # ============================================================
@@ -370,7 +515,7 @@ class UserSerializer(
 
         read_only_fields = fields
 
-    def get_effective_role(self, obj):
+    def get_effective_role(self, obj) -> str:
         return obj.get_effective_role_name()
 
 
@@ -423,7 +568,7 @@ class MeSerializer(
             "last_login",
         ]
 
-    def get_effective_role(self, obj):
+    def get_effective_role(self, obj) -> str:
         return obj.get_effective_role_name()
 
     def get_permissions(self, obj):

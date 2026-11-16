@@ -347,7 +347,7 @@ Hourly `crawl_all_news` runs the five news spiders in `NEWS_SPIDERS`; `NewsPipel
 
 1. The SPA route is guarded by `PermissionRoute` with a rule from `config/routePermissions.ts`.
 2. The `api/` module sends `Authorization: Bearer <access>`; on 401 `api/client.ts` refreshes once (shared promise) and retries.
-3. The DRF view checks `HasAppPermission` (`permission_key`) and narrows companies with `apps/users/company_access.py`.
+3. The DRF view checks `HasAppPermission` (`permission_key` or any-of `permission_keys`) and narrows companies with `apps/users/company_access.py`. Legacy broad keys remain valid alongside page-level keys; see [docs/ROLE_PERMISSIONS.md](docs/ROLE_PERMISSIONS.md).
 4. The view calls a service; prices come only from `source="crawled"` rows (`market_data/services/price_source.py::with_crawled_price`).
 
 ## Frontend route → API → backend

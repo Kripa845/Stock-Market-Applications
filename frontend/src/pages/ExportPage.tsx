@@ -11,6 +11,7 @@ import {
 
 import PageHeader from '../components/common/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
+import PermissionGate from '../components/common/PermissionGate';
 import {
   exportsApi,
   _cleanParams,
@@ -68,9 +69,7 @@ const FORMAT_ICONS: Record<ExportFormat, React.ReactNode> = {
 // ---------------------------------------------------------------------------
 
 export default function ExportPage() {
-  const { hasPermission } = useAuth();
-  const canView = hasPermission('view_reports');
-  const canExport = hasPermission('export_reports');
+  const { hasAnyPermission } = useAuth();
 
   // ── state ────────────────────────────────────────────────────────────────
   const [companies, setCompanies] = useState<ExportCompany[]>([]);
@@ -84,6 +83,14 @@ export default function ExportPage() {
     sentiment: '',
     format:    'csv',
   });
+
+  const canView = hasAnyPermission(['view_reports', 'export_reports', 'export_floorsheet', 'export_broker_analysis']);
+  const exportPermissions = form.dataType === 'floorsheet'
+    ? ['export_reports', 'export_floorsheet']
+    : form.dataType === 'broker_analysis'
+      ? ['export_reports', 'export_broker_analysis']
+      : ['export_reports'];
+  const canExport = hasAnyPermission(exportPermissions);
 
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -404,24 +411,26 @@ export default function ExportPage() {
           )}
 
           {/* Export button */}
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={submitting || !canExport}
-            className="btn-primary flex items-center gap-2 px-6 py-2.5 w-full sm:w-auto justify-center"
-          >
-            {submitting ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Exporting…
-              </>
-            ) : (
-              <>
-                <Download size={16} />
-                {form.dataType === 'report' ? 'Generate Report' : 'Export'}
-              </>
-            )}
-          </button>
+          <PermissionGate permissions={exportPermissions} fallback={null}>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={submitting}
+              className="btn-primary flex items-center gap-2 px-6 py-2.5 w-full sm:w-auto justify-center"
+            >
+              {submitting ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Exporting…
+                </>
+              ) : (
+                <>
+                  <Download size={16} />
+                  {form.dataType === 'report' ? 'Generate Report' : 'Export'}
+                </>
+              )}
+            </button>
+          </PermissionGate>
         </div>
 
         {/* ── RIGHT PANEL: summary / info ──────────────────────────── */}

@@ -59,7 +59,7 @@ import ForbiddenPage from './pages/ForbiddenPage';
 import NotFound from './pages/NotFound';
 import FinancialReports from "./pages/FinancialReports";
 import type { RouteRule } from './config/routePermissions';
-import { ROUTE_RULES } from './config/routePermissions';
+import { LANDING_ROUTES, ROUTE_RULES } from './config/routePermissions';
 
 
 /* =========================================================
@@ -94,7 +94,7 @@ function PrivateRoute({
 ========================================================= */
 
 function RoleRedirect() {
-  const { user, loading } = useAuth();
+  const { user, loading, hasAnyPermission, hasAllPermissions } = useAuth();
 
   if (loading) {
     return null;
@@ -104,7 +104,17 @@ function RoleRedirect() {
     return <Navigate to="/login" replace />;
   }
 
-  return <Navigate to="/dashboard" replace />;
+  const firstRoute = LANDING_ROUTES.find((path) => {
+    const rule = ROUTE_RULES[path];
+    if (!rule) return true;
+    return rule.mode === 'all'
+      ? hasAllPermissions(rule.permissions)
+      : hasAnyPermission(rule.permissions);
+  });
+
+  return firstRoute
+    ? <Navigate to={firstRoute} replace />
+    : <ForbiddenPage requiredPermission="a page permission" message="Your role does not currently allow access to any application page." />;
 }
 
 
@@ -250,7 +260,7 @@ function AppRoutes() {
 
           <Route
             path="/dashboard"
-            element={<Dashboard />}
+            element={<PermissionRoute rule={ROUTE_RULES['/dashboard']}><Dashboard /></PermissionRoute>}
           />
 
 

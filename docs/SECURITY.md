@@ -24,12 +24,15 @@ How authentication, authorisation, secrets and credentials are actually handled,
 
 Two backend layers; the frontend only mirrors them for navigation.
 
-1. **Permission keys.** `DEFAULT_PERMISSION_CLASSES = IsAuthenticated`. Views set `permission_key` and use `HasAppPermission`, or `HasViewMethodPermissions` with `get_required_permissions(request)` for per-method keys (`apps/users/permissions.py`). **A view with no `permission_key` denies everyone** (fail closed). Keys live in `apps/users/api/serializers.py` → `ROLE_PERMISSIONS`; `User.get_app_permissions()` gives admins every key, otherwise the custom role's keys, otherwise the built-in role's `RolePermissionConfig`.
-2. **Company access.** `apps/users/company_access.py`. Admins are unrestricted (`None`). Everyone else sees only companies with an active `UserCompanyAccess` row (`status=1`); **no rows means no companies**. Per-company endpoints use `filter_company_queryset()` / `require_company_access()`. Deliberate exceptions (whole-market or news data) are listed in [API.md](API.md#how-access-is-checked).
+1. **Permission keys.** Views set `permission_key` and use `HasAppPermission`, or `HasViewMethodPermissions` with `get_required_permissions(request)` for per-method keys (`apps/users/permissions.py`). `permission_keys` on a view means any listed key grants access; a tuple/list inside a method permission list also means any-of, while separate strings remain required together. Keys are defined in `apps/users/api/serializers.py`. Admins receive every valid key; other users receive their active custom role's keys or the active built-in `RolePermissionConfig` keys.
+2. **Page permissions are additive.** The four broad keys (`view_market_data`, `view_price_history`, `view_trading_volume`, `view_analysis`) remain valid and continue to grant the endpoints they protected before. Matching page keys are alternatives on those endpoints, so holding either key preserves access. A role that holds a broad legacy key still gets access to every page mapped to it; to restrict a role to selected pages, remove the matching legacy key.
+3. **Company access.** `apps/users/company_access.py`. Admins are unrestricted (`None`). Everyone else sees only companies with an active `UserCompanyAccess` row (`status=1`); **no rows means no companies**. Per-company endpoints use `filter_company_queryset()` / `require_company_access()`. Deliberate exceptions (whole-market or news data) are listed in [API.md](API.md#how-access-is-checked).
 
 Frontend: `config/routePermissions.ts`, `PermissionRoute`, `PermissionGate`, `usePermissions`, and a permission-filtered sidebar. These hide UI only; the backend enforces.
 
-Tests: `apps/users/tests/test_rbac_matrix.py` and `test_permission_dependencies.py` cover the matrix; see [TESTING.md](TESTING.md).
+The role editor returns page groups, dependency rules, any-of prerequisites, and a collapsed legacy group through `GET /api/users/admin/role-permissions/`. New actions without a backend endpoint are not listed yet (including event writes, announcement writes, dividend/comparison exports, chart layout persistence, and financial-report upload/export).
+
+Tests: `apps/users/tests/test_rbac_matrix.py`, `test_page_permissions.py` and `test_permission_dependencies.py` cover the matrix; see [TESTING.md](TESTING.md).
 
 ### Public (unauthenticated) endpoints
 

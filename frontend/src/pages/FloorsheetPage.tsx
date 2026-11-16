@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import PageHeader from '../components/common/PageHeader';
+import PermissionGate from '../components/common/PermissionGate';
 import BrokerBadge from '../components/brokers/BrokerBadge';
 import CompanyLogo from '../components/companies/CompanyLogo';
 import { formatCount, formatNprCompact, formatTradeDate } from '../components/market/format';
@@ -273,9 +274,11 @@ export default function FloorsheetPage() {
               <RefreshCw size={13} className={!summary || !rows ? 'animate-spin' : ''} />
               Refresh
             </button>
-            <Link to="/reports" className="btn-ghost flex items-center gap-2 text-xs">
-              <Download size={13} /> Export
-            </Link>
+            <PermissionGate permissions={["export_reports", "export_floorsheet"]}>
+              <Link to="/reports" className="btn-ghost flex items-center gap-2 text-xs">
+                <Download size={13} /> Export
+              </Link>
+            </PermissionGate>
           </>
         }
       />

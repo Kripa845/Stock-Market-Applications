@@ -1,0 +1,133 @@
+apps\analysis\api\views.py:43:    permission_key = "view_analysis"
+apps\analysis\api\views.py:73:    permission_key = "view_analysis"
+apps\analysis\api\views.py:304:    permission_key = "view_analysis"
+apps\analysis\api\views.py:401:    permission_key = "view_analysis"
+apps\analysis\api\views.py:545:    permission_key = "view_analysis"
+apps\analysis\api\views.py:669:    permission_key = "view_analysis"
+apps\analysis\api\views.py:769:    permission_key = "view_analysis"
+apps\analysis\api\views.py:884:    permission_key = "view_analysis"
+apps\analysis\api\views.py:939:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1114:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1288:    permission_key = "view_market_data"
+apps\analysis\api\views.py:1456:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1478:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1498:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1519:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1559:    permission_key = "view_trading_volume"
+apps\analysis\api\views.py:1597:    permission_key = "view_analysis"
+apps\analysis\api\views.py:1641:    permission_key = "view_analysis"
+apps\analysis\tests\test_broker_api.py:156:        viewer.custom_role = CustomRole.objects.create(name="Top Stocks Viewer", permissions=["view_analysis"])
+apps\analysis\tests\test_broker_api.py:320:            permissions=["view_analysis"],
+apps\analysis\tests\test_broker_position.py:128:        role = CustomRole.objects.create(name="analyst", permissions=["view_analysis"])
+apps\analysis\tests\test_broker_position.py:210:        role = CustomRole.objects.create(name="analyst", permissions=["view_analysis"])
+apps\analysis\tests\test_floorsheet_grid.py:223:        role = CustomRole.objects.create(name="tape", permissions=["view_trading_volume"])
+apps\companies\api\views.py:147:    permission_key = "view_price_history"
+apps\companies\api\views.py:236:    permission_key = "view_price_history"
+apps\companies\api\views.py:283:    permission_key = "view_price_history"
+apps\companies\api\views.py:306:    permission_key = "view_trading_volume"
+apps\companies\api\views.py:326:    permission_key = "view_trading_volume"
+apps\companies\api\views.py:349:    permission_key = "view_analysis"
+apps\companies\api\views.py:379:    permission_key = "view_market_data"
+apps\companies\api\views.py:450:    permission_key = "view_market_data"
+apps\companies\api\views.py:491:    permission_key = "view_price_history"
+apps\companies\api\views.py:539:    permission_key = "view_market_data"
+apps\companies\api\views.py:588:    permission_key = "view_analysis"   # or "view_market_data"
+apps\companies\api\views.py:623:    permission_key = "view_price_history"
+apps\companies\api\views.py:640:    permission_key = "view_market_data"
+apps\companies\tests\test_companies.py:147:        """GET /api/companies/{id}/prices/ needs view_price_history AND company access."""
+apps\companies\tests\test_companies.py:150:        # Ensure analyst has view_price_history permission
+apps\companies\tests\test_companies.py:153:            defaults={"name": "Analyst", "permissions": ["view_price_history"]},
+apps\companies\tests\test_companies.py:169:        # Viewer does not have view_price_history by default
+apps\companies\tests\test_companies.py:182:        """GET /api/companies/{id}/floorsheet/ needs view_market_data AND company access."""
+apps\companies\tests\test_companies.py:185:        # Ensure analyst has view_market_data permission
+apps\companies\tests\test_companies.py:188:            defaults={"name": "Analyst", "permissions": ["view_market_data"]},
+apps\comparison\api\views.py:21:    permission_key = "view_analysis"
+apps\comparison\api\views.py:49:    permission_key = "view_analysis"
+apps\comparison\api\views.py:67:    permission_key = "view_analysis"
+apps\comparison\tests\test_compare.py:321:        viewer.custom_role = CustomRole.objects.create(name="Compare viewer", permissions=["view_analysis"])
+apps\dashboard\api\views.py:26:    General market summary — requires view_market_data or view_news.
+apps\dashboard\api\views.py:35:        if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
+apps\dashboard\api\views.py:68:            if user.has_app_permission("view_market_data"):
+apps\dashboard\api\views.py:183:            for p in ["view_news", "view_companies", "view_market_data", "view_analysis"]
+apps\dashboard\api\views.py:195:        if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
+apps\dashboard\api\views.py:224:    Viewer dashboard — requires view_market_data or view_news.
+apps\dashboard\api\views.py:233:            for p in ["view_news", "view_companies", "view_market_data", "view_analysis"]
+apps\dashboard\api\views.py:244:        if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
+apps\floorsheet\api\views.py:55:    permission_key = "view_trading_volume"
+apps\floorsheet\api\views.py:161:    permission_key = "view_price_history"
+apps\market_calendar\api\views.py:21:    permission_key = "view_market_data"
+apps\market_calendar\api\views.py:47:    and (with view_analysis) top brokers, for the tracked companies the user may access.
+apps\market_calendar\api\views.py:61:                include_brokers=request.user.has_app_permission("view_analysis"),
+apps\market_calendar\api\views.py:74:    permission_key = "view_market_data"
+apps\market_calendar\api\views.py:103:    permission_key = "view_market_data"
+apps\market_calendar\api\views.py:132:    permission_key = "view_market_data"
+apps\market_calendar\services\market_day.py:69:    ``include_brokers=False`` (no view_analysis) leaves ``brokers`` out.
+apps\market_calendar\tests\test_calendar_api.py:112:    def test_needs_view_market_data(self, _today):
+apps\market_calendar\tests\test_calendar_api.py:121:        viewer = _user("cal-api-viewer", permissions=["view_market_data"])
+apps\market_calendar\tests\test_market_day.py:130:        viewer = _user("md-viewer", permissions=["view_market_data"])
+apps\market_calendar\tests\test_market_day.py:135:        self.assertNotIn("brokers", market)               # no view_analysis
+apps\market_calendar\tests\test_market_day.py:137:        analyst = _user("md-analyst", permissions=["view_market_data", "view_analysis"])
+apps\market_calendar\tests\test_monthly_returns.py:152:    def test_needs_view_market_data(self):
+apps\market_calendar\tests\test_weekday_summary.py:171:        role = CustomRole.objects.create(name="market", permissions=["view_market_data"])
+apps\market_data\api\market_views.py:81:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:103:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:131:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:146:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:161:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:210:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:231:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:326:    permission_key = "view_analysis"
+apps\market_data\api\market_views.py:346:    permission_key = "view_analysis"
+apps\market_data\api\market_views.py:359:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:392:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:402:    permission_key = "view_market_data"
+apps\market_data\api\market_views.py:418:    permission_key = "view_market_data"
+apps\market_data\api\views.py:13:    permission_key = "view_price_history"
+apps\market_indices\api\views.py:45:    permission_key = "view_market_data"
+apps\market_indices\api\views.py:158:        return "run_crawler" if request.method == "POST" else "view_market_data"
+apps\market_indices\api\views.py:225:    permission_key = "view_analysis"
+apps\market_indices\api\views.py:242:    permission_key = "view_analysis"
+apps\market_intelligence\api\views.py:62:    permission_key = "view_market_data"
+apps\market_intelligence\api\views.py:101:    permission_key = "view_market_data"
+apps\market_intelligence\api\views.py:165:    permission_key = "view_market_data"
+apps\market_intelligence\api\views.py:220:    permission_key = "view_market_data"
+apps\market_intelligence\api\views.py:257:    permission_key = "view_analysis"
+apps\market_intelligence\api\views.py:310:    permission_key = "view_analysis"
+apps\market_intelligence\api\views.py:338:    permission_key = "view_analysis"
+apps\market_intelligence\api\views.py:379:    permission_key = "view_analysis"
+apps\market_intelligence\api\views.py:394:    permission_key = "view_analysis"
+apps\market_intelligence\tests\test_indicator_library.py:926:    def test_requires_company_access_and_view_analysis(self):
+apps\reports\api\views.py:33:    permission_key = "view_market_data"
+apps\reports\api\views.py:100:    permission_key = "view_market_data"
+apps\reports\api\views.py:112:    permission_key = "view_market_data"
+apps\reports\api\views.py:130:    permission_key = "view_market_data"
+apps\users\api\serializers.py:40:        {"key": "view_market_data", "name": "View Market Data"},
+apps\users\api\serializers.py:41:        {"key": "view_price_history", "name": "View Price History"},
+apps\users\api\serializers.py:42:        {"key": "view_trading_volume", "name": "View Trading Volume"},
+apps\users\api\serializers.py:61:        {"key": "view_analysis", "name": "View Analysis"},
+apps\users\migrations\0006_seed_role_permissions.py:17:        "view_market_data",
+apps\users\migrations\0006_seed_role_permissions.py:18:        "view_price_history",
+apps\users\migrations\0006_seed_role_permissions.py:19:        "view_trading_volume",
+apps\users\migrations\0006_seed_role_permissions.py:28:        "view_analysis",
+apps\users\migrations\0006_seed_role_permissions.py:53:        "view_market_data",
+apps\users\migrations\0006_seed_role_permissions.py:54:        "view_price_history",
+apps\users\migrations\0006_seed_role_permissions.py:55:        "view_trading_volume",
+apps\users\migrations\0006_seed_role_permissions.py:60:        "view_analysis",
+apps\users\migrations\0012_migrate_permission_keys.py:37:    "view_market_data": MARKET_PAGES,
+apps\users\migrations\0012_migrate_permission_keys.py:38:    "view_trading_volume": ["view_floorsheet"] + BROKER_PAGES,   # /floorsheet used this key
+apps\users\migrations\0012_migrate_permission_keys.py:39:    "view_price_history": CHART_PERMS,
+apps\users\migrations\0012_migrate_permission_keys.py:40:    "view_analysis": CHART_PERMS + BROKER_PAGES + ["view_stock_comparison", "view_watchlist_comparison"],
+apps\users\tests\test_rbac_matrix.py:43:    ("get", "/api/companies/1/prices/", "view_price_history"),
+apps\users\tests\test_rbac_matrix.py:44:    ("get", "/api/companies/1/floorsheet/", "view_market_data"),
+apps\users\tests\test_rbac_matrix.py:45:    ("get", "/api/market-data/", "view_price_history"),
+apps\users\tests\test_rbac_matrix.py:46:    ("get", "/api/market-data/floorsheet/", "view_trading_volume"),
+apps\users\tests\test_rbac_matrix.py:52:    ("get", "/api/analysis/daily/", "view_analysis"),
+apps\users\tests\test_rbac_matrix.py:53:    ("get", "/api/analysis/cross-company/", "view_analysis"),
+apps\users\tests\test_rbac_matrix.py:54:    ("get", "/api/analysis/brokers/", "view_analysis"),
+apps\users\tests\test_rbac_matrix.py:55:    ("get", "/api/analysis/brokers/58/", "view_analysis"),
+apps\users\tests\test_rbac_matrix.py:56:    ("get", "/api/analysis/dashboard-summary/", "view_market_data"),
+apps\users\tests\test_rbac_matrix.py:57:    ("get", "/api/market-indices/history/", "view_market_data"),
+apps\users\tests\test_users.py:164:                    "view_market_data", "view_price_history",
+apps\users\tests\test_users.py:335:            permissions=["view_price_history", "view_analysis", "view_reports", "export_reports"],
+apps\users\tests\test_users.py:360:        require_permission_and_company(self.user_a, "view_price_history", self.allowed)
+apps\users\tests\test_users.py:362:            require_permission_and_company(self.user_a, "view_price_history", self.denied)

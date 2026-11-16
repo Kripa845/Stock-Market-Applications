@@ -16,8 +16,23 @@ export interface PermissionGroup {
   permissions: PermissionDefinition[];
 }
 
+export interface LegacyPermission {
+  key: string;
+  name: string;
+  description: string;
+}
+
+export interface LegacyPermissionGroup {
+  key: string;
+  name: string;
+  permissions: LegacyPermission[];
+}
+
 export interface PermissionDefinitionsResponse {
   groups: PermissionGroup[];
+  legacy_groups: LegacyPermissionGroup[];
+  dependencies: Record<string, string[]>;
+  requires_any: Record<string, string[]>;
 }
 
 export interface RolePermissionEntry {

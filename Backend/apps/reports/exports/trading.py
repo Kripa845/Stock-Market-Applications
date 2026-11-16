@@ -10,6 +10,7 @@ from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.api_schema import document_api_view
 
 from apps.market_data.models import DailyPrice
 from apps.users.permissions import HasAppPermission
@@ -42,6 +43,7 @@ from apps.reports.exports.common import (
 # TRADING (DAILY PRICE) EXPORT
 # ============================================================
 
+@document_api_view("Reports")
 class ExportTradingAPIView(APIView):
     """
     GET /api/reports/export/trading/

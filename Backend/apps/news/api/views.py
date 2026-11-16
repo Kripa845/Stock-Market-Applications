@@ -1,5 +1,6 @@
 
 from datetime import timedelta
+from apps.api_schema import document_api_view
 
 from django.db.models import Count, F, Q, Prefetch
 from django.shortcuts import get_object_or_404
@@ -25,6 +26,7 @@ from apps.users.company_access import get_accessible_company_ids, require_compan
 from apps.news.selectors import real_articles, real_tags
 
 
+@document_api_view('News')
 class NewsArticleListAPIView(generics.ListAPIView):
     """
     GET /api/news/?company_id=&sentiment=&source=&search=&confidence_min=&confidence_max=&needs_review=
@@ -110,6 +112,7 @@ class NewsArticleListAPIView(generics.ListAPIView):
         return qs.distinct()
 
 
+@document_api_view('News')
 class NewsArticleDetailAPIView(generics.RetrieveAPIView):
     """
     GET /api/news/:id/
@@ -142,6 +145,7 @@ class NewsArticleDetailAPIView(generics.RetrieveAPIView):
         return qs
 
 
+@document_api_view('News')
 class NewsRecategorizeAPIView(APIView):
    
 
@@ -246,6 +250,7 @@ class NewsRecategorizeAPIView(APIView):
         )
 
 
+@document_api_view('News')
 class NewsTriggerCategorizeAPIView(APIView):
     """
     POST /api/news/:id/trigger-categorize/
@@ -268,6 +273,7 @@ class NewsTriggerCategorizeAPIView(APIView):
         )
 
 
+@document_api_view('News')
 class PublicLatestNewsAPIView(APIView):
     """
     GET /api/news/public/latest/?limit=6
@@ -305,6 +311,7 @@ class PublicLatestNewsAPIView(APIView):
         return Response(PublicNewsSerializer(articles, many=True).data)
 
 
+@document_api_view('News')
 class NewsStatsAPIView(APIView):
     """
     GET /api/news/stats/
@@ -360,6 +367,7 @@ class NewsStatsAPIView(APIView):
         })
 
 
+@document_api_view('News')
 class CategorizationCorrectionListAPIView(generics.ListAPIView):
     """
     GET /api/news/corrections/?article_id=

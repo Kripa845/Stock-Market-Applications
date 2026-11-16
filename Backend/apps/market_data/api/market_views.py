@@ -11,6 +11,7 @@ never share a cached response.
 """
 
 import hashlib
+from apps.api_schema import document_api_view
 from datetime import datetime
 
 from django.core.cache import cache
@@ -25,8 +26,9 @@ from apps.companies.models import Company
 from apps.market_indices.services import aggregates
 from apps.market_intelligence.services import technical_summary
 from apps.news.api.views import NewsArticleListAPIView
+from apps.news.models import NewsArticle
 from apps.users.company_access import get_accessible_company_ids, require_company_access
-from apps.users.permissions import HasAppPermission
+from apps.users.permissions import HasAppPermission, HasViewMethodPermissions
 
 from apps.market_data.services import heatmap, live_prices, market_overview, market_stats, movers, top_movers
 
@@ -75,11 +77,13 @@ def _limit(request, default):
         return default
 
 
+@document_api_view('Market data')
 class TrackedSummaryAPIView(APIView):
     """GET /api/market/summary/?date=YYYY-MM-DD"""
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_dashboard', 'view_top_gainer', 'view_top_losers', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     def get(self, request):
         trade_date, error = _parse_date(request)
         if error:
@@ -92,6 +96,7 @@ class TrackedSummaryAPIView(APIView):
         })
 
 
+@document_api_view('Market data')
 class TrackedMoversAPIView(APIView):
     """
     GET /api/market/movers/?period=1D|5S|20S&date=YYYY-MM-DD&limit=5
@@ -102,6 +107,7 @@ class TrackedMoversAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers']
     def get(self, request):
         trade_date, error = _parse_date(request)
         if error:
@@ -119,6 +125,7 @@ class TrackedMoversAPIView(APIView):
         })
 
 
+@document_api_view('Market data')
 class LiveTrackedMoversAPIView(APIView):
     """
     GET /api/market/movers/live/?limit=10
@@ -130,11 +137,13 @@ class LiveTrackedMoversAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers']
     def get(self, request):
         limit = _limit(request, 10)
         return _cached(request, lambda ids: live_prices.live_movers(ids, limit))
 
 
+@document_api_view('Market data')
 class HeatmapAPIView(APIView):
     """
     GET /api/market/heatmap/
@@ -144,11 +153,13 @@ class HeatmapAPIView(APIView):
     """
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
 
     def get(self, request):
         return _cached(request, heatmap.heatmap)
 
 
+@document_api_view('Market data')
 class TopMoversAPIView(APIView):
     """
     GET /api/market/top-gainers/?type=gainers|losers&period=today|2d|3d|5d|7d|1w|1m|3m|4m|6m|1y
@@ -157,9 +168,14 @@ class TopMoversAPIView(APIView):
     One page of the tracked companies' top gainers or losers (services.top_movers).
     Today is live from NEPSE's feed until the day's prices are crawled.
     """
-    permission_classes = [HasAppPermission]
+    permission_classes = [HasViewMethodPermissions]
     permission_key = "view_market_data"
     PAGE_SIZES = (10, 20, 50, 100)
+
+    def get_required_permissions(self, request):
+        side = request.query_params.get("type", "gainers").strip().lower()
+        key = "view_top_losers" if side == "losers" else "view_top_gainer"
+        return [("view_market_data", key)]
 
     def get(self, request):
         q = request.query_params
@@ -177,7 +193,6 @@ class TopMoversAPIView(APIView):
         errors.update(page_errors)
         if errors:
             return Response(errors, status=status.HTTP_400_BAD_REQUEST)
-
         sector = q.get("sector", "").strip() or None
         return _cached(request, lambda ids: top_movers.top_movers(
             side, period, sector, adjusted == "true", page, page_size, ids,
@@ -198,6 +213,7 @@ def _page_params(q, page_sizes):
     return page, page_size, errors
 
 
+@document_api_view('Market data')
 class TopActivityAPIView(APIView):
     """
     GET /api/market/top-activity/?metric=turnover|volume|transactions
@@ -209,6 +225,7 @@ class TopActivityAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     def get(self, request):
         q = request.query_params
         metric = q.get("metric", "turnover").strip().lower()
@@ -225,10 +242,12 @@ class TopActivityAPIView(APIView):
         return _cached(request, lambda ids: top_movers.top_activity(metric, period, sector, page, page_size, ids))
 
 
+@document_api_view('Market data')
 class TrackedTopAPIView(APIView):
     """GET /api/market/top-turnover/ | top-volume/ | top-transactions/ ?date=&limit="""
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
+    permission_keys = ['view_market_data', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     metric = None
 
     def get(self, request):
@@ -271,6 +290,7 @@ def _public_snapshot():
     }
 
 
+@document_api_view('Market data')
 class PublicMarketSnapshotAPIView(APIView):
     """
     GET /api/market/public/snapshot/
@@ -293,6 +313,7 @@ class PublicMarketSnapshotAPIView(APIView):
         return Response(payload)
 
 
+@document_api_view('Market data')
 class PublicMarketChartAPIView(APIView):
     """
     GET /api/market/public/chart/?range=1D|1W|1M|3M|6M|1Y|5Y|ALL
@@ -320,11 +341,13 @@ class PublicMarketChartAPIView(APIView):
         return Response(payload)
 
 
+@document_api_view('Market data')
 class CompanyBrokerActivityAPIView(APIView):
     """GET /api/market/brokers/<symbol>/?date=YYYY-MM-DD -- 5- and 20-session broker windows."""
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_accumulation', 'view_broker_acc_dist_chart', 'view_broker_explorer', 'view_charts']
     def get(self, request, symbol):
         company = _tracked_company(request, symbol)
         anchor, error = _parse_date(request)
@@ -340,6 +363,7 @@ class CompanyBrokerActivityAPIView(APIView):
         })
 
 
+@document_api_view('Market data')
 class CompanySignalsAPIView(APIView):
     """GET /api/market/signals/<symbol>/?date=YYYY-MM-DD"""
     permission_classes = [HasAppPermission]
@@ -353,6 +377,7 @@ class CompanySignalsAPIView(APIView):
         return _cached(request, lambda ids: {"signals": market_stats.signals(company.id, anchor)})
 
 
+@document_api_view('Market data')
 class BasketIndexAPIView(APIView):
     """GET /api/market/basket-index/?days=N -- the "Tracked Basket" (not the NEPSE index)."""
     permission_classes = [HasAppPermission]
@@ -366,11 +391,14 @@ class BasketIndexAPIView(APIView):
         return _cached(request, lambda ids: market_stats.basket_index(days))
 
 
+@document_api_view('Market data')
 class CompanyNewsAPIView(NewsArticleListAPIView):
     """
     GET /api/market/news/<symbol>/ -- alias of /api/news/ (same serializer,
     permission ``view_news``, pagination and filters) restricted to one company.
     """
+
+    queryset = NewsArticle.objects.none()
 
     def get_queryset(self):
         company = get_object_or_404(Company, symbol__iexact=self.kwargs["symbol"], is_active=True)
@@ -386,20 +414,24 @@ def _overview_company(request):
     return _tracked_company(request, symbol)
 
 
+@document_api_view('Market data')
 class MarketOverviewAPIView(APIView):
     """GET /api/market/overview/?symbol=NEPSE|<tracked symbol> -- card header + tracked-company stats."""
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ["view_market_data", "view_top_gainer", "view_top_losers", "view_top_turnover", "view_top_volume", "view_top_transactions"]
     def get(self, request):
         company = _overview_company(request)
         return _cached(request, lambda ids: market_overview.market_overview(company=company, company_ids=ids))
 
 
+@document_api_view('Market data')
 class MarketOverviewChartAPIView(APIView):
     """GET /api/market/overview/chart/?symbol=&range=1D|1W|1M|3M|6M|1Y|5Y|ALL"""
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
+    permission_keys = ["view_market_data", "view_top_gainer", "view_top_losers", "view_top_turnover", "view_top_volume", "view_top_transactions"]
 
     def get(self, request):
         range_id = request.query_params.get("range", "1D").strip().upper()
@@ -412,10 +444,12 @@ class MarketOverviewChartAPIView(APIView):
         return _cached(request, lambda ids: market_overview.chart_series(range_id, company))
 
 
+@document_api_view('Market data')
 class MarketOverviewTechnicalAPIView(APIView):
     """GET /api/market/overview/technical/?symbol= -- indicators, pivots and summary signal."""
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
+    permission_keys = ["view_market_data", "view_top_gainer", "view_top_losers", "view_top_turnover", "view_top_volume", "view_top_transactions"]
 
     def get(self, request):
         company = _overview_company(request)

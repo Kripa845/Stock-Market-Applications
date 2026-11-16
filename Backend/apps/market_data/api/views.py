@@ -1,4 +1,5 @@
 from rest_framework.response import Response
+from apps.api_schema import document_api_view
 from rest_framework.views import APIView
 
 from apps.market_data.api.serializers import DailyPriceSerializers
@@ -8,9 +9,11 @@ from apps.users.company_access import filter_company_queryset, require_company_a
 from apps.users.permissions import HasAppPermission
 
 
+@document_api_view('Market data')
 class CompanyPriceList(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
+    permission_keys = ["view_price_history", "view_charts"]
 
     def get(self, request):
         prices = DailyPrice.objects.filter(

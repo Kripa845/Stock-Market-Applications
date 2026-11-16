@@ -50,18 +50,14 @@ class HasAppPermission(permissions.BasePermission):
         if not user or not user.is_authenticated:
             return False
 
-        permission_key = getattr(
-            view,
-            "permission_key",
-            None,
-        )
+        permission_keys = getattr(view, "permission_keys", None)
+        if permission_keys is not None:
+            return bool(permission_keys) and user.has_any_app_permission(*permission_keys)
 
+        permission_key = getattr(view, "permission_key", None)
         if not permission_key:
             return False
-
-        return user.has_app_permission(
-            permission_key
-        )
+        return user.has_app_permission(permission_key)
 
 
 class HasViewMethodPermissions(permissions.BasePermission):
@@ -81,9 +77,17 @@ class HasViewMethodPermissions(permissions.BasePermission):
         )
         if isinstance(required, str):
             required = [required]
-        return bool(required) and all(
-            user.has_app_permission(key) for key in required
-        )
+        if isinstance(required, str):
+            required = [required]
+        if not required:
+            return False
+
+        def is_granted(item):
+            if isinstance(item, (tuple, list, set, frozenset)):
+                return bool(item) and user.has_any_app_permission(*item)
+            return user.has_app_permission(item)
+
+        return all(is_granted(item) for item in required)
 
 
 class ReadOnlyOrAdmin(permissions.BasePermission):

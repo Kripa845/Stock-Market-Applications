@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from apps.api_schema import document_api_view
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -61,6 +62,7 @@ def get_holding(company):                      # 👈 paste it here
         "public": float(latest.public_pct),
     }
 
+@document_api_view('Companies')
 class CompanyListCreateAPIView(generics.ListCreateAPIView):
     """
     GET /api/companies/ - List tracked or all companies
@@ -109,6 +111,7 @@ class CompanyListCreateAPIView(generics.ListCreateAPIView):
         return queryset.order_by("symbol")
 
 
+@document_api_view('Companies')
 class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     """
     GET /api/companies/:id/ - Company detail
@@ -141,11 +144,13 @@ class CompanyDetailUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
         }.get(request.method, [])
 
 
+@document_api_view('Companies')
 class TrackedCompanyQuoteAPIView(APIView):
     """Current stock-detail quote for one active tracked company."""
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
+    permission_keys = ['view_price_history', 'view_stock_details', 'view_charts']
     def get(self, request, symbol):
         company = get_object_or_404(
             Company.objects.select_related("tracking"),
@@ -196,6 +201,7 @@ class TrackedCompanyQuoteAPIView(APIView):
         })
 
 
+@document_api_view('Companies')
 class CompanyToggleTrackAPIView(APIView):
     """
     POST /api/companies/:id/toggle-track/
@@ -230,11 +236,13 @@ class CompanyToggleTrackAPIView(APIView):
         )
 
 
+@document_api_view('Companies')
 class CompanyPricesAPIView(APIView):
  
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
+    permission_keys = ['view_price_history', 'view_charts', 'view_stock_details']
     # Rolling window sizes in calendar days
     RANGE_DAYS = {
         "7d":   7,
@@ -277,11 +285,13 @@ class CompanyPricesAPIView(APIView):
         )
 
 
+@document_api_view('Companies')
 class CompanyIntradayBarsAPIView(APIView):
     """GET /api/companies/<id>/intraday/?days=5."""
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
+    permission_keys = ['view_price_history', 'view_charts', 'view_stock_details']
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk, is_active=True)
         require_company_access(request.user, company.pk)
@@ -300,11 +310,13 @@ class CompanyIntradayBarsAPIView(APIView):
         return Response({"bars": bars})
 
 
+@document_api_view('Companies')
 class CompanyVolumeAnomaliesAPIView(APIView):
     """GET /api/companies/<symbol>/volume-anomalies/"""
     permission_classes = [HasAppPermission]
     permission_key = "view_trading_volume"
 
+    permission_keys = ['view_trading_volume', 'view_floorsheet', 'view_stock_details', 'view_charts']
     def get(self, request, symbol):
         company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
         require_company_access(request.user, company.pk)
@@ -320,11 +332,13 @@ class CompanyVolumeAnomaliesAPIView(APIView):
         return Response(VolumeAnomalySerializer(results, many=True).data)
 
 
+@document_api_view('Companies')
 class CompanyRvolAPIView(APIView):
     """GET /api/companies/<symbol>/rvol/"""
     permission_classes = [HasAppPermission]
     permission_key = "view_trading_volume"
 
+    permission_keys = ['view_trading_volume', 'view_floorsheet', 'view_stock_details', 'view_charts']
     def get(self, request, symbol):
         company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
         require_company_access(request.user, company.pk)
@@ -343,11 +357,13 @@ class CompanyRvolAPIView(APIView):
         return Response(RvolPointSerializer(rows, many=True).data)
 
 
+@document_api_view('Companies')
 class CompanyNewsSentimentCorrelationAPIView(APIView):
     """Exploratory daily sentiment versus the next one or two trading sessions."""
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_stock_details']
     def get(self, request, symbol):
         company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
         require_company_access(request.user, company.pk)
@@ -371,6 +387,7 @@ class CompanyNewsSentimentCorrelationAPIView(APIView):
         return Response(NewsSentimentForwardResponseSerializer(payload).data)
 
 
+@document_api_view('Companies')
 class CompanyFloorsheetAPIView(APIView):
     """
     GET /api/companies/:id/floorsheet?date=YYYY-MM-DD
@@ -378,6 +395,7 @@ class CompanyFloorsheetAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_floorsheet', 'view_stock_details']
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
         require_company_access(request.user, company.pk)
@@ -408,6 +426,7 @@ class CompanyFloorsheetAPIView(APIView):
         
         
         
+@document_api_view('Companies')
 class CompanySectorsAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_companies"
@@ -438,6 +457,7 @@ def _int(value, default, lo, hi):
         return default
 
 
+@document_api_view('Companies')
 class _TrackedMoversSideAPIView(APIView):
     """
     Gainers or losers of the tracked companies.
@@ -446,9 +466,13 @@ class _TrackedMoversSideAPIView(APIView):
     change, crawled prices only). Users only see companies they may access,
     same rule as the company list.
     """
-    permission_classes = [HasAppPermission]
+    permission_classes = [HasViewMethodPermissions]
     permission_key = "view_market_data"
     side = None  # "gainers" or "losers"
+
+    def get_required_permissions(self, request):
+        page_key = "view_top_losers" if self.side == "losers" else "view_top_gainer"
+        return [("view_market_data", page_key)]
 
     def get(self, request):
         accessible_ids = filter_company_queryset(
@@ -468,10 +492,12 @@ class _TrackedMoversSideAPIView(APIView):
         })
 
 
+@document_api_view('Companies')
 class TopGainersAPIView(_TrackedMoversSideAPIView):
     side = "gainers"
 
 
+@document_api_view('Companies')
 class TopLosersAPIView(_TrackedMoversSideAPIView):
     side = "losers"
 
@@ -480,6 +506,7 @@ class TopLosersAPIView(_TrackedMoversSideAPIView):
 top_gainers = TopGainersAPIView.as_view()
 top_losers = TopLosersAPIView.as_view()
 
+@document_api_view('Companies')
 class CompanyPerformanceAPIView(APIView):
     """
     GET /api/companies/<id>/performance/
@@ -490,6 +517,7 @@ class CompanyPerformanceAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
+    permission_keys = ['view_price_history', 'view_charts', 'view_stock_details']
     def get(self, request, pk):
         company = get_object_or_404(
             Company,
@@ -527,6 +555,7 @@ class CompanyPerformanceAPIView(APIView):
         )
         
         
+@document_api_view('Companies')
 class CompanyValuationAPIView(APIView):
     """
     GET /api/companies/<id>/valuation/
@@ -538,6 +567,7 @@ class CompanyValuationAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_stock_details', 'view_latest_reports']
     def get(self, request, pk):
         company = get_object_or_404(
             Company,
@@ -582,10 +612,12 @@ from django.core.cache import cache
 from apps.analysis.services.master_score import compute_master_score
 
 
+@document_api_view('Companies')
 class CompanyMasterScoreAPIView(APIView):
     """GET /api/companies/<id>/master-score/"""
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"   # or "view_market_data"
+    permission_keys = ['view_analysis', 'view_stock_details']
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk, is_active=True)
@@ -616,11 +648,13 @@ class CompanyMasterScoreAPIView(APIView):
         })
         
         
+@document_api_view('Companies')
 class CompanyTechnicalsAPIView(APIView):
     """GET /api/companies/<id>/technicals/"""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
+    permission_keys = ['view_price_history', 'view_charts', 'view_stock_details', 'use_indicators']
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk, is_active=True)
@@ -633,11 +667,13 @@ class CompanyTechnicalsAPIView(APIView):
         })
 
 
+@document_api_view('Companies')
 class CompanyFinancialsAPIView(APIView):
     """GET /api/companies/<id>/financials/"""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
+    permission_keys = ['view_market_data', 'view_stock_details', 'view_financial_reports']
 
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk, is_active=True)

@@ -3,10 +3,21 @@ from django.core.paginator import EmptyPage, Paginator
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.db.models import F
+from rest_framework.decorators import api_view, permission_classes
+from apps.api_schema import document_api_function
 from apps.companies.models import Company, TrackedCompany
+from apps.users.permissions import HasAppPermission
 
 from .constants import DURATIONS, FISCAL_YEARS, PAGE_SIZE
 from .models import FinancialReport
+
+
+class HasFinancialReportsPermission(HasAppPermission):
+    """Accept prior broad grants or the new Financial Reports page grant."""
+
+    def has_permission(self, request, view):
+        view.permission_keys = ("view_market_data", "view_reports", "view_financial_reports")
+        return super().has_permission(request, view)
 
 
 def _tracked_company_ids():
@@ -42,6 +53,9 @@ def financial_reports_page(request):
     })
 
 
+@document_api_function("Reports", "List financial reports", "Return paginated financial report filing links, optionally filtered by sector, company, fiscal year, or duration.")
+@api_view(["GET"])
+@permission_classes([HasFinancialReportsPermission])
 def financial_reports_filters(request):
     """Dropdown values for the React page."""
     sectors = list(
@@ -64,6 +78,9 @@ def financial_reports_filters(request):
     })
 
 
+@document_api_function("Reports", "Get financial report filters", "Return sector, tracked company, fiscal year, and report duration values for filtering financial reports.")
+@api_view(["GET"])
+@permission_classes([HasFinancialReportsPermission])
 def financial_reports_api(request):
     qs = FinancialReport.objects.filter(
         is_active=True,

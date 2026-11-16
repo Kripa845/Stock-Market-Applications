@@ -87,13 +87,3 @@ export interface MasterScoreResponse {
   holding: { promoter: number; public: number } | null;
 }
 
-
-interface PriceRow {
-  date: string;
-  open: number | string | null;
-  high: number | string | null;
-  low: number | string | null;
-  close: number | string | null;
-  volume: number | string | null;
-}
-

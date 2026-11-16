@@ -1,5 +1,6 @@
 
 from datetime import datetime, timedelta
+from apps.api_schema import document_api_view
 from decimal import Decimal
 import math
 import hashlib
@@ -38,6 +39,7 @@ from apps.analysis.services.daily_metrics import PRESSURE_METHOD
 from apps.analysis.services.news_market_reaction import build_news_market_reaction
 
 
+@document_api_view('Analysis')
 class DailyAnalysisListAPIView(generics.ListAPIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
@@ -53,6 +55,7 @@ class DailyAnalysisListAPIView(generics.ListAPIView):
         return qs.order_by("-date")
 
 
+@document_api_view('Analysis')
 class CompanyBehaviorSummaryAPIView(APIView):
     """
     GET /api/analysis/companies/:id/behaviorsummary/
@@ -72,6 +75,7 @@ class CompanyBehaviorSummaryAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_stock_details']
     WINDOW_DAYS = 31
 
     def get(self, request, pk):
@@ -283,10 +287,10 @@ class CompanyBehaviorSummaryAPIView(APIView):
                 f"{latest.volume_baseline_sessions} previous sessions "
                 f"available."
             )
-
         return base
 
 
+@document_api_view('Analysis')
 class CompanyBrokerActivityAPIView(APIView):
     """
     GET /api/analysis/companies/:id/brokers/
@@ -303,6 +307,7 @@ class CompanyBrokerActivityAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_explorer']
     def get(self, request, pk):
         company = get_object_or_404(Company, pk=pk)
         require_company_access(request.user, company.pk)
@@ -394,11 +399,13 @@ def _broker_company_scope(request):
     return company, company_ids, None
 
 
+@document_api_view('Analysis')
 class BrokerAnalysisAPIView(APIView):
     """Aggregated floorsheet activity across accessible companies."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
+    permission_keys = ['view_analysis', 'view_broker_explorer', 'view_broker_accumulation', 'view_broker_acc_dist_chart']
     PAGE_SIZE = 25
     def get(self, request):
         dates, error = _broker_date_filters(request)
@@ -527,6 +534,7 @@ class BrokerAnalysisAPIView(APIView):
             "note": "Floorsheet data covers sampled trading sessions only.",
         })
 
+@document_api_view('Analysis')
 class TopBrokerAPIView(APIView):
     """
     One trading day's broker ranking by turnover (buy + sell amount) across
@@ -543,6 +551,7 @@ class TopBrokerAPIView(APIView):
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
+    permission_keys = ['view_analysis', 'view_top_broker']
     COMPLETE_RATIO = 0.9
 
     def get(self, request):
@@ -654,6 +663,7 @@ class TopBrokerAPIView(APIView):
         })
 
 
+@document_api_view('Analysis')
 class BrokerListAPIView(APIView):
     """
     GET /api/analysis/brokers/list/?days=30
@@ -667,6 +677,7 @@ class BrokerListAPIView(APIView):
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
+    permission_keys = ['view_analysis', 'view_broker_list']
     DAY_CHOICES = (7, 30, 90, 365)
     DEFAULT_DAYS = 30
 
@@ -762,12 +773,14 @@ def _broker_profile(broker_code):
     return profile
 
 
+@document_api_view('Analysis')
 class BrokerDetailAPIView(APIView):
     """Real broker-side totals, daily activity, and company breakdown."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_explorer']
     def get(self, request, broker_id):
         dates, error = _broker_date_filters(request)
         if error:
@@ -877,11 +890,13 @@ class BrokerDetailAPIView(APIView):
         })
 
 
+@document_api_view('Analysis')
 class CompanyCategorizedNewsAPIView(APIView):
     """Company news articles with an explicit categorization tag for this company."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
+    permission_keys = ['view_analysis', 'view_stock_details']
     PAGE_SIZE = 20
 
     def get(self, request, pk):
@@ -925,6 +940,7 @@ class CompanyCategorizedNewsAPIView(APIView):
         })
 
 
+@document_api_view('Analysis')
 class CompanyNewsPriceCorrelationAPIView(APIView):
     """
     GET /api/companies/:id/news-pricecorrelation/
@@ -938,6 +954,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_stock_details']
     WINDOW_DAYS = 60
 
     def get(self, request, pk):
@@ -1098,6 +1115,7 @@ class CompanyNewsPriceCorrelationAPIView(APIView):
         )
 
 
+@document_api_view('Analysis')
 class CrossCompanyAnalysisAPIView(APIView):
     """
     GET /api/analysis/cross-company/
@@ -1113,6 +1131,7 @@ class CrossCompanyAnalysisAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_watchlist_comparison']
     WINDOW_DAYS = 31
 
     def get(self, request):
@@ -1275,6 +1294,7 @@ class CrossCompanyAnalysisAPIView(APIView):
         )
 
 
+@document_api_view('Analysis')
 class DashboardSummaryAPIView(APIView):
     """
     GET /api/analysis/dashboard-summary/
@@ -1287,6 +1307,7 @@ class DashboardSummaryAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_dashboard']
     def get(self, request):
         from django.utils import timezone
         from datetime import timedelta
@@ -1449,16 +1470,17 @@ def _accumulation_broker_metadata(rows):
     return {"broker_metadata": broker_metadata(row["broker"] for row in rows)}
 
 
+@document_api_view('Analysis')
 class BrokerSummaryAPIView(APIView):
     """Every broker's buy / sell / net, averages and net % of volume for one stock and window."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_accumulation']
     def get(self, request):
         from apps.analysis.api.serializers import AccumulationBrokerRowSerializer
         from apps.analysis.services.broker_accumulation import build_broker_summary
-
         def build(company, window, exclude_self):
             summary = build_broker_summary(company, window, exclude_self)
             rows = summary.pop("rows")
@@ -1471,12 +1493,14 @@ class BrokerSummaryAPIView(APIView):
         return _accumulation_payload(request, "summary", build)
 
 
+@document_api_view('Analysis')
 class BrokerSignalAPIView(APIView):
     """Accumulation / distribution / neutral, with the top-5 lists behind it."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_accumulation']
     def get(self, request):
         from apps.analysis.api.serializers import AccumulationTopBrokerSerializer
         from apps.analysis.services.broker_accumulation import build_broker_signal
@@ -1491,11 +1515,13 @@ class BrokerSignalAPIView(APIView):
         return _accumulation_payload(request, "signal", build)
 
 
+@document_api_view('Analysis')
 class BrokerFlowAPIView(APIView):
     """Per-session top-5 net broker flow with the close, oldest first."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
+    permission_keys = ['view_analysis', 'view_broker_accumulation']
 
     def get(self, request):
         from apps.analysis.api.serializers import BrokerFlowPointSerializer
@@ -1508,6 +1534,7 @@ class BrokerFlowAPIView(APIView):
         return _accumulation_payload(request, "flow", build)
 
 
+@document_api_view('Analysis')
 class AccDistAPIView(APIView):
     """
     Market-wide accumulation / distribution: (stock, broker) pairs with the
@@ -1518,6 +1545,7 @@ class AccDistAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_acc_dist_chart']
     def get(self, request):
         import hashlib
 
@@ -1546,6 +1574,7 @@ class AccDistAPIView(APIView):
         return Response(payload)
 
 
+@document_api_view('Analysis')
 class FloorsheetGridAPIView(APIView):
     """
     GET /api/analysis/floorsheet-grid/?date=YYYY-MM-DD&minutes=1|5|10|15|30|45
@@ -1558,6 +1587,7 @@ class FloorsheetGridAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_trading_volume"
 
+    permission_keys = ['view_trading_volume', 'view_floorsheet_summary', 'view_floorsheet']
     def get(self, request):
         from apps.analysis.services.floorsheet_grid import (
             BUCKET_MINUTES, DEFAULT_BUCKET_MINUTES, available_dates, build_grid, serialize_grid,
@@ -1585,6 +1615,7 @@ class FloorsheetGridAPIView(APIView):
         return Response({**payload, "dates": [d.isoformat() for d in dates]})
 
 
+@document_api_view('Analysis')
 class BrokerPositionAPIView(APIView):
     """
     GET /api/analysis/broker-position/?symbol=NABIL&broker=58&range=1M[&exclude_self=1]
@@ -1596,6 +1627,7 @@ class BrokerPositionAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_explorer']
     def get(self, request):
         from django.conf import settings
         from django.core.cache import cache
@@ -1629,6 +1661,7 @@ class BrokerPositionAPIView(APIView):
         return Response(payload)
 
 
+@document_api_view('Analysis')
 class BrokerActivityAPIView(APIView):
     """
     GET /api/analysis/broker-activity/?symbols=NABIL,ADBL&broker=58&range=1M[&exclude_self=1]
@@ -1640,6 +1673,7 @@ class BrokerActivityAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_broker_acc_dist_chart']
     def get(self, request):
         from django.conf import settings
         from django.core.cache import cache

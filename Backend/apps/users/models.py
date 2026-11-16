@@ -218,6 +218,11 @@ class User(AbstractUser):
 
     def has_app_permission(self, permission_key):
         return permission_key in self.get_app_permissions()
+
+    def has_any_app_permission(self, *permission_keys):
+        """Return whether this user holds any one of the supplied permissions."""
+        granted = self.get_app_permissions()
+        return any(key in granted for key in permission_keys)
     def get_effective_role_name(self):
         if self.custom_role:
             return self.custom_role.name

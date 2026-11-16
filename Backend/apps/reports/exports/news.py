@@ -11,6 +11,7 @@ from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.api_schema import document_api_view
 
 from apps.news.models import ArticleCompanyTag, NewsArticle
 from apps.news.selectors import real_articles
@@ -43,6 +44,7 @@ from apps.reports.exports.common import (
 # NEWS EXPORT
 # ============================================================
 
+@document_api_view("Reports")
 class ExportNewsAPIView(APIView):
     """
     GET /api/reports/export/news/

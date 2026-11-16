@@ -1,4 +1,5 @@
 from django.shortcuts import render
+from apps.api_schema import document_api_view
 
 # Create your views here.
 from django.conf import settings
@@ -9,6 +10,7 @@ from rest_framework.views import APIView
 
 from .models import Announcement
 from .serializers import AnnouncementSerializer
+from apps.users.permissions import HasAppPermission
 
 
 class Pager(PageNumberPagination):
@@ -17,9 +19,12 @@ class Pager(PageNumberPagination):
     max_page_size = 100
 
 
+@document_api_view('Announcements')
 class AnnouncementList(generics.ListAPIView):
     serializer_class = AnnouncementSerializer
     pagination_class = Pager
+    permission_classes = [HasAppPermission]
+    permission_keys = ["view_news", "view_announcements"]
 
     def get_queryset(self):
         p = self.request.query_params
@@ -41,7 +46,11 @@ class AnnouncementList(generics.ListAPIView):
         return qs
 
 
+@document_api_view('Announcements')
 class AnnouncementFilterOptions(APIView):
+    permission_classes = [HasAppPermission]
+    permission_keys = ["view_news", "view_announcements"]
+
     def get(self, request):
         return Response({
             "is_event": [{"value": "true", "label": "True"}, {"value": "false", "label": "False"}],

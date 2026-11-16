@@ -6,6 +6,7 @@ The index is whole-market; events cover the tracked companies the user may acces
 """
 
 from datetime import date
+from apps.api_schema import document_api_view
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -16,10 +17,12 @@ from apps.users.company_access import get_accessible_company_ids
 from apps.users.permissions import HasAppPermission
 
 
+@document_api_view('Market calendar')
 class _CalendarView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_calendar']
     def build(self, request):
         raise NotImplementedError
 
@@ -58,11 +61,15 @@ class CalendarDayAPIView(_CalendarView):
             data["market"] = market_day(
                 data["date"],
                 company_ids=get_accessible_company_ids(request.user),
-                include_brokers=request.user.has_app_permission("view_analysis"),
+                include_brokers=request.user.has_any_app_permission(
+                    "view_analysis", "view_broker_explorer", "view_broker_accumulation",
+                    "view_broker_acc_dist_chart", "view_top_broker", "view_broker_list",
+                ),
             )
         return data
 
 
+@document_api_view('Market calendar')
 class WeekdaySummaryAPIView(APIView):
     """
     ?weeks=6&scope=tracked -- the tracked companies' average move by weekday over the last
@@ -73,6 +80,7 @@ class WeekdaySummaryAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_weekday_summary']
     def get(self, request):
         try:
             weeks = int(request.query_params.get("weeks") or weekday_summary.DEFAULT_WEEKS)
@@ -93,6 +101,7 @@ class WeekdaySummaryAPIView(APIView):
         return Response(weekday_summary.to_json(data))
 
 
+@document_api_view('Market calendar')
 class MonthSummaryAPIView(APIView):
     """
     ?index=NEPSE&calendar=bs&months=12 -- NEPSE day by day: one row per BS (bs) or AD (ad) month,
@@ -102,6 +111,7 @@ class MonthSummaryAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_nepse_day_by_day']
     def get(self, request):
         params = request.query_params
         try:
@@ -121,6 +131,7 @@ class MonthSummaryAPIView(APIView):
         return Response(weekday_summary.to_json(data))
 
 
+@document_api_view('Market calendar')
 class MonthlyReturnsAPIView(APIView):
     """
     ?index=NEPSE -- NEPSE month by month: one row per BS year (newest first), one tile per BS
@@ -131,6 +142,7 @@ class MonthlyReturnsAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_nepse_month_by_month']
     def get(self, request):
         try:
             data = monthly_returns.monthly_returns(

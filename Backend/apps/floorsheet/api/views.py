@@ -1,4 +1,5 @@
 from datetime import datetime, time, timedelta
+from apps.api_schema import document_api_view
 
 import django_filters
 from django.db.models import Count, Max, Min, Sum
@@ -49,10 +50,12 @@ class FloorsheetPagination(PageNumberPagination):
     max_page_size = 200
 
 
+@document_api_view('Floorsheet')
 class FloorsheetListAPIView(generics.ListAPIView):
     serializer_class = FloorsheetSerializer
     permission_classes = [HasAppPermission]
     permission_key = "view_trading_volume"
+    permission_keys = ['view_trading_volume', 'view_floorsheet']
     queryset = FloorsheetTransaction.objects.select_related("company").all()
     pagination_class = FloorsheetPagination
 
@@ -94,6 +97,7 @@ FLOORSHEET_TOP_BROKERS = 5
 FLOORSHEET_RECENT_DATES = 60
 
 
+@document_api_view('Floorsheet')
 class FloorsheetSummaryAPIView(FloorsheetListAPIView):
     """
     GET /api/floorsheet/summary/ -- totals and top brokers for the same filters / search
@@ -103,6 +107,7 @@ class FloorsheetSummaryAPIView(FloorsheetListAPIView):
     ``date`` in the response says which day was used.
     """
     pagination_class = None
+    permission_keys = ["view_trading_volume", "view_floorsheet", "view_floorsheet_summary"]
     DATE_PARAMS = ("date", "date_from", "date_to")
 
     def list(self, request, *args, **kwargs):
@@ -149,6 +154,7 @@ class FloorsheetSummaryAPIView(FloorsheetListAPIView):
         })
 
 
+@document_api_view('Floorsheet')
 class StockIntradayCandlesAPIView(APIView):
     """
     GET /api/stocks/<symbol>/intraday/?interval=5m&date=YYYY-MM-DD
@@ -160,6 +166,7 @@ class StockIntradayCandlesAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_price_history"
 
+    permission_keys = ['view_price_history', 'view_floorsheet', 'view_charts']
     def get(self, request, symbol):
         company = get_object_or_404(Company, symbol__iexact=symbol, is_active=True)
         require_company_access(request.user, company.pk)

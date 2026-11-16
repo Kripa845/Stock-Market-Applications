@@ -1,5 +1,6 @@
 
 from django.contrib.auth import get_user_model
+from apps.api_schema import document_api_view
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
@@ -35,6 +36,7 @@ from apps.users.api.serializers import (
     ROLE_PERMISSIONS,
     VALID_PERMISSION_KEYS,
     validate_permission_dependencies,
+    permission_definitions_payload,
 )
 # from apps.users.api.serializers import UserCompanyAccessListSerializer
 User = get_user_model()
@@ -59,6 +61,7 @@ def assignment_escalation(request, instance=None):
         cfg = RolePermissionConfig.objects.filter(role_key=new_role, is_active=True).first()
         wanted |= set(cfg.permissions or []) if cfg else set()
     return missing_grants(actor, wanted)
+@document_api_view('Users and authentication')
 class CustomRoleListCreateAPIView(APIView):
     """
     GET:
@@ -106,6 +109,7 @@ class CustomRoleListCreateAPIView(APIView):
         )
 
 
+@document_api_view('Users and authentication')
 class CustomRoleDetailAPIView(APIView):
     """
     GET:
@@ -196,6 +200,7 @@ class CustomRoleDetailAPIView(APIView):
         )
 
 
+@document_api_view('Users and authentication')
 class RolePermissionDefinitionsAPIView(APIView):
     """
     Returns the permission structure used by
@@ -206,22 +211,7 @@ class RolePermissionDefinitionsAPIView(APIView):
     permission_key = "view_roles"
 
     def get(self, request):
-        groups = []
-
-        for group_key, permissions in ROLE_PERMISSIONS.items():
-            groups.append(
-                {
-                    "key": group_key,
-                    "name": group_key.title(),
-                    "permissions": permissions,
-                }
-            )
-
-        return Response(
-            {
-                "groups": groups
-            }
-        )
+        return Response(permission_definitions_payload())
 
 # ======================================================
 # LOGIN
@@ -242,6 +232,7 @@ class CustomTokenObtainPairView(
 # REGISTRATION
 # ======================================================
 
+@document_api_view('Users and authentication')
 class RegisterAPIView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
@@ -275,6 +266,7 @@ class RegisterAPIView(APIView):
 # CURRENT USER
 # ======================================================
 
+@document_api_view('Users and authentication')
 class MeAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -303,6 +295,7 @@ class MeAPIView(APIView):
         )
 
 
+@document_api_view('Users and authentication')
 class MePermissionsAPIView(APIView):
     """
     Returns the current user's effective permissions.
@@ -631,6 +624,7 @@ class AnalystListAPIView(
 # ROLE PERMISSIONS
 # ======================================================
 
+@document_api_view('Users and authentication')
 class RolePermissionDetailAPIView(APIView):
     """
     GET/PATCH a single built-in editable role
@@ -771,6 +765,7 @@ class RolePermissionDetailAPIView(APIView):
     put = patch
 
 
+@document_api_view('Users and authentication')
 class RolePermissionsAPIView(APIView):
     """
     Returns the editable role permission matrix.
@@ -838,6 +833,7 @@ class RolePermissionsAPIView(APIView):
 # ROLE STATISTICS
 # ======================================================
 
+@document_api_view('Users and authentication')
 class RoleStatisticsAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_roles"
@@ -889,6 +885,7 @@ class RoleStatisticsAPIView(APIView):
 # USER COMPANY ACCESS
 # ======================================================
 
+@document_api_view('Users and authentication')
 class UserCompanyAccessAPIView(APIView):
     """
     GET:

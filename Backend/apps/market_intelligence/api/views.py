@@ -1,4 +1,5 @@
 from datetime import date
+from apps.api_schema import document_api_view
 from decimal import Decimal
 
 from django.shortcuts import get_object_or_404
@@ -57,10 +58,12 @@ def _resolve_date(request, sessions):
     return day if day in sessions else None
 
 
+@document_api_view('Market intelligence')
 class MarketBreadthAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     def get(self, request):
         _, sessions, _, _, _, _ = _market_context()
         day = _resolve_date(request, sessions)
@@ -96,10 +99,12 @@ class MarketBreadthAPIView(APIView):
         })
 
 
+@document_api_view('Market intelligence')
 class MarketHeatmapAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     def get(self, request):
         prices, sessions, _, analyses, flags, lookup = _market_context()
         group = request.query_params.get("group", "company")
@@ -160,10 +165,12 @@ class MarketHeatmapAPIView(APIView):
         })
 
 
+@document_api_view('Market intelligence')
 class MarketRankingsAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     def get(self, request):
         prices, sessions, _, analyses, flags, lookup = _market_context()
         metric = request.query_params.get("metric", "gainers")
@@ -215,10 +222,12 @@ class MarketRankingsAPIView(APIView):
         })
 
 
+@document_api_view('Market intelligence')
 class SectorRotationAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_top_gainer', 'view_top_losers', 'view_top_turnover', 'view_top_volume', 'view_top_transactions']
     def get(self, request):
         period = request.query_params.get("period", "1w")
         if period not in PERIODS:
@@ -252,10 +261,12 @@ class SectorRotationAPIView(APIView):
         })
 
 
+@document_api_view('Market intelligence')
 class RelativeStrengthAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_charts']
     def get(self, request):
         try:
             company_id = int(request.query_params["company_id"])
@@ -305,10 +316,12 @@ class RelativeStrengthAPIView(APIView):
         })
 
 
+@document_api_view('Market intelligence')
 class CompanyTechnicalsAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_charts', 'view_stock_details', 'use_indicators']
     def get(self, request, company_id):
         company = get_object_or_404(Company, pk=company_id, is_active=True)
         require_company_access(request.user, company.pk)
@@ -332,11 +345,13 @@ class CompanyTechnicalsAPIView(APIView):
         })
 
 
+@document_api_view('Market intelligence')
 class CompanySupportResistanceAPIView(APIView):
     """GET /api/market-intelligence/companies/<id>/support-resistance/ -- clustered swing levels."""
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ['view_analysis', 'view_charts', 'view_stock_details']
     def get(self, request, company_id):
         company = get_object_or_404(Company, pk=company_id, is_active=True)
         require_company_access(request.user, company.pk)
@@ -372,16 +387,19 @@ class CompanySupportResistanceAPIView(APIView):
 PRICE_SOURCES = ("crawled",)
 
 
+@document_api_view('Market intelligence')
 class IndicatorRegistryAPIView(APIView):
     """Every available indicator with its parameters, outputs and display hints; drives the chart picker."""
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
 
+    permission_keys = ["view_analysis", "view_charts", "use_indicators"]
     def get(self, request):
         return Response(registry_payload())
 
 
+@document_api_view('Market intelligence')
 class CompanyIndicatorSeriesAPIView(APIView):
     """Compute one or more registry indicators for a company.
 
@@ -392,6 +410,7 @@ class CompanyIndicatorSeriesAPIView(APIView):
 
     permission_classes = [HasAppPermission]
     permission_key = "view_analysis"
+    permission_keys = ['view_analysis', 'view_charts', 'view_stock_details', 'use_indicators']
 
     def get(self, request, company_id):
         company = get_object_or_404(Company, pk=company_id, is_active=True)

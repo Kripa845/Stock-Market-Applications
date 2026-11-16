@@ -1,4 +1,5 @@
 import logging
+from apps.api_schema import document_api_view
 import os
 import subprocess
 
@@ -116,6 +117,7 @@ def _check_active_crawl(crawl_type):
 # List / Create
 # ---------------------------------------------------------------------------
 
+@document_api_view('Crawler runs')
 class CrawlRunListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [HasViewMethodPermissions]
     serializer_class = CrawlRunSerializer
@@ -244,6 +246,7 @@ class CrawlRunListCreateAPIView(generics.ListCreateAPIView):
 # Detail
 # ---------------------------------------------------------------------------
 
+@document_api_view('Crawler runs')
 class CrawlRunDetailAPIView(generics.RetrieveAPIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_crawl_runs"
@@ -255,6 +258,7 @@ class CrawlRunDetailAPIView(generics.RetrieveAPIView):
 # Cancel
 # ---------------------------------------------------------------------------
 
+@document_api_view('Crawler runs')
 class CrawlRunCancelAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "run_crawler"
@@ -304,6 +308,7 @@ class CrawlRunCancelAPIView(APIView):
 # Retry
 # ---------------------------------------------------------------------------
 
+@document_api_view('Crawler runs')
 class CrawlRunRetryAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "retry_failed_crawl"

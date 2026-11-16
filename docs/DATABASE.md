@@ -140,7 +140,7 @@ Indicators are not stored: `market_intelligence/indicators/registry.py` computes
 | Model | Key | Notes |
 |---|---|---|
 | `User` (`AUTH_USER_MODEL = "users.User"`) | `username` (login), `email` unique | `role` ∈ admin / analyst / viewer (default viewer), optional `custom_role`. `get_app_permissions()`: admin gets all keys, otherwise the custom role's list, otherwise the role's `RolePermissionConfig`. |
-| `RolePermissionConfig`, `CustomRole` | `role_key`, none | Editable permission lists (keys in `users/api/serializers.py` → `ROLE_PERMISSIONS`). |
+| `RolePermissionConfig`, `CustomRole` | `role_key`, none | Editable permission lists. Legacy keys and page groups are defined in `users/api/serializers.py`; additive grants are recorded by the users permission migrations. |
 | `UserCompanyAccess` | (`user`, `company`) | Per-user allowed companies, on top of role permissions. Only rows with `status=1` and an active company count. Admins are unrestricted; a non-admin with no rows sees **no** companies (`users/company_access.py::get_accessible_company_ids`). |
 | `Watchlist` / `WatchlistItem` | (`user`, `name`) / (`watchlist`, `company`) | Named lists, one `is_default`. Items hold `units` and `wacc` (Decimal). |
 

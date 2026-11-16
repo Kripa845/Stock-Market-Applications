@@ -215,7 +215,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { hasAnyPermission, hasAllPermissions } = useAuth();
 
   const canSeeItem = (item: NavItem): boolean => {
-    const rule = item.to ? ROUTE_RULES[item.to] : undefined;
+    if (item.children?.some(canSeeItem)) return true;
+    const rule = item.to
+      ? ROUTE_RULES[item.to] ?? Object.entries(ROUTE_RULES).find(
+          ([path]) => item.to!.startsWith(`${path}/`),
+        )?.[1]
+      : undefined;
     if (!rule) return true;
     return rule.mode === 'all' ? hasAllPermissions(rule.permissions) : hasAnyPermission(rule.permissions);
   };

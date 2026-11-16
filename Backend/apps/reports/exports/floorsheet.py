@@ -8,6 +8,7 @@ from django.http import HttpResponse
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.api_schema import document_api_view
 
 from apps.analysis.services.brokers import build_broker_activity, sampled_floorsheet_dates
 from apps.floorsheet.models import FloorsheetTransaction
@@ -31,11 +32,13 @@ from apps.reports.exports.common import (
 # FLOORSHEET EXPORT
 # ============================================================
 
+@document_api_view("Reports")
 class ExportBrokerActivityAPIView(APIView):
     """Export aggregated broker activity from sampled floorsheet rows."""
 
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
+    permission_keys = ["export_reports", "export_broker_analysis"]
     content_negotiation_class = ExportContentNegotiation
 
     def get(self, request):
@@ -110,10 +113,12 @@ class ExportBrokerActivityAPIView(APIView):
         return _xlsx_response(wb, fname)
 
 
+@document_api_view("Reports")
 class ExportFloorsheetAPIView(APIView):
     
     permission_classes = [HasAppPermission]
     permission_key = "export_reports"
+    permission_keys = ["export_reports", "export_floorsheet"]
     content_negotiation_class = ExportContentNegotiation
 
     MAX_ROWS = 20_000

@@ -15,7 +15,7 @@ The database stores metadata in `FinancialReport`; source document URLs are comp
 | `GET` | `/api/financial-reports/filters/` | Sector, tracked-company, fiscal-year and duration options |
 | `GET` | `/api/financial-reports/` | Paginated filings; accepts `sector`, `company`, `fiscal_year`, `duration` and `page` |
 
-The API returns only active filings belonging to tracked companies. The Django views have no explicit permission decorators, so the API itself does not enforce login or per-company access. The frontend route is gated by `view_reports`.
+The API returns only active filings belonging to tracked companies. The list and filter endpoints require one of `view_financial_reports`, `view_market_data`, or `view_reports`; they do not apply per-user company access. The frontend `/financial-reports` route is gated by `view_financial_reports` or the legacy `view_reports` key. There is no upload or export API.
 
 ## Source values
 

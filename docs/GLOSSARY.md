@@ -59,7 +59,7 @@ NEPSE and project terms as they are used in the code. Where a term maps to a mod
 | **Support / resistance** | Price levels with touch counts and strength (`SupportResistanceSet` / `Level`). |
 | **Floorsheet grid** | The Floor Sheet Summary page: trades bucketed by 1–45 minutes, with validation checks (`analysis/services/floorsheet_grid.py`). |
 | **WACC** | A user's weighted average cost per share for a watchlist holding (`WatchlistItem.wacc`). |
-| **Permission key** | A string such as `view_market_data` checked by `HasAppPermission` (`ROLE_PERMISSIONS`). |
+| **Permission key** | A string such as `view_market_data` or `view_dashboard`, checked by `HasAppPermission`. Legacy keys remain valid alongside page-level keys; see [Roles & Permissions](ROLE_PERMISSIONS.md). |
 | **Company access** | Which companies a non-admin user may see (`UserCompanyAccess`). |
 | **CrawlRun** | One recorded spider run with status, counters and logs. |
 | **Announcement** | A ShareHub notice or event (`Announcement`), linked by symbol to a tracked company when applicable; a blank symbol is a market-wide NEPSE item. |

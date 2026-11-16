@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Download, ExternalLink, Globe, Search, Trophy } from 'lucide-react';
 import PageHeader from '../components/common/PageHeader';
+import PermissionGate from '../components/common/PermissionGate';
 import BrokerBadge, { BrokerLogo } from '../components/brokers/BrokerBadge';
 import TopBrokers from '../components/brokers/TopBrokers';
 import BrokerActivityCharts from '../components/brokers/BrokerActivityCharts';
@@ -73,7 +74,7 @@ export default function BrokerAnalysisPage() {
   const apply = () => { setPage(1); setFilters(draft); };
   const reset = () => { setDraft(emptyFilters); setPage(1); setFilters(emptyFilters); };
   return <div className="space-y-5">
-    <PageHeader title="Broker Explorer" subtitle="Broker buy, sell and net activity over any date range, company or broker, from collected floorsheet trades." actions={<><Link className="btn-ghost flex items-center gap-2 text-xs" to="/top-brokers"><Trophy size={14} /> Top Brokers (one day)</Link><Link className="btn-ghost flex items-center gap-2 text-xs" to="/reports"><Download size={14} /> Export</Link></>} />
+    <PageHeader title="Broker Explorer" subtitle="Broker buy, sell and net activity over any date range, company or broker, from collected floorsheet trades." actions={<><Link className="btn-ghost flex items-center gap-2 text-xs" to="/top-brokers"><Trophy size={14} /> Top Brokers (one day)</Link><PermissionGate permissions={["export_reports", "export_broker_analysis"]}><Link className="btn-ghost flex items-center gap-2 text-xs" to="/reports"><Download size={14} /> Export</Link></PermissionGate></>} />
     <section className="card space-y-4">
       <FilterFields value={draft} onChange={setDraft} companies={data?.companies ?? []} brokers={data?.broker_options ?? []} brokerDirectory={data?.broker_directory ?? []} />
       <div className="flex flex-wrap gap-2"><button className="btn-primary flex items-center gap-2 text-xs" onClick={apply}><Search size={13} /> Apply Filters</button><button className="btn-ghost text-xs" onClick={reset}>Reset Filters</button></div>

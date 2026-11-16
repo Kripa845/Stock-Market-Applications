@@ -87,6 +87,29 @@ class PermissionMatrixTests(TestCase):
                 ok = make_user(f"ok{i}", perms=[key])
                 self.assertNotIn(call(as_user(ok), method, url).status_code, (401, 403))
 
+    def test_new_page_permission_matrix(self):
+        cases = [
+            ("get", "/api/companies/1/prices/", "view_charts"),
+            ("get", "/api/market-indices/history/", "view_indices"),
+            ("get", "/api/market/dividends/", "view_dividends"),
+            ("get", "/api/market-calendar/month/", "view_calendar"),
+            ("get", "/api/market-calendar/months/", "view_nepse_day_by_day"),
+            ("get", "/api/market/quarterly-report/?sector=BANKING", "view_latest_reports"),
+            ("get", "/api/floorsheet/", "view_floorsheet"),
+            ("get", "/api/analysis/brokers/top/", "view_top_broker"),
+            ("get", "/api/analysis/brokers/list/", "view_broker_list"),
+            ("get", "/api/compare/companies/", "view_stock_comparison"),
+            ("get", "/api/analysis/cross-company/", "view_watchlist_comparison"),
+            ("get", "/api/announcements/", "view_announcements"),
+            ("get", "/api/financial-reports/", "view_financial_reports"),
+            ("get", "/api/reports/export/floorsheet/", "export_floorsheet"),
+            ("get", "/api/reports/export/brokers/", "export_broker_analysis"),
+        ]
+        for i, (method, url, key) in enumerate(cases):
+            with self.subTest(url=url, permission=key):
+                user = make_user(f"page_perm_{i}", perms=[key])
+                self.assertNotIn(call(as_user(user), method, url).status_code, (401, 403))
+
 
 @FAST_HASH
 class EscalationTests(TestCase):

@@ -4,6 +4,7 @@ GET export/companies/ -- the company dropdown on the Export page.
 
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.api_schema import document_api_view
 
 from apps.companies.models import Company
 from apps.users.company_access import get_accessible_company_ids
@@ -14,10 +15,12 @@ from apps.users.permissions import HasAppPermission
 # COMPANIES LIST (for frontend dropdown)
 # ============================================================
 
+@document_api_view("Reports")
 class ExportCompanyListAPIView(APIView):
     
     permission_classes = [HasAppPermission]
     permission_key = "view_reports"
+    permission_keys = ["view_reports", "export_reports", "export_floorsheet", "export_broker_analysis"]
 
     def get(self, request):
         companies = (

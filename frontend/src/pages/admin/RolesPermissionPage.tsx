@@ -20,6 +20,7 @@ import {
   rolesApi,
   type CustomRole,
   type PermissionGroup,
+  type LegacyPermissionGroup,
   type EditableRole,
   type CustomRoleSummary,
 } from "../../api/roles";
@@ -63,6 +64,9 @@ export default function RolesPermissionsPage() {
     permissionGroups,
     setPermissionGroups,
   ] = useState<PermissionGroup[]>([]);
+  const [legacyGroups, setLegacyGroups] = useState<LegacyPermissionGroup[]>([]);
+  const [dependencies, setDependencies] = useState<Record<string, string[]>>({});
+  const [requiresAny, setRequiresAny] = useState<Record<string, string[]>>({});
 
   const [
     customRoles,
@@ -181,13 +185,7 @@ export default function RolesPermissionsPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SEQUENTIAL DEPENDENCY HELPERS
-  //
-  // The backend returns group.permissions[] in dependency order:
-  //   index 0 → no prerequisite
-  //   index N → requires index 0…N-1
-  //
-  // All logic derives from this order alone — no hardcoded key lists.
+  // Dependency rules come from the same API response used by backend validation.
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
@@ -195,42 +193,55 @@ export default function RolesPermissionsPage() {
    * interacted with (its direct prerequisite at index-1 is already checked).
    * The first permission in every group is always enabled.
    */
-  const isEnabled = (
-    group: PermissionGroup,
-    index: number,
-    checked: string[]
-  ): boolean => {
-    if (index === 0) return true;
-    return checked.includes(group.permissions[index - 1].key);
+  const isPageGroup = (group: PermissionGroup) =>
+    !["companies", "watchlist", "news", "crawler", "reports", "users", "roles_permissions"].includes(group.key);
+
+  const isEnabled = (group: PermissionGroup, index: number, checked: string[]) =>
+    isPageGroup(group) || index === 0 || checked.includes(group.permissions[index - 1].key);
+
+  const addPermissionAndRequirements = (key: string, permissions: Set<string>) => {
+    if (permissions.has(key)) return;
+    permissions.add(key);
+    (dependencies[key] ?? []).forEach((required) => addPermissionAndRequirements(required, permissions));
+    const alternatives = requiresAny[key] ?? [];
+    if (alternatives.length && !alternatives.some((option) => permissions.has(option))) {
+      addPermissionAndRequirements(alternatives[0], permissions);
+    }
   };
 
-  /**
-   * Toggle a single permission key while enforcing cascade rules:
-   *
-   * CHECKING   → simply add the key (caller must only call this when
-   *               isEnabled() returned true, so prerequisites are already present).
-   *
-   * UNCHECKING → remove the key AND all subsequent keys in the same group
-   *               (cascade-off), because they depended on the unchecked one.
-   */
-  const applySequentialToggle = (
-    group: PermissionGroup,
-    permissionKey: string,
-    current: string[]
-  ): string[] => {
-    const index = group.permissions.findIndex((p) => p.key === permissionKey);
-    const isChecked = current.includes(permissionKey);
-
-    if (isChecked) {
-      // Uncheck this + everything after it in the group
-      const keysToRemove = group.permissions
-        .slice(index)
-        .map((p) => p.key);
-      return current.filter((k) => !keysToRemove.includes(k));
+  const removePermissionAndDependants = (key: string, permissions: Set<string>) => {
+    permissions.delete(key);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const granted of [...permissions]) {
+        const required = dependencies[granted] ?? [];
+        const alternatives = requiresAny[granted] ?? [];
+        if (required.some((item) => !permissions.has(item)) ||
+            (alternatives.length > 0 && !alternatives.some((item) => permissions.has(item)))) {
+          permissions.delete(granted);
+          changed = true;
+        }
+      }
     }
+  };
 
-    // Check: just add (prerequisites already satisfied per isEnabled guard)
-    return [...current, permissionKey];
+  const applyPermissionToggle = (group: PermissionGroup, key: string, current: string[]) => {
+    const next = new Set(current);
+    if (next.has(key)) {
+      if (isPageGroup(group)) removePermissionAndDependants(key, next);
+      else {
+        const index = group.permissions.findIndex((item) => item.key === key);
+        group.permissions.slice(index).forEach((item) => removePermissionAndDependants(item.key, next));
+      }
+    } else {
+      if (isPageGroup(group)) addPermissionAndRequirements(key, next);
+      else {
+        const index = group.permissions.findIndex((item) => item.key === key);
+        group.permissions.slice(0, index + 1).forEach((item) => addPermissionAndRequirements(item.key, next));
+      }
+    }
+    return [...next];
   };
 
   /**
@@ -244,11 +255,12 @@ export default function RolesPermissionsPage() {
   ): string[] => {
     const keys = group.permissions.map((p) => p.key);
     const allSelected = keys.every((k) => current.includes(k));
-
-    if (allSelected) {
-      return current.filter((k) => !keys.includes(k));
-    }
-    return Array.from(new Set([...current, ...keys]));
+    return keys.reduce((permissions, key) => {
+      const checked = permissions.includes(key);
+      if (allSelected && checked) return applyPermissionToggle(group, key, permissions);
+      if (!allSelected && !checked) return applyPermissionToggle(group, key, permissions);
+      return permissions;
+    }, current);
   };
 
   // ── Handlers used by the main role-editor grid ───────────────────────────
@@ -258,7 +270,7 @@ export default function RolesPermissionsPage() {
     permissionKey: string
   ) => {
     setCurrentPermissions((current) =>
-      applySequentialToggle(group, permissionKey, current)
+      applyPermissionToggle(group, permissionKey, current)
     );
   };
 
@@ -276,7 +288,7 @@ export default function RolesPermissionsPage() {
   ) => {
     setForm((current) => ({
       ...current,
-      permissions: applySequentialToggle(group, permissionKey, current.permissions),
+      permissions: applyPermissionToggle(group, permissionKey, current.permissions),
     }));
   };
 
@@ -286,6 +298,16 @@ export default function RolesPermissionsPage() {
       permissions: applyGroupToggle(group, current.permissions),
     }));
   };
+
+  const toggleLegacyPermission = (key: string, current: string[]) => {
+    const next = new Set(current);
+    if (next.has(key)) removePermissionAndDependants(key, next);
+    else if ((dependencies[key] ?? []).every((required) => next.has(required))) next.add(key);
+    return [...next];
+  };
+
+  const canSelectLegacyPermission = (key: string, current: string[]) =>
+    (dependencies[key] ?? []).every((required) => current.includes(required));
 
   const saveRoleEdits = async () => {
     try {
@@ -377,6 +399,9 @@ export default function RolesPermissionsPage() {
       setPermissionGroups(
         permissionsResponse.groups
       );
+      setLegacyGroups(permissionsResponse.legacy_groups ?? []);
+      setDependencies(permissionsResponse.dependencies ?? {});
+      setRequiresAny(permissionsResponse.requires_any ?? {});
 
       setCustomRoles(
         rolesResponse.custom_roles
@@ -786,6 +811,34 @@ const openCreate = () => {
             Click Analyst, Viewer, or any custom role above to view and edit its permission set.
           </p>
         </div>
+      )}
+
+      {(selectedRole || selectedCustomRole) && legacyGroups.length > 0 && (
+        <details className="card overflow-hidden">
+          <summary className="cursor-pointer px-4 py-3 font-semibold text-text-primary">
+            Legacy broad permissions
+          </summary>
+          <div className="border-t border-bg-border p-4">
+            <p className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+              A role that has this permission can open all of these pages, even if the page permissions below are unticked.
+            </p>
+            {legacyGroups.flatMap((group) => group.permissions).map((permission) => (
+              <label key={permission.key} className="flex items-start gap-3 border-t border-bg-border py-3 first:border-0">
+                <input
+                  type="checkbox"
+                  checked={currentPermissions.includes(permission.key)}
+                  disabled={selectedRole?.key === "admin" || (!currentPermissions.includes(permission.key) && !canSelectLegacyPermission(permission.key, currentPermissions))}
+                  onChange={() => setCurrentPermissions((current) => toggleLegacyPermission(permission.key, current))}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span className="text-sm">
+                  <span className="font-medium">{permission.name}</span>
+                  <span className="mt-1 block text-xs text-text-muted">{permission.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </details>
       )}
 
       {/* FOOTER */}
@@ -1338,6 +1391,35 @@ const openCreate = () => {
                   )}
 
                 </div>
+
+                {legacyGroups.map((group) => (
+                  <details key={group.key} className="mt-3 rounded-lg border border-bg-border">
+                    <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Legacy broad permissions</summary>
+                    <div className="border-t border-bg-border p-3">
+                      <p className="mb-2 rounded bg-amber-500/10 p-2 text-xs text-amber-200">
+                        A role that has this permission can open all of these pages, even if the page permissions below are unticked.
+                      </p>
+                      {group.permissions.map((permission) => (
+                        <label key={permission.key} className="flex items-start gap-3 border-t border-bg-border py-2 first:border-0">
+                          <input
+                            type="checkbox"
+                            checked={form.permissions.includes(permission.key)}
+                            disabled={!form.permissions.includes(permission.key) && !canSelectLegacyPermission(permission.key, form.permissions)}
+                            onChange={() => setForm((current) => ({
+                              ...current,
+                              permissions: toggleLegacyPermission(permission.key, current.permissions),
+                            }))}
+                            className="mt-0.5 h-4 w-4"
+                          />
+                          <span className="text-sm">
+                            <span>{permission.name}</span>
+                            <span className="mt-1 block text-xs text-text-muted">{permission.description}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                ))}
 
               </div>
 

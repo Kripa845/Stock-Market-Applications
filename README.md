@@ -104,6 +104,10 @@ There is no CI. On 2026-10-30: 1017 tests, 5 failing (listed in [docs/status.md]
 
 ## Documentation
 
+### API Documentation
+
+Start the backend, then open the interactive [Swagger UI](http://localhost:8000/api/docs/) to explore endpoints and authorize requests with a JWT access token. The machine-readable schema is available at `/api/schema/`, with an alternative ReDoc interface at `/api/redoc/`. See [API getting started](docs/getting-started.md) and [authentication](docs/authentication.md).
+
 | Doc | For |
 |---|---|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, data flow diagram, page → API → backend map, design decisions |

@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from apps.api_schema import document_api_view
 from django.db.models import Count, Q, Sum
 
 from rest_framework.permissions import IsAuthenticated
@@ -20,6 +21,7 @@ from apps.news.selectors import real_articles
 User = get_user_model()
 
 
+@document_api_view('Dashboard')
 class DashboardSummaryAPIView(APIView):
     """
     GET /api/dashboard/summary/
@@ -32,7 +34,7 @@ class DashboardSummaryAPIView(APIView):
         user = request.user
         result = {}
 
-        if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
+        if user.has_any_app_permission("view_companies", "view_market_data", "view_dashboard"):
             companies = Company.objects.filter(
                 is_active=True,
                 tracking__is_tracked=True,
@@ -65,7 +67,7 @@ class DashboardSummaryAPIView(APIView):
                 .distinct()
                 .count()
             )
-            if user.has_app_permission("view_market_data"):
+            if user.has_any_app_permission("view_market_data", "view_dashboard"):
                 result["total_floorsheet_transactions"] = (
                     FloorsheetTransaction.objects
                     .filter(company__in=companies)
@@ -85,6 +87,7 @@ class DashboardSummaryAPIView(APIView):
         return Response(result)
 
 
+@document_api_view('Dashboard')
 class AdminDashboardAPIView(APIView):
     """
     GET /api/dashboard/admin/
@@ -99,7 +102,7 @@ class AdminDashboardAPIView(APIView):
         # Must have at least one relevant admin permission to access this endpoint
         if not user.is_admin() and not any(
             user.has_app_permission(p)
-            for p in ["view_users", "view_crawl_runs", "view_companies", "view_news"]
+            for p in ["view_users", "view_crawl_runs", "view_companies", "view_news", "view_dashboard"]
         ):
             from rest_framework import status as http_status
             from rest_framework.response import Response as R
@@ -168,6 +171,7 @@ class AdminDashboardAPIView(APIView):
         })
 
 
+@document_api_view('Dashboard')
 class AnalystDashboardAPIView(APIView):
     """
     GET /api/dashboard/analyst/
@@ -178,9 +182,12 @@ class AnalystDashboardAPIView(APIView):
     def get(self, request):
         user = request.user
 
-        if not any(
-            user.has_app_permission(p)
-            for p in ["view_news", "view_companies", "view_market_data", "view_analysis"]
+        if not user.has_any_app_permission(
+            "view_news", "view_companies", "view_market_data", "view_analysis",
+            "view_dashboard", "view_top_gainer", "view_top_losers", "view_top_turnover",
+            "view_top_volume", "view_top_transactions", "view_indices", "view_dividends",
+            "view_calendar", "view_nepse_day_by_day", "view_nepse_month_by_month",
+            "view_weekday_summary", "view_floorsheet_summary", "view_latest_reports",
         ):
             from rest_framework import status as http_status
             return Response(
@@ -192,7 +199,7 @@ class AnalystDashboardAPIView(APIView):
 
         result = {"role": "analyst"}
 
-        if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
+        if user.has_any_app_permission("view_companies", "view_market_data", "view_dashboard"):
             companies = Company.objects.filter(
                 is_active=True,
                 tracking__is_tracked=True,
@@ -218,6 +225,7 @@ class AnalystDashboardAPIView(APIView):
         return Response(result)
 
 
+@document_api_view('Dashboard')
 class ViewerDashboardAPIView(APIView):
     """
     GET /api/dashboard/viewer/
@@ -228,9 +236,12 @@ class ViewerDashboardAPIView(APIView):
     def get(self, request):
         user = request.user
 
-        if not any(
-            user.has_app_permission(p)
-            for p in ["view_news", "view_companies", "view_market_data", "view_analysis"]
+        if not user.has_any_app_permission(
+            "view_news", "view_companies", "view_market_data", "view_analysis",
+            "view_dashboard", "view_top_gainer", "view_top_losers", "view_top_turnover",
+            "view_top_volume", "view_top_transactions", "view_indices", "view_dividends",
+            "view_calendar", "view_nepse_day_by_day", "view_nepse_month_by_month",
+            "view_weekday_summary", "view_floorsheet_summary", "view_latest_reports",
         ):
             from rest_framework import status as http_status
             return Response(
@@ -241,7 +252,7 @@ class ViewerDashboardAPIView(APIView):
         result = {"role": request.user.role}
         summary = {}
 
-        if user.has_app_permission("view_companies") or user.has_app_permission("view_market_data"):
+        if user.has_any_app_permission("view_companies", "view_market_data", "view_dashboard"):
             tracked_count = filter_company_queryset(Company.objects.filter(
                 is_active=True,
                 tracking__is_tracked=True,

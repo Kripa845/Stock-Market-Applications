@@ -4,6 +4,7 @@ Not narrowed to the caller's companies.
 """
 
 import hashlib
+from apps.api_schema import document_api_view
 import re
 
 from django.core.cache import cache
@@ -20,6 +21,7 @@ from apps.users.permissions import HasAppPermission
 CACHE_SECONDS = 60
 
 
+@document_api_view('Reports')
 class DividendListAPIView(APIView):
     """
     GET /api/market/dividends/?fiscal_year=2082/2083|all&status=proposed
@@ -32,6 +34,7 @@ class DividendListAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_dividends']
     def get(self, request):
         status_filter = request.query_params.get("status", "").strip()
         if status_filter and status_filter not in DividendAnnouncement.Status.values:
@@ -87,6 +90,7 @@ def _quarterly_params(request, *, period=True):
     return sector, fiscal_year, quarter, None
 
 
+@document_api_view('Reports')
 class QuarterlyReportAPIView(APIView):
     """
     GET /api/market/quarterly-report/?sector=BANKING&fiscal_year=2082/83&quarter=4
@@ -99,6 +103,7 @@ class QuarterlyReportAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_latest_reports']
     def get(self, request):
         sector, fiscal_year, quarter, error = _quarterly_params(request)
         if error:
@@ -106,11 +111,13 @@ class QuarterlyReportAPIView(APIView):
         return Response(quarterly_reports.quarterly_report(sector, fiscal_year, quarter))
 
 
+@document_api_view('Reports')
 class QuarterlyReportPeriodsAPIView(APIView):
     """GET /api/market/quarterly-report/periods/?sector=BANKING -> fiscal years and quarters filed, newest first."""
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_latest_reports']
     def get(self, request):
         sector, _, _, error = _quarterly_params(request, period=False)
         if error:
@@ -118,6 +125,7 @@ class QuarterlyReportPeriodsAPIView(APIView):
         return Response({"sector": sector, "periods": quarterly_reports.periods(sector)})
     
     
+@document_api_view('Reports')
 class CompanyValuationAPIView(APIView):
     """
     GET /api/companies/<id>/valuation/
@@ -129,6 +137,7 @@ class CompanyValuationAPIView(APIView):
     permission_classes = [HasAppPermission]
     permission_key = "view_market_data"
 
+    permission_keys = ['view_market_data', 'view_stock_details', 'view_latest_reports']
     def get(self, request, pk):
         company = get_object_or_404(
             Company,
